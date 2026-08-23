@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+
+# Stitch generated assets (fetched via MCP / curl -L) — do not commit large binaries
+public/stitch/
+stitch_html/
+**/stitch_screens/
+dist/stitch/
+
+# Editor - VS Code
+.vscode/
