@@ -1,0 +1,41 @@
+{
+  "project": { "title": "ERMS Blueprint Architecture", "id": "8706529359515318547" },
+  "screens": [
+    {
+      "id": "407ee16216d649b3b9e792ce67187d1d",
+      "title": "EARMS - Enhanced Landing Page",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxY2JjOWM0NTUwMjNiY2JkZGQ1MTZiODQ4EgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1W1npjOiswRFq1SUTrFbYALqza-F6pbfmM6yfrwecO8PETm3tR0khHxQqNMM14MvZyLr9BeUDffG3gCZqTC8aQ0dYxx1yE1bVbTCStK0MYGdP3XNhuTz1JeE8j1wxr5hk9A981__mBToasXPixNaEnbXM1V7r6EhNlSSAWxLr7jgqOfqAUcrxA4KiW9A1E3QGJvHZSmPcMUGJnpoaobwHKTV3MG1pn5Vf9yhk1IiKqCUVwAszx_mAThLg"
+    },
+    {
+      "id": "1b71e7e4646a44a9a080da09a72c3dfa",
+      "title": "EARMS - Login Page",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxYzg3NDY2MjMwNGU3NGJkZDY1MmM4ZTVjEgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1X6N68BBrHvfUkL4mdGPg62FQi-C5yTzgov6-eb5Tkyd8Uhl94Kqa8BwEnPyRR3ylAu6HU_EE1-0daEaZP7xYAaNKDTVSpq0wqnbJKosYF153bTvArJm4vM720VhGg8kYwtLMuAL_CCEiymoD3dquzCx1-jRn_zq4U-TmT3MK5ViMC7Ihfa6qUQcIP7UG_dVmYmrLOhklZqEJ3F55pi4yI0SES-wUfLNSMtq_j-JdrYYL75tNl51DT39bc"
+    },
+    {
+      "id": "2756eae455014af28d63a4ac3d257d5d",
+      "title": "EARMS - Login Gateway",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxYzhjMGViNmYwMzU2ZWE2YTY3MzM2YmE1EgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1XodwoRShek40K9UAvNIx3eAPyNCJv5RQ6RFOMQwbWXgBWycilPUw72AmTRpn7EAliQPFtk7YF1BsL_OO91jrP3neskJeNs4rwm7h1zqCOl3wuWEWtAkbOTxoQ5gALk01hGLf1QW9Iho2JjWAug8ovni6pbl4kpIQUmeidkJdiLQtM3iBkaaeYmMbcUBowjNx7yE4zUA0-5ERQ2ymOiGc2CjFo3qr1l4IvSe_C4A3WEEI7TvdwrLjOjOts"
+    },
+    {
+      "id": "6cac2f74a4d34ab79e8c434ea4373e91",
+      "title": "EARMS - Student Dashboard",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxODAzYjg0YTMwNGU3NGJkZDY1MmM4ZTVjEgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1V8ucN0pA31HNkAMbysV2R9URY7Za40Hp_Wj51dHO4dElF_KUyF_zo9VsdZ3c2TxDl0KolTfYySfKE2p3fykO6vwazNZ8c_m3qvTtAmpbySJdHY8Hl1m5Btb9rCWpX8u4S7aR9p7El19ktfYwJC4jcdes7P5DbzIsAp9mDIy0uOzCg0eqoCdpMd3mSjzysh9DHb9sXzp8Aokwc55xJ8QTezUPm5wt4N9gFf0x50PmXHozkPMfZlgxRHjh8"
+    },
+    {
+      "id": "6c68c2f0c2d74e1891b698f86351b70f",
+      "title": "EARMS - Faculty Dashboard",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxN2ZjZTBiNGQwMzU2ZWNhNGYyMmQzNmUyEgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1UatC5hUQtRXJIEFRZkI3xpIad-mQ-a-5sIxOy6w8S4Ls8Kg4-cb1D9A9f4pOCuKePvrcM13imn-fgoRSoz7SsR2D8Cwyk-hYA1LfGG-C8kSgQm2VPx2n2UBn0AH6Gh0O92z-MwzWegiZRYHP6Vi1a-FXfLheRLNcX8ee_ppP1HFrOKjV8TPUaxdBehPwsG8ttTYOIo9X4lI9abnZJxIwMV56Wh30y_DviwIzNAh52XwFQp2Jm6dfKcv-w"
+    },
+    {
+      "id": "704fc6b367d542fb86070aa7c5c7787e",
+      "title": "EARMS - Admin Control Panel",
+      "html": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1OWIxODAyOWVjZDcwOTY4OGM0MWE1MDNiMDE2EgsSBxCTw_ejlhwYAZIBIwoKcHJvamVjdF9pZBIVQhM4NzA2NTI5MzU5NTE1MzE4NTQ3&filename=&opi=89354086",
+      "screenshot": "https://lh3.googleusercontent.com/aida/AEtjO1UPTXtIoEqLxLRwr1rxoTZ03PICZO4K1yE2EjmDPJpAihti3f7pC19c7M0fACfbjebwVNRCIYqFrS14QL8RRFyoExaxkJzTtqen4lohqa7ovxeNAUIasWQJUUkko_PDYeuktK68o2FIX9AZ7x5eQRT3v7xe4jnlItefn-X4qoC4C6ibMw-ncB3X-rZxOq0P6xs0hPjuuCwUP703okFBNaqTsLqweMOw7WPTEC5UAjqQL6MKRI9SwVvO4A"
+    }
+  ]
+}

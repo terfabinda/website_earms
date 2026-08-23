@@ -174,14 +174,14 @@ function Landing({ go }) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                {src:HERO_2, id:'3afeb6d3', title:'Collaborative Lab', desc:'Diverse postgraduate cohort in a high-tech university lab — bright, airy, professional.'},
-                {src:HERO_1, id:'7a9c8cf1', title:'Focused Scholarship', desc:'Female postgraduate in a sunlit library, embodying deep focus and academic elegance.'},
-                {src:HERO_3, id:'f8d90eea', title:'Knowledge Transfer', desc:'Professor lecturing engaged postgraduates, digital whiteboard with research data.'},
-                {src:HERO_4, id:'fd2900c8', title:'Data Dialogue', desc:'Two researchers debating a complex visualization on a large research facility screen.'},
+                {src:HERO_2, fallback:HERO_REMOTE_2, id:'3afeb6d3', title:'Collaborative Lab', desc:'Diverse postgraduate cohort in a high-tech university lab — bright, airy, professional.'},
+                {src:HERO_1, fallback:HERO_REMOTE_1, id:'7a9c8cf1', title:'Focused Scholarship', desc:'Female postgraduate in a sunlit library, embodying deep focus and academic elegance.'},
+                {src:HERO_3, fallback:HERO_REMOTE_3, id:'f8d90eea', title:'Knowledge Transfer', desc:'Professor lecturing engaged postgraduates, digital whiteboard with research data.'},
+                {src:HERO_4, fallback:HERO_REMOTE_4, id:'fd2900c8', title:'Data Dialogue', desc:'Two researchers debating a complex visualization on a large research facility screen.'},
               ].map(card=>(
                 <div key={card.id} className="bg-surface rounded-xl overflow-hidden border border-surface-variant shadow-ambient group">
                   <div className="h-44 overflow-hidden bg-surface-container">
-                    <img src={card.src} alt={card.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={card.src} alt={card.title} onError={e=>{e.currentTarget.onerror=null; e.currentTarget.src=card.fallback}} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                   <div className="p-4">
                     <span className="font-label-md text-[11px] tracking-widest uppercase text-outline">{card.id}</span>
