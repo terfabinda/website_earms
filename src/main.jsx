@@ -60,12 +60,12 @@ function Landing({ go }) {
           <button onClick={() => go('landing')} className="flex items-center gap-3">
             <img alt="EARMS Logo" className="h-9 md:h-10 object-contain" src={LOGO_EARMS} />
             <div className="hidden sm:flex flex-col items-start leading-tight text-left">
-              <span className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight leading-none">ERMS</span>
-              <span className="font-body-sm text-[11px] tracking-wide text-on-surface-variant leading-none">Electronic Research Management System</span>
+              <span className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight leading-none">EARMS</span>
+              <span className="font-body-sm text-[11px] tracking-wide text-on-surface-variant leading-none">Electronic Academic Research Management System</span>
             </div>
             <div className="sm:hidden flex flex-col items-start leading-none text-left">
-              <span className="font-headline-sm text-[13px] font-bold text-primary leading-none">ERMS</span>
-              <span className="font-body-sm text-[9px] tracking-wide text-on-surface-variant leading-none">Electronic Research Management System</span>
+              <span className="font-headline-sm text-[13px] font-bold text-primary leading-none">EARMS</span>
+              <span className="font-body-sm text-[9px] tracking-wide text-on-surface-variant leading-none">Electronic Academic Research Management System</span>
             </div>
           </button>
           <div className="hidden md:flex items-center gap-8">
@@ -170,7 +170,7 @@ function Landing({ go }) {
                 <h2 className="font-headline-lg text-headline-lg text-primary mt-2">Real people. Real research.</h2>
                 <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mt-2">Photography from the EARMS Blueprint — curated to showcase collaborative scholarship across African institutions.</p>
               </div>
-              <span className="font-body-sm text-body-sm text-outline">4 images • Electronic Research Management System</span>
+              <span className="font-body-sm text-body-sm text-outline">4 images • Electronic Academic Research Management System</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
@@ -320,7 +320,7 @@ function Landing({ go }) {
       <footer className="bg-primary-container text-on-primary-container py-10 px-6 md:px-8 border-t border-surface-variant">
         <div className="max-w-7xl mx-auto flex flex-col gap-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3 text-on-primary-container font-headline-md font-bold">EARMS <span className="font-body-sm font-normal opacity-70 hidden sm:inline">Electronic Research Management System</span><span className="font-body-sm font-normal opacity-70 sm:hidden">ERMS</span></div>
+            <div className="flex items-center gap-3 text-on-primary-container font-headline-md font-bold">EARMS <span className="font-body-sm font-normal opacity-70 hidden sm:inline">Electronic Academic Research Management System</span><span className="font-body-sm font-normal opacity-70 sm:hidden">EARMS</span></div>
             <div className="flex gap-4 font-body-sm">
               <a className="hover:text-inverse-primary transition-colors" href="#">Privacy Policy</a>
               <a className="hover:text-inverse-primary transition-colors" href="#">Terms of Service</a>
@@ -378,7 +378,7 @@ function Gateway({ go }) {
         </div>
         <footer className="mt-10 text-center">
           <p className="font-body-sm text-body-sm text-outline">© 2024 Institutional Research Board. All rights reserved.<br/><a className="hover:text-primary underline decoration-outline-variant underline-offset-4" href="#">Privacy Policy</a> · <a className="hover:text-primary underline decoration-outline-variant underline-offset-4" href="#">Terms of Service</a></p>
-          <p className="font-body-sm text-[11px] text-outline mt-2">Secure gateway • Electronic Research Management System</p>
+          <p className="font-body-sm text-[11px] text-outline mt-2">Secure gateway • Electronic Academic Research Management System</p>
         </footer>
       </main>
     </div>
@@ -829,7 +829,7 @@ function App() {
       {page==='admin' && <AdminPanel go={go} />}
       {/* quick navigator */}
       <div className="fixed bottom-3 right-3 z-50 flex flex-col gap-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-elevated p-2">
-        <span className="font-label-md text-[10px] tracking-widest uppercase text-outline text-center">ERMS • Electronic Research Management System</span>
+        <span className="font-label-md text-[10px] tracking-widest uppercase text-outline text-center">EARMS • Electronic Academic Research Management System</span>
         <div className="grid grid-cols-3 gap-1">
           {Object.keys(pages).map(k=>(
             <button key={k} onClick={()=>go(k)} className={`px-2 py-1 rounded text-[11px] font-label-md ${page===k ? 'bg-primary text-on-primary' : 'bg-surface-container hover:bg-surface-variant'}`}>{k}</button>

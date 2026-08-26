@@ -1,5 +1,5 @@
-## Electronic Research Management System (ERMS)
-The Electronic Research Management System (ERMS) is a microservice-based platform designed to streamline and automate the lifecycle of student research projects in tertiary institutions. By integrating seamlessly with existing institutional infrastructure, ERMS eliminates administrative bottlenecks, improves supervisor-student workflows, and ensures complete transparency in grant routing, ethics approvals, and budget clearances.
+## Electronic Academic Research Management System (EARMS)
+The Electronic Academic Research Management System (EARMS) is a microservice-based platform designed to streamline and automate the lifecycle of student research projects in tertiary institutions. By integrating seamlessly with existing institutional infrastructure, EARMS eliminates administrative bottlenecks, improves supervisor-student workflows, and ensures complete transparency in grant routing, ethics approvals, and budget clearances.
 ------------------------------
 ## 🚀 Key Features
 
@@ -10,7 +10,7 @@ The Electronic Research Management System (ERMS) is a microservice-based platfor
 
 ------------------------------
 ## 🛠️ System Architecture
-ERMS is structured around an ecosystem of independent microservices mediated by a centralized API gateway:
+EARMS is structured around an ecosystem of independent microservices mediated by a centralized API gateway:
 
                       +-----------------------------+
 
@@ -67,7 +67,7 @@ The system employs OAuth 2.0 with Authorization Code Flow + PKCE (Proof Key for 
 
 +------------+          +-----------------------+          +------------------------+
 
-| React App  |          | Institutional OAuth2  |          |   ERMS API Gateway     |
+| React App  |          | Institutional OAuth2  |          |   EARMS API Gateway     |
 |  (Client)  |          |   Identity Provider   |          |     (Resource Server)  |
 +-----+------+          +-----------+-----------+          +-----------+------------+
 
@@ -94,10 +94,10 @@ The system employs OAuth 2.0 with Authorization Code Flow + PKCE (Proof Key for 
 ## Token Configuration Required (.env file schema)
 
 # React App Environment Variables
-VITE_ERMS_AUTH_URL=https://yourinstitution.edu
-VITE_ERMS_CLIENT_ID=erms_spa_client_prod_0123
-VITE_ERMS_REDIRECT_URI=http://localhost:3000/authentication/callback
-VITE_ERMS_API_GATEWAY_URL=http://localhost:8080/api/v1
+VITE_EARMS_AUTH_URL=https://yourinstitution.edu
+VITE_EARMS_CLIENT_ID=earms_spa_client_prod_0123
+VITE_EARMS_REDIRECT_URI=http://localhost:3000/authentication/callback
+VITE_EARMS_API_GATEWAY_URL=http://localhost:8080/api/v1
 
 ------------------------------
 ## 💻 Getting Started## Prerequisites
@@ -111,7 +111,7 @@ VITE_ERMS_API_GATEWAY_URL=http://localhost:8080/api/v1
    1. Clone the platform repository:
    
    git clone https://github.com
-   cd erms-platform
+   cd earms-platform
    
    2. Initialize local environment configurations:
    Navigate to both the frontend panel and downstream microservice paths to generate your active environmental secrets:

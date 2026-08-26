@@ -1,5 +1,5 @@
-## Contributing to ERMS
-Thank you for your interest in contributing to the Electronic Research Management System (ERMS)! As an institutional platform, we maintain strict code quality, security protocols, and compliance standards to ensure stability across all university campuses.
+## Contributing to EARMS
+Thank you for your interest in contributing to the Electronic Academic Research Management System (EARMS)! As an institutional platform, we maintain strict code quality, security protocols, and compliance standards to ensure stability across all university campuses.
 By contributing to this project, you agree to abide by our repository terms and development workflows.
 
 ------------------------------
