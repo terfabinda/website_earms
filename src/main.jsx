@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
+import { authApi, tokenService } from './iam'
 
 // ----- Routing -----
 const pages = {
   landing: { label: 'Landing' },
   gateway: { label: 'Gateway' },
   login: { label: 'Login' },
+  forgot: { label: 'Forgot' },
+  reset: { label: 'Reset' },
+  verify: { label: 'Verify' },
+  dashboard: { label: 'Dashboard' },
   student: { label: 'Student' },
   faculty: { label: 'Faculty' },
   admin: { label: 'Admin' },
@@ -390,14 +395,26 @@ function Login({ go }) {
   const [show, setShow] = useState(false)
   const [email, setEmail] = useState('')
   const [pwd, setPwd] = useState('')
-  const submit = (e) => {
+  const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const q = new URLSearchParams((window.location.hash.split('?')[1]) || window.location.search)
+    if (q.get('reset') === 'success') setInfo('Your password has been reset. Please sign in with your new password.')
+  }, [])
+  const submit = async (e) => {
     e.preventDefault()
-    // simple role routing by email
-    const low = email.toLowerCase()
-    if (low.includes('admin')) go('admin')
-    else if (low.includes('faculty') || low.includes('prof') || low.includes('lecturer')) go('faculty')
-    else if (low) go('student')
-    else go('gateway')
+    setError('')
+    if (!email.trim() || !pwd) { setError('Please enter your username/email and password.'); return }
+    setBusy(true)
+    try {
+      await authApi.login(email.trim(), pwd)
+      go('dashboard')
+    } catch (err) {
+      setError(err.message || 'Login failed. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
   return (
     <div className="bg-background min-h-screen flex items-center justify-center relative antialiased overflow-hidden p-4">
@@ -414,6 +431,8 @@ function Login({ go }) {
           </div>
         </div>
         <form onSubmit={submit} className="space-y-5">
+          {error && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg">{error}</div>}
+          {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg">{info}</div>}
           <div className="space-y-1">
             <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email or Username</label>
             <div className="relative">
@@ -425,7 +444,7 @@ function Login({ go }) {
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="font-label-md text-label-md text-on-surface block" htmlFor="password">Password</label>
-              <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim" href="#">Forgot Password?</a>
+              <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer" onClick={(e)=>{e.preventDefault(); go('forgot')}}>Forgot Password?</a>
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
@@ -448,6 +467,228 @@ function Login({ go }) {
           <p className="font-body-sm text-body-sm text-on-surface-variant flex items-center justify-center gap-1"><span className="material-symbols-outlined text-[16px]">lock</span> Secure Institutional Access • Stitch Login (1b71e7…)</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ---------- Shared auth card wrapper (matches Login visual style) ---------- */
+function AuthCard({ go, children }) {
+  return (
+    <div className="bg-background min-h-screen flex items-center justify-center relative antialiased overflow-hidden p-4">
+      <div className="absolute inset-0 bg-cover bg-center w-full h-full z-0 blur-[2px] scale-105" style={{backgroundImage:`url('${BG_LIBRARY}')`}}></div>
+      <div className="absolute inset-0 bg-surface/80 backdrop-blur-md z-0"></div>
+      <div className="relative z-10 w-full max-w-[440px] bg-surface-container-lowest rounded-xl shadow-ambient p-6 md:p-8 mx-2">
+        <div className="flex flex-col items-center mb-6">
+          <button onClick={()=>go('landing')}><img alt="EARMS Logo" className="h-20 w-auto object-contain mb-3" src={LOGO_LOGIN} /></button>
+          <div className="flex gap-2 mt-1 text-[11px]">
+            <button onClick={()=>go('landing')} className="underline hover:text-primary">← Landing</button>
+            <button onClick={()=>go('login')} className="underline hover:text-primary">Login</button>
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function useHashQuery() {
+  const h = window.location.hash || ''
+  const q = h.split('?')[1] || window.location.search
+  return new URLSearchParams(q)
+}
+
+/* ---------- Forgot Password (POST /api/Auth/request-password-reset) ---------- */
+function ForgotPassword({ go }) {
+  const [email, setEmail] = useState('')
+  const [msg, setMsg] = useState(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e) => {
+    e.preventDefault()
+    setErr(''); setMsg(null)
+    if (!email.trim()) { setErr('Please enter your email address.'); return }
+    setBusy(true)
+    try {
+      await authApi.requestPasswordReset(email.trim())
+      setMsg("If the account exists, a password reset link has been sent to your email.")
+    } catch (e2) {
+      setErr(e2.message || 'Could not send reset email. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <AuthCard go={go}>
+      <h1 className="font-headline-md text-headline-md text-on-surface text-center">Forgot Password</h1>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Enter your account email and we'll send a secure reset link.</p>
+      {err && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{err}</div>}
+      {msg && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{msg}</div>}
+      <form onSubmit={submit} className="space-y-5">
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email</label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">mail</span>
+            <input className="w-full pl-10 pr-3 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="email"/>
+          </div>
+        </div>
+        <button className="w-full bg-primary-container text-on-primary-container font-label-md py-3.5 rounded-lg hover:bg-primary hover:text-on-primary transition-colors duration-200 flex justify-center items-center gap-2 shadow-sm" type="submit" disabled={busy}>
+          {busy ? 'Sending…' : 'Send Reset Link'} <span className="material-symbols-outlined text-[18px]">send</span>
+        </button>
+      </form>
+    </AuthCard>
+  )
+}
+
+/* ---------- Reset Password (POST /api/Auth/reset-password) ---------- */
+function ResetPassword({ go }) {
+  const q = useHashQuery()
+  const [token, setToken] = useState(q.get('token') || '')
+  const [email, setEmail] = useState(q.get('email') || '')
+  const [pw, setPw] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!token) setErr('Missing or invalid reset token. Please request a new reset link.')
+  }, [token])
+  const submit = async (e) => {
+    e.preventDefault()
+    setErr('')
+    if (!token) return
+    if (!email.trim() || !pw) { setErr('Please complete all fields.'); return }
+    if (pw !== confirm) { setErr('Passwords do not match.'); return }
+    setBusy(true)
+    try {
+      await authApi.resetPassword(email.trim(), token, pw)
+      go('login')
+      window.location.hash = '/login?reset=success'
+    } catch (e2) {
+      setErr(e2.message || 'Password reset failed. Please try again.')
+      setBusy(false)
+    }
+  }
+  return (
+    <AuthCard go={go}>
+      <h1 className="font-headline-md text-headline-md text-on-surface text-center">Reset Password</h1>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Choose a new password for your account.</p>
+      {err && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{err}</div>}
+      <form onSubmit={submit} className="space-y-5">
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email</label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">mail</span>
+            <input className="w-full pl-10 pr-3 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="email"/>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="newPassword">New Password</label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+            <input className="w-full pl-10 pr-10 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md" id="newPassword" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" required type={show ? 'text':'password'}/>
+            <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface"><span className="material-symbols-outlined text-[20px]">{show ? 'visibility_off':'visibility'}</span></button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="confirmPassword">Confirm Password</label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
+            <input className="w-full pl-10 pr-3 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md" id="confirmPassword" value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="••••••••" required type={show ? 'text':'password'}/>
+          </div>
+        </div>
+        <button className="w-full bg-primary-container text-on-primary-container font-label-md py-3.5 rounded-lg hover:bg-primary hover:text-on-primary transition-colors duration-200 flex justify-center items-center gap-2 shadow-sm" type="submit" disabled={busy}>
+          {busy ? 'Updating…' : 'Update Password'} <span className="material-symbols-outlined text-[18px]">check</span>
+        </button>
+      </form>
+    </AuthCard>
+  )
+}
+
+/* ---------- Verify Email (GET /api/Auth/confirm-email) ---------- */
+function VerifyEmail({ go }) {
+  const q = useHashQuery()
+  const [state, setState] = useState({ status: 'loading', msg: 'Verifying your email address…' })
+  useEffect(() => {
+    const userId = q.get('userId')
+    const code = q.get('code')
+    if (!userId || !code) {
+      setState({ status: 'error', msg: 'Invalid verification link. Missing user or code.' })
+      return
+    }
+    authApi.confirmEmail(userId, code)
+      .then(() => setState({ status: 'ok', msg: 'Your email has been confirmed successfully.' }))
+      .catch((e) => setState({ status: 'error', msg: (e.message || 'Email confirmation failed') + ' The link may be invalid or expired.' }))
+  }, [])
+  const tone = state.status === 'ok'
+    ? 'bg-primary-container text-on-primary-container'
+    : state.status === 'error'
+      ? 'bg-error-container text-on-error-container'
+      : 'bg-surface-container text-on-surface'
+  const icon = state.status === 'ok' ? 'check_circle' : state.status === 'error' ? 'error' : 'hourglass_top'
+  return (
+    <AuthCard go={go}>
+      <h1 className="font-headline-md text-headline-md text-on-surface text-center mb-6">Email Verification</h1>
+      <div className={`w-full rounded-lg text-body-md font-body-md px-4 py-6 flex flex-col items-center gap-3 text-center ${tone}`}>
+        <span className="material-symbols-outlined text-[40px]">{icon}</span>
+        <span>{state.msg}</span>
+      </div>
+      {state.status !== 'loading' && (
+        <div className="mt-4 text-center">
+          <button onClick={()=>go('login')} className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim inline-flex items-center justify-center gap-1">
+            <span className="material-symbols-outlined text-[18px]">login</span> Continue to Login
+          </button>
+        </div>
+      )}
+    </AuthCard>
+  )
+}
+
+/* ---------- Authenticated Dashboard placeholder (GET /api/Auth/entitlements) ---------- */
+function Dashboard({ go }) {
+  const [info, setInfo] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    if (!tokenService.isAuthenticated()) { go('login'); return }
+    authApi.getEntitlements()
+      .then((d) => setInfo(d))
+      .catch((e) => {
+        if (!tokenService.isAuthenticated()) go('login')
+        else setErr('Could not load entitlements: ' + (e.message || 'unknown error'))
+      })
+  }, [])
+  const logout = async () => {
+    try { await authApi.logout() } catch (e) {}
+    go('login')
+  }
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-outline-variant bg-surface-container-lowest">
+        <div className="flex items-center gap-3">
+          <button onClick={()=>go('landing')}><img alt="EARMS Logo" className="h-9 object-contain" src={LOGO_EARMS} /></button>
+          <span className="font-headline-sm text-headline-sm font-bold text-primary">EARMS</span>
+        </div>
+        <button onClick={logout} className="flex items-center gap-2 font-label-md text-label-md text-primary hover:text-primary-fixed-dim transition-colors">
+          <span className="material-symbols-outlined text-[18px]">logout</span> Log out
+        </button>
+      </header>
+      <main className="max-w-4xl mx-auto px-6 py-16 w-full">
+        <h1 className="font-headline-lg text-headline-lg text-on-surface mb-2">Welcome to your research portal</h1>
+        <p className="font-body-lg text-body-lg text-on-surface-variant mb-8">You are signed in. The full dashboard will be built next.</p>
+        {err && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-6">{err}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-6 rounded-xl bg-surface-container border border-outline-variant">
+            <span className="material-symbols-outlined text-primary text-[28px]">verified_user</span>
+            <p className="font-label-md text-label-md text-on-surface mt-2">Authenticated</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">Access token is valid.</p>
+          </div>
+        </div>
+        {info && (
+          <div className="mt-8 p-6 rounded-xl bg-surface-container-low border border-outline-variant">
+            <p className="font-label-md text-label-md text-on-surface mb-2">Subscription &amp; Features</p>
+            <pre className="font-body-sm text-body-sm text-on-surface-variant whitespace-pre-wrap">{JSON.stringify(info, null, 2)}</pre>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
@@ -824,6 +1065,10 @@ function App() {
       {page==='landing' && <Landing go={go} />}
       {page==='gateway' && <Gateway go={go} />}
       {page==='login' && <Login go={go} />}
+      {page==='forgot' && <ForgotPassword go={go} />}
+      {page==='reset' && <ResetPassword go={go} />}
+      {page==='verify' && <VerifyEmail go={go} />}
+      {page==='dashboard' && <Dashboard go={go} />}
       {page==='student' && <StudentDashboard go={go} />}
       {page==='faculty' && <FacultyDashboard go={go} />}
       {page==='admin' && <AdminPanel go={go} />}
