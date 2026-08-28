@@ -1089,15 +1089,6 @@ function App() {
       {page==='student' && <StudentDashboard go={go} />}
       {page==='faculty' && <FacultyDashboard go={go} />}
       {page==='admin' && <AdminPanel go={go} />}
-      {/* quick navigator */}
-      <div className="fixed bottom-3 right-3 z-50 flex flex-col gap-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-elevated p-2">
-        <span className="font-label-md text-[10px] tracking-widest uppercase text-outline text-center">EARMS • Electronic Academic Research Management System</span>
-        <div className="grid grid-cols-3 gap-1">
-          {Object.keys(pages).map(k=>(
-            <button key={k} onClick={()=>go(k)} className={`px-2 py-1 rounded text-[11px] font-label-md ${page===k ? 'bg-primary text-on-primary' : 'bg-surface-container hover:bg-surface-variant'}`}>{k}</button>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
