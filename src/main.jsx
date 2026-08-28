@@ -19,7 +19,7 @@ const pages = {
 function usePage() {
   const getInitial = () => {
     const h = window.location.hash.replace('#/', '').split('?')[0]
-    return pages[h] ? h : 'landing'
+    return pages[h] ? h : 'login'
   }
   const [page, setPage] = useState(getInitial)
   useEffect(() => {
