@@ -11,3 +11,7 @@ dist/stitch/
 
 # Editor - VS Code
 .vscode/
+
+# Microsoft Word documents
+*.docx
+~$*.docx

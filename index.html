@@ -233,9 +233,10 @@
 <img alt="EARMS Logo" class="h-24 w-auto object-contain mb-md" src="assets/stitch_login/logo.png"/>
 <h1 class="font-headline-md text-headline-md text-on-surface text-center">Welcome Back</h1>
 <p class="font-body-sm text-body-sm text-on-surface-variant mt-sm text-center">Secure institutional access to the research portal.</p>
+<div class="w-full rounded-lg bg-error-container text-on-error-container text-body-sm font-body-sm px-md py-sm mt-md hidden" id="auth-message" role="alert"></div>
 </div>
 <!-- Form -->
-<form action="#" class="space-y-lg" method="POST">
+<form id="login-form" class="space-y-lg" method="POST" novalidate>
 <!-- Email Field -->
 <div class="space-y-xs">
 <label class="font-label-md text-label-md text-on-surface block" for="email">Email or Username</label>
@@ -248,12 +249,12 @@
 <div class="space-y-xs">
 <div class="flex items-center justify-between">
 <label class="font-label-md text-label-md text-on-surface block" for="password">Password</label>
-<a class="font-label-md text-label-md text-primary hover:text-primary-fixed-dim transition-colors" href="#">Forgot Password?</a>
+<a class="font-label-md text-label-md text-primary hover:text-primary-fixed-dim transition-colors" href="forgot-password.html">Forgot Password?</a>
 </div>
 <div class="relative">
 <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">lock</span>
 <input class="w-full pl-xl pr-xl py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md" id="password" name="password" placeholder="••••••••" required="" type="password"/>
-<button class="absolute right-sm top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors focus:outline-none" type="button">
+<button id="toggle-password" class="absolute right-sm top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors focus:outline-none" type="button" aria-label="Show password">
 <span class="material-symbols-outlined">visibility</span>
 </button>
 </div>
@@ -268,7 +269,7 @@
 <span class="flex-shrink-0 mx-md text-outline font-body-sm text-body-sm">or</span>
 <div class="flex-grow border-t border-outline-variant"></div>
 </div>
-<button class="w-full bg-surface-container text-on-surface font-label-md text-label-md py-[14px] rounded-lg border border-outline-variant hover:bg-surface-variant transition-colors duration-200 flex justify-center items-center gap-sm shadow-sm" type="button">
+<button id="sso-btn" class="w-full bg-surface-container text-on-surface font-label-md text-label-md py-[14px] rounded-lg border border-outline-variant hover:bg-surface-variant transition-colors duration-200 flex justify-center items-center gap-sm shadow-sm" type="button">
 <span class="material-symbols-outlined text-[18px] text-secondary">domain</span>
                 SSO / Institutional Login
             </button>
@@ -286,4 +287,66 @@
 </div>
 </div>
 </div>
+<script src="assets/earms-auth.js"></script>
+<script>
+  (function () {
+    // Show confirmation when redirected back after a successful password reset.
+    var qp = new URLSearchParams(window.location.search);
+    if (qp.get("reset") === "success") {
+      var info = document.getElementById("auth-message");
+      info.className = "w-full rounded-lg bg-primary-container text-on-primary-container text-body-sm font-body-sm px-md py-sm mt-md";
+      info.textContent = "Your password has been reset. Please sign in with your new password.";
+      info.classList.remove("hidden");
+    }
+
+    var form = document.getElementById("login-form");
+    var message = document.getElementById("auth-message");
+    var submitBtn = form.querySelector('button[type="submit"]');
+    var emailInput = document.getElementById("email");
+    var passwordInput = document.getElementById("password");
+
+    function showError(msg) {
+      message.textContent = msg;
+      message.classList.remove("hidden");
+    }
+    function clearError() {
+      message.textContent = "";
+      message.classList.add("hidden");
+    }
+
+    // Password visibility toggle
+    document.getElementById("toggle-password").addEventListener("click", function () {
+      var isPw = passwordInput.type === "password";
+      passwordInput.type = isPw ? "text" : "password";
+      this.querySelector(".material-symbols-outlined").textContent = isPw ? "visibility_off" : "visibility";
+    });
+
+    // SSO placeholder (no IAM endpoint defined yet)
+    document.getElementById("sso-btn").addEventListener("click", function () {
+      showError("SSO / Institutional Login is not available yet.");
+    });
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      clearError();
+      var userName = emailInput.value.trim();
+      var password = passwordInput.value;
+      if (!userName || !password) {
+        showError("Please enter your username/email and password.");
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.classList.add("opacity-70", "cursor-not-allowed");
+      try {
+        await window.EARMS.authApi.login(userName, password);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        showError(err.message || "Login failed. Please try again.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("opacity-70", "cursor-not-allowed");
+      }
+    });
+  })();
+</script>
 </body></html>
