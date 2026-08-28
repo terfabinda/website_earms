@@ -446,7 +446,7 @@ function Login({ go }) {
               <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email or Username</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">person</span>
-                <input className="w-full pl-xl pr-md py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="email" />
+                <input className="w-full pl-xl pr-md py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="text" autoComplete="username" />
               </div>
             </div>
             <div className="space-y-xs">
