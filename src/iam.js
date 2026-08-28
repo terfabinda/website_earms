@@ -5,7 +5,7 @@
 //   - apiFetch: attaches Bearer token and handles 401 -> refresh -> retry (Section 13)
 
 const BASE_URL =
-  (typeof window !== "undefined" && window.EARMS_IAM_BASE_URL) || "https://iam.earmshub.com";
+  ((typeof window !== "undefined" && window.EARMS_IAM_BASE_URL) || "https://iam.earmshub.com").replace(/\/?$/, "/");
 
 export const tokenService = {
   accessTokenKey: "earms_accessToken",
