@@ -417,54 +417,71 @@ function Login({ go }) {
     }
   }
   return (
-    <div className="bg-background min-h-screen flex items-center justify-center relative antialiased overflow-hidden p-4">
-      <div className="absolute inset-0 bg-cover bg-center w-full h-full z-0 blur-[2px] scale-105" style={{backgroundImage:`url('${BG_LIBRARY}')`}}></div>
-      <div className="absolute inset-0 bg-surface/80 backdrop-blur-md z-0"></div>
-      <div className="relative z-10 w-full max-w-[440px] bg-surface-container-lowest rounded-xl shadow-ambient p-6 md:p-8 mx-2">
-        <div className="flex flex-col items-center mb-8">
-          <button onClick={()=>go('landing')}><img alt="EARMS Logo" className="h-20 w-auto object-contain mb-3" src={LOGO_LOGIN} /></button>
-          <h1 className="font-headline-md text-headline-md text-on-surface">Welcome Back</h1>
-          <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center">Enter your credentials to access the research portal.</p>
-          <div className="flex gap-2 mt-2 text-[11px]">
-            <button onClick={()=>go('landing')} className="underline hover:text-primary">← Landing</button>
-            <button onClick={()=>go('gateway')} className="underline hover:text-primary">Gateway</button>
-          </div>
+    <div className="bg-surface-container-lowest min-h-screen font-body-md text-on-surface antialiased overflow-hidden flex flex-col md:flex-row">
+      {/* Left Column: Slideshow Hero Area (60%) */}
+      <div className="relative hidden md:block md:w-[60%] bg-surface-container h-screen overflow-hidden">
+        <div className="absolute inset-0">
+          <img alt="Researchers discussing data visualization" className="slideshow-image slide-1 active" src="/assets/stitch_login/slide-1.jpg" />
+          <img alt="Professor lecturing postgraduate students" className="slideshow-image slide-2" src="/assets/stitch_login/slide-2.jpg" />
+          <img alt="Postgraduate student in university library" className="slideshow-image slide-3" src="/assets/stitch_login/slide-3.jpg" />
+          <img alt="Diverse group in modern lab" className="slideshow-image slide-4" src="/assets/stitch_login/slide-4.jpg" />
         </div>
-        <form onSubmit={submit} className="space-y-5">
-          {error && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg">{error}</div>}
-          {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg">{info}</div>}
-          <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email or Username</label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">person</span>
-              <input className="w-full pl-10 pr-3 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="email"/>
-            </div>
-            <p className="font-body-sm text-[11px] text-outline">Try: faculty@institution.edu / admin@institution.edu / student@institution.edu</p>
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent flex flex-col justify-end p-xl z-10">
+          <h2 className="font-headline-lg text-headline-lg text-on-primary mb-sm">Advancing Academic Excellence</h2>
+          <p className="font-body-lg text-body-lg text-on-primary/90 max-w-2xl">Empowering research and innovation across Sub-Saharan Africa through collaborative digital infrastructure.</p>
+        </div>
+      </div>
+      {/* Right Column: Authentication Portal (40%) */}
+      <div className="w-full md:w-[40%] flex flex-col justify-between h-screen p-lg md:p-xl lg:p-xxl bg-surface-container-lowest overflow-y-auto relative z-20">
+        <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
+          <div className="flex flex-col items-center mb-xl">
+            <img alt="EARMS Logo" className="h-24 w-auto object-contain mb-md" src="/assets/stitch_login/logo.png" />
+            <h1 className="font-headline-md text-headline-md text-on-surface text-center">Welcome Back</h1>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-sm text-center">Secure institutional access to the research portal.</p>
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="font-label-md text-label-md text-on-surface block" htmlFor="password">Password</label>
-              <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer" onClick={(e)=>{e.preventDefault(); go('forgot')}}>Forgot Password?</a>
+          {error && <div className="w-full rounded-lg bg-error-container text-on-error-container text-body-sm font-body-sm px-md py-sm mb-md">{error}</div>}
+          {info && <div className="w-full rounded-lg bg-primary-container text-on-primary-container text-body-sm font-body-sm px-md py-sm mb-md">{info}</div>}
+          <form onSubmit={submit} className="space-y-lg">
+            <div className="space-y-xs">
+              <label className="font-label-md text-label-md text-on-surface block" htmlFor="email">Email or Username</label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">person</span>
+                <input className="w-full pl-xl pr-md py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md placeholder-outline-variant" id="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="researcher@institution.edu" required type="email" />
+              </div>
             </div>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-              <input className="w-full pl-10 pr-10 py-3 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md" id="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="••••••••" required type={show ? 'text':'password'}/>
-              <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface"><span className="material-symbols-outlined text-[20px]">{show ? 'visibility_off':'visibility'}</span></button>
+            <div className="space-y-xs">
+              <div className="flex items-center justify-between">
+                <label className="font-label-md text-label-md text-on-surface block" htmlFor="password">Password</label>
+                <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer" onClick={(e)=>{e.preventDefault(); go('forgot')}}>Forgot Password?</a>
+              </div>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">lock</span>
+                <input className="w-full pl-xl pr-xl py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md" id="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="••••••••" required type={show ? 'text':'password'} />
+                <button type="button" onClick={()=>setShow(!show)} className="absolute right-sm top-1/2 -translate-y-1/2 text-outline hover:text-on-surface focus:outline-none" aria-label="Show password">
+                  <span className="material-symbols-outlined">{show ? 'visibility_off' : 'visibility'}</span>
+                </button>
+              </div>
             </div>
+            <button className="w-full bg-primary text-on-primary font-label-md text-label-md py-[14px] rounded-lg hover:bg-primary-fixed-dim transition-colors duration-200 flex justify-center items-center gap-sm mt-md shadow-sm" type="submit" disabled={busy}>
+              {busy ? 'Signing in…' : 'Sign In'} <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </button>
+            <div className="relative flex items-center py-sm">
+              <div className="flex-grow border-t border-outline-variant"></div>
+              <span className="flex-shrink-0 mx-md text-outline font-body-sm text-body-sm">or</span>
+              <div className="flex-grow border-t border-outline-variant"></div>
+            </div>
+            <button type="button" onClick={()=>setError('SSO / Institutional Login is not available yet.')} className="w-full bg-surface-container text-on-surface font-label-md text-label-md py-[14px] rounded-lg border border-outline-variant hover:bg-surface-variant transition-colors duration-200 flex justify-center items-center gap-sm shadow-sm">
+              <span className="material-symbols-outlined text-[18px] text-secondary">domain</span> SSO / Institutional Login
+            </button>
+          </form>
+        </div>
+        <div className="mt-xl text-center pb-md border-t border-outline-variant pt-md">
+          <p className="font-body-sm text-body-sm text-on-surface-variant mb-sm">In partnership with BDIC &amp; African Digital Infrastructure</p>
+          <div className="flex justify-center gap-md font-body-sm text-body-sm text-primary">
+            <a className="hover:underline" href="#">Privacy Policy</a>
+            <span className="text-outline-variant">•</span>
+            <a className="hover:underline" href="#">Terms of Service</a>
           </div>
-          <button className="w-full bg-primary-container text-on-primary-container font-label-md py-3.5 rounded-lg hover:bg-primary hover:text-on-primary transition-colors duration-200 flex justify-center items-center gap-2 shadow-sm" type="submit">
-            Sign In <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-          </button>
-          <div className="relative flex items-center justify-center my-2">
-            <span className="absolute w-full h-px bg-outline-variant"></span>
-            <span className="relative bg-surface-container-lowest px-3 font-body-sm text-[12px] text-outline">OR</span>
-          </div>
-          <button type="button" onClick={()=>go('gateway')} className="w-full border border-outline-variant bg-surface-container-lowest font-label-md py-3 rounded-lg hover:bg-surface-container flex justify-center items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span> Choose Portal via Gateway
-          </button>
-        </form>
-        <div className="mt-6 text-center">
-          <p className="font-body-sm text-body-sm text-on-surface-variant flex items-center justify-center gap-1"><span className="material-symbols-outlined text-[16px]">lock</span> Secure Institutional Access • Stitch Login (1b71e7…)</p>
         </div>
       </div>
     </div>
