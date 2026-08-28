@@ -11,13 +11,11 @@
 (function () {
   "use strict";
 
-  // Base URL configuration (Section 1). Allow override via window.EARMS_IAM_BASE_URL
-  // or a build-time global; otherwise pick dev/prod by hostname.
+  // Base URL configuration (Section 1). Default to the production TLD. Developers can
+  // override for local testing by setting window.EARMS_IAM_BASE_URL = "http://localhost:5005/"
+  // before this script loads.
   const DEFAULT_BASE_URL =
-    window.EARMS_IAM_BASE_URL ||
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:5005/"
-      : "https://iam.earmshub.com");
+    window.EARMS_IAM_BASE_URL || "https://iam.earmshub.com";
 
   const CONFIG = {
     baseUrl: DEFAULT_BASE_URL,
