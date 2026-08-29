@@ -11,6 +11,12 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/iam/, ''),
       },
+      '/api/onb': {
+        target: 'https://onboarding.earmshub.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/onb/, ''),
+      },
     },
   },
 })

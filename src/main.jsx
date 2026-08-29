@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { authApi, tokenService, getRoleFromToken, routeForRole } from './iam'
+import { AdminOnboarding } from './onboarding.jsx'
 
 // ----- Routing -----
 const pages = {
@@ -1002,61 +1003,11 @@ function FacultyDashboard({ go }) {
 }
 
 /* ---------- Admin Control Panel (Stitch: 704fc6b367d542fb86070aa7c5c7787e) ---------- */
-/* ---------- Admin Control Panel (layout mirrored from Faculty/Supervisor dashboard) ---------- */
+/* ---------- Admin Control Panel (onboarding module) ---------- */
 function AdminPanel({ go }) {
   return (
     <DashShell go={go} active="admin" role="admin" title="Admin Overview" subtitle="Manage institutions, users, approvals, and platform operations.">
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
-            <div><p className="font-label-md text-on-surface-variant mb-1">Total Institutions</p><p className="font-headline-lg text-primary font-bold">8</p></div>
-            <div className="p-2 bg-tertiary-fixed rounded-lg text-on-tertiary-fixed"><span className="material-symbols-outlined">account_balance</span></div>
-          </div>
-          <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
-            <div><p className="font-label-md text-on-surface-variant mb-1">Pending Approvals</p><p className="font-headline-lg text-secondary font-bold">5</p></div>
-            <div className="p-2 bg-secondary-fixed rounded-lg text-on-secondary-fixed"><span className="material-symbols-outlined">pending_actions</span></div>
-          </div>
-          <div className="glass-card ambient-shadow rounded-xl p-4 flex flex-col justify-between border border-surface-container">
-            <div className="flex items-center justify-between mb-1"><p className="font-label-md text-on-surface-variant">Weekly Digest</p><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" defaultChecked className="sr-only peer"/><div className="w-9 h-5 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div></label></div>
-            <p className="font-body-sm text-on-surface-variant">Sends a platform summary to admins every Monday.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 glass-card ambient-shadow rounded-xl border border-surface-container overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-surface-container flex items-center justify-between bg-surface-container-lowest">
-              <h3 className="font-headline-sm font-semibold text-primary">User Management Board</h3>
-              <button className="px-3 py-1.5 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container text-sm flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">filter_list</span> Filter</button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead><tr className="bg-surface-container-low border-b border-outline-variant font-label-md text-on-surface-variant"><th className="p-3 font-semibold">User</th><th className="p-3 font-semibold">Institution</th><th className="p-3 font-semibold">Role</th><th className="p-3 font-semibold">Status</th><th className="p-3 font-semibold text-right">Action</th></tr></thead>
-                <tbody className="font-body-sm divide-y divide-surface-container">
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-bold text-xs">EA</div><span className="font-semibold text-on-surface">E. Admin</span></td><td className="p-3 text-on-surface-variant">Earms Hub</td><td className="p-3">System Admin</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-secondary h-2 rounded-full" style={{width:'100%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">Manage</button></td></tr>
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center font-bold text-xs">WI</div><span className="font-semibold text-on-surface">W. Institute</span></td><td className="p-3 text-on-surface-variant">West African Inst.</td><td className="p-3 text-error">Onboarding</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-error h-2 rounded-full" style={{width:'40%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">Review</button></td></tr>
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs">RU</div><span className="font-semibold text-on-surface">R. University</span></td><td className="p-3 text-on-surface-variant">Regional Univ.</td><td className="p-3">Institution Admin</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-primary h-2 rounded-full" style={{width:'80%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">Manage</button></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="glass-card ambient-shadow rounded-xl border border-surface-container flex flex-col">
-            <div className="p-4 border-b border-surface-container bg-surface-container-lowest"><h3 className="font-headline-sm font-semibold text-primary flex items-center gap-2"><span className="material-symbols-outlined text-secondary">inbox</span> Approval Queue</h3></div>
-            <div className="p-4 space-y-3 overflow-auto">
-              {[
-                {title:'New Institution Onboarding', by:'W. Institute • 2 hrs ago', status:'Pending'},
-                {title:'Role Change: Faculty', by:'R. University • 5 hrs ago', status:'Urgent'},
-                {title:'Grant Budget v2', by:'Earms Hub • yesterday', status:'Pending'},
-              ].map(it=>(
-                <div key={it.title} className="p-3 border border-outline-variant rounded-lg bg-surface hover:bg-surface-container-low cursor-pointer">
-                  <div className="flex justify-between items-start mb-1"><span className="font-label-md font-bold text-on-surface">{it.title}</span><span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${it.status==='Urgent' ? 'bg-error-container text-on-error-container' : 'text-secondary bg-secondary-fixed'}`}>{it.status}</span></div>
-                  <p className="font-body-sm text-on-surface-variant mb-2">{it.by}</p>
-                  <button className="w-full bg-primary text-on-primary py-1.5 rounded text-xs font-semibold hover:bg-opacity-90">Review</button>
-                </div>
-              ))}
-              <button className="w-full text-primary font-label-md text-[13px] hover:underline mt-1">View All Requests →</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminOnboarding go={go} />
     </DashShell>
   )
 }

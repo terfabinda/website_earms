@@ -4,7 +4,7 @@
 //   - tokenService: storage / retrieval / replacement / removal of access + refresh tokens
 //   - apiFetch: attaches Bearer token and handles 401 -> refresh -> retry (Section 13)
 
-const BASE_URL =
+export const BASE_URL =
   ((typeof window !== "undefined" && window.EARMS_IAM_BASE_URL) || "/api/iam").replace(/\/?$/, "/");
 
 export const tokenService = {
@@ -82,21 +82,22 @@ async function jsonOrText(res) {
 
 // Attaches Authorization: Bearer {accessToken} automatically (Section 15).
 // On 401, attempts one refresh + retry (Section 13.5-13.6); on failure clears tokens + throws.
-export async function apiFetch(path, options = {}, _isRetry = false) {
+export async function apiFetch(path, options = {}, _isRetry = false, base = BASE_URL) {
   options.headers = options.headers || {};
   const token = tokenService.getAccessToken();
   if (token) options.headers["Authorization"] = "Bearer " + token;
   if (options.body && !(options.headers["Content-Type"] || options.headers["content-type"])) {
-    options.headers["Content-Type"] = "application/json";
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    if (!isFormData) options.headers["Content-Type"] = "application/json";
   }
 
-  let res = await fetch(BASE_URL + path, options);
+  let res = await fetch(base + path, options);
 
   if (res.status === 401 && token && !_isRetry) {
     try {
       const newToken = await refreshAccessToken();
       options.headers["Authorization"] = "Bearer " + newToken;
-      res = await fetch(BASE_URL + path, options);
+      res = await fetch(base + path, options);
     } catch (e) {
       throw e;
     }
