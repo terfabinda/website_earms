@@ -45,11 +45,25 @@ function Card({ children, className = "" }) {
 }
 
 /* ---------- top-level Admin Onboarding ---------- */
+const TABS = ["overview", "departments", "programs", "staff", "students", "institution"];
+
+function tabFromHash() {
+  const q = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const t = q.get("tab");
+  return TABS.includes(t) ? t : "overview";
+}
+
 export function AdminOnboarding({ go }) {
   const [institutions, setInstitutions] = useState([]);
   const [instId, setInstId] = useState("");
   const [instErr, setInstErr] = useState("");
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(tabFromHash);
+
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => {
     onboardingApi

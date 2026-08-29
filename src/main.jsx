@@ -752,7 +752,7 @@ function DashShell({ go, active, title, subtitle, children, role }) {
             <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">{role==='admin' ? 'Control Panel' : 'Academic Year 2023-24'}</p>
           </div>
         </div>
-        <button onClick={()=>go('gateway')} className={`mb-6 w-full font-label-md py-2.5 rounded-lg flex items-center justify-center gap-1.5 ${role==='admin' ? 'bg-primary text-on-primary' : role==='faculty' ? 'bg-primary text-on-primary' : 'bg-secondary-container text-on-secondary-container hover:bg-secondary-fixed'}`}>
+        <button onClick={()=> role==='admin' ? go('admin?tab=institution') : go('gateway')} className={`mb-6 w-full font-label-md py-2.5 rounded-lg flex items-center justify-center gap-1.5 ${role==='admin' ? 'bg-primary text-on-primary' : role==='faculty' ? 'bg-primary text-on-primary' : 'bg-secondary-container text-on-secondary-container hover:bg-secondary-fixed'}`}>
           <span className="material-symbols-outlined text-[18px]">add</span> {role==='admin' ? 'Add Institution' : 'New Grant Application'}
         </button>
         <ul className="flex-1 space-y-1 overflow-y-auto">
