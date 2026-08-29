@@ -179,3 +179,38 @@ export const authApi = {
     return res.json();
   },
 };
+
+const ROLE_CLAIM = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
+
+export function decodeToken(token) {
+  const t = token || tokenService.getAccessToken();
+  if (!t) return null;
+  try {
+    const part = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      Array.prototype.map
+        .call(window.atob(part), (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+export function getRoleFromToken(token) {
+  const p = decodeToken(token);
+  if (!p) return null;
+  const raw = p[ROLE_CLAIM] || p.role;
+  if (Array.isArray(raw)) return raw[0];
+  return raw || null;
+}
+
+export function routeForRole(role) {
+  if (!role) return "dashboard";
+  const r = String(role).toLowerCase();
+  if (r.includes("admin")) return "admin";
+  if (r.includes("faculty") || r.includes("supervisor")) return "faculty";
+  if (r.includes("student")) return "student";
+  return "dashboard";
+}
