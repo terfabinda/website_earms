@@ -45,7 +45,10 @@ function Card({ children, className = "" }) {
 }
 
 /* ---------- top-level Admin Onboarding ---------- */
-const TABS = ["overview", "departments", "programs", "staff", "students", "institution"];
+const TABS = [
+  "overview", "departments", "programs", "staff", "students",
+  "colleges", "levels", "postgraduate", "lookup", "institution",
+];
 
 function tabFromHash() {
   const q = new URLSearchParams(window.location.hash.split("?")[1] || "");
@@ -81,6 +84,10 @@ export function AdminOnboarding({ go }) {
     { key: "programs", label: "Programs", icon: "menu_book" },
     { key: "staff", label: "Staff", icon: "group" },
     { key: "students", label: "Students", icon: "school" },
+    { key: "colleges", label: "Colleges", icon: "account_balance" },
+    { key: "levels", label: "Levels", icon: "format_list_numbered" },
+    { key: "postgraduate", label: "Postgraduate", icon: "workspaces" },
+    { key: "lookup", label: "Lookup & Edit", icon: "travel_explore" },
     { key: "institution", label: "New Institution", icon: "add_business" },
   ];
 
@@ -123,6 +130,10 @@ export function AdminOnboarding({ go }) {
       {tab === "programs" && <ProgramsTab instId={instId} />}
       {tab === "staff" && <StaffTab instId={instId} />}
       {tab === "students" && <StudentsTab instId={instId} />}
+      {tab === "colleges" && <CollegesTab instId={instId} />}
+      {tab === "levels" && <LevelsTab instId={instId} />}
+      {tab === "postgraduate" && <PostgraduateTab instId={instId} />}
+      {tab === "lookup" && <LookupTab instId={instId} />}
       {tab === "institution" && <InstitutionTab />}
     </div>
   );
@@ -788,5 +799,407 @@ function InstitutionTab() {
         </button>
       </form>
     </Card>
+  );
+}
+
+/* ---------- Colleges (create + list) ---------- */
+function CollegesTab({ instId }) {
+  const { items, error, reload } = useList(() => onboardingApi.getColleges(instId), instId);
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg("");
+    if (!name.trim()) {
+      setMsg("College name is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onboardingApi.createCollege({
+        Name: name.trim(),
+        Code: code.trim(),
+        InstitutionId: Number(instId),
+      });
+      setMsg("College created.");
+      setName("");
+      setCode("");
+      reload();
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <Card className="p-5 xl:col-span-2">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">Colleges</h3>
+        <Msg kind="err" text={error} />
+        {items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No colleges found.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-on-surface-variant border-b border-outline-variant">
+                <th className="py-2">Id</th>
+                <th className="py-2">Name</th>
+                <th className="py-2">Code</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-container">
+              {items.map((c) => (
+                <tr key={c.Id}>
+                  <td className="py-2 font-medium text-on-surface">{c.Id}</td>
+                  <td className="py-2 text-on-surface-variant">{c.Name}</td>
+                  <td className="py-2 text-on-surface-variant">{c.Code || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      <Card className="p-5">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">New College</h3>
+        <form onSubmit={submit} className="space-y-3">
+          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="College of Science" /></Field>
+          <Field label="Code"><TextInput value={code} onChange={(e) => setCode(e.target.value)} placeholder="COS" /></Field>
+          <Msg kind="err" text={msg} />
+          <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
+            {busy ? "Saving…" : "Create College"}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- Levels (create + list) ---------- */
+function LevelsTab({ instId }) {
+  const { items, error, reload } = useList(() => onboardingApi.getLevels(instId), instId);
+  const [name, setName] = useState("");
+  const [value, setValue] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg("");
+    if (!name.trim()) {
+      setMsg("Level name is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onboardingApi.createLevel({
+        Name: name.trim(),
+        Value: value.trim(),
+        InstitutionId: Number(instId),
+      });
+      setMsg("Level created.");
+      setName("");
+      setValue("");
+      reload();
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <Card className="p-5 xl:col-span-2">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">Levels</h3>
+        <Msg kind="err" text={error} />
+        {items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No levels found.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-on-surface-variant border-b border-outline-variant">
+                <th className="py-2">Id</th>
+                <th className="py-2">Name</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-container">
+              {items.map((l) => (
+                <tr key={l.Id}>
+                  <td className="py-2 font-medium text-on-surface">{l.Id}</td>
+                  <td className="py-2 text-on-surface-variant">{l.Name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      <Card className="p-5">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">New Level</h3>
+        <form onSubmit={submit} className="space-y-3">
+          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="400 Level" /></Field>
+          <Field label="Value"><TextInput value={value} onChange={(e) => setValue(e.target.value)} placeholder="400" /></Field>
+          <Msg kind="err" text={msg} />
+          <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
+            {busy ? "Saving…" : "Create Level"}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- Postgraduate (list + create) ---------- */
+function PostgraduateTab({ instId }) {
+  const { items, error, reload } = useList(() => onboardingApi.getPostgraduates(instId), instId);
+  const [form, setForm] = useState({ matricNo: "", firstName: "", lastName: "", email: "", title: "", researchArea: "" });
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e2) => setForm((f) => ({ ...f, [k]: e2.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg("");
+    if (!form.matricNo.trim() || !form.firstName.trim() || !form.lastName.trim()) {
+      setMsg("Matric No, first and last name are required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onboardingApi.createPostgraduate({
+        MatricNo: form.matricNo.trim(),
+        FirstName: form.firstName.trim(),
+        LastName: form.lastName.trim(),
+        Email: form.email.trim(),
+        Title: form.title.trim(),
+        ResearchArea: form.researchArea.trim(),
+        InstitutionId: Number(instId),
+      });
+      setMsg("Postgraduate created.");
+      setForm({ matricNo: "", firstName: "", lastName: "", email: "", title: "", researchArea: "" });
+      reload();
+    } catch (err) {
+      setMsg(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <Card className="p-5 xl:col-span-2">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">Postgraduate Students</h3>
+        <Msg kind="err" text={error} />
+        {items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No postgraduate records found.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-on-surface-variant border-b border-outline-variant">
+                <th className="py-2">Matric No</th>
+                <th className="py-2">Name</th>
+                <th className="py-2">Research Area</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-container">
+              {items.map((p) => (
+                <tr key={p.Id}>
+                  <td className="py-2 font-medium text-on-surface">{p.MatricNo}</td>
+                  <td className="py-2 text-on-surface-variant">{p.FirstName} {p.LastName}</td>
+                  <td className="py-2 text-on-surface-variant">{p.ResearchArea || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      <Card className="p-5">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">New Postgraduate</h3>
+        <form onSubmit={submit} className="space-y-3">
+          <Field label="Matric No"><TextInput value={form.matricNo} onChange={set("matricNo")} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="First Name"><TextInput value={form.firstName} onChange={set("firstName")} /></Field>
+            <Field label="Last Name"><TextInput value={form.lastName} onChange={set("lastName")} /></Field>
+          </div>
+          <Field label="Email"><TextInput type="email" value={form.email} onChange={set("email")} /></Field>
+          <Field label="Title"><TextInput value={form.title} onChange={set("title")} placeholder="M.Sc / Ph.D" /></Field>
+          <Field label="Research Area"><TextInput value={form.researchArea} onChange={set("researchArea")} /></Field>
+          <Msg kind="err" text={msg} />
+          <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
+            {busy ? "Saving…" : "Create Postgraduate"}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- Lookup & Edit (staff / student detail + update) ---------- */
+function LookupTab({ instId }) {
+  const [kind, setKind] = useState("student");
+  const [query, setQuery] = useState("");
+  const [depts, setDepts] = useState([]);
+  const [deptId, setDeptId] = useState("");
+  const [records, setRecords] = useState([]);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!instId) return;
+    onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
+  }, [instId]);
+
+  const search = async (e) => {
+    e.preventDefault();
+    setError(""); setMsg(""); setResult(null); setRecords([]);
+    setBusy(true);
+    try {
+      if (kind === "student") {
+        if (query.trim()) {
+          const s = await onboardingApi.getStudent(query.trim());
+          setResult(s);
+        } else if (deptId) {
+          const list = await onboardingApi.getDepartmentStudents(deptId, instId);
+          setRecords(list || []);
+        } else {
+          const list = await onboardingApi.getStudentsByInstitution(instId);
+          setRecords(list || []);
+        }
+      } else {
+        if (query.trim()) {
+          const s = await onboardingApi.getStaff(query.trim(), instId);
+          setResult(s);
+        } else if (deptId) {
+          const list = await onboardingApi.getStaffList(deptId);
+          setRecords(list || []);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateStudent = async (ev) => {
+    ev.preventDefault();
+    if (!result || !result.MatricNo) return;
+    setMsg(""); setError("");
+    setBusy(true);
+    try {
+      await onboardingApi.updateStudent(result.MatricNo, {
+        MatricNo: result.MatricNo,
+        FirstName: result.FirstName,
+        LastName: result.LastName,
+        Email: result.Email,
+        PhoneNo: result.PhoneNo,
+        AreaOfInterest: result.AreaOfInterest,
+        Level: result.Level,
+        DepartmentId: result.DepartmentId ? Number(result.DepartmentId) : Number(deptId || instId && 0),
+        InstitutionId: Number(instId),
+      });
+      setMsg("Student updated.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pk = (r) => r.Id ?? r.id ?? r.MatricNo ?? r.staffId ?? JSON.stringify(r);
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">Lookup Staff / Student</h3>
+        <form onSubmit={search} className="flex flex-col md:flex-row gap-3 md:items-end">
+          <CustomField label="Type">
+            <SelectInput value={kind} onChange={(e) => setKind(e.target.value)} className="max-w-[140px]">
+              <option value="student">Student</option>
+              <option value="staff">Staff</option>
+            </SelectInput>
+          </CustomField>
+          <CustomField label="Matric / Staff ID">
+            <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by ID" />
+          </CustomField>
+          <CustomField label="Department (optional)">
+            <SelectInput value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+              <option value="">All departments</option>
+              {depts.map((d) => (
+                <option key={d.Id} value={String(d.Id)}>{d.Name}</option>
+              ))}
+            </SelectInput>
+          </CustomField>
+          <button className="bg-primary text-on-primary px-5 py-2 rounded font-label-md" disabled={busy}>
+            {busy ? "Searching…" : "Search"}
+          </button>
+        </form>
+        <div className="mt-2">
+          <Msg kind="err" text={error} />
+          {msg && <Msg kind="ok" text={msg} />}
+        </div>
+      </Card>
+
+      {result && (
+        <Card className="p-5">
+          <h3 className="font-headline-sm font-semibold text-primary mb-3">Edit {kind === "student" ? "Student" : "Staff"}</h3>
+          {Object.entries(result).map(([k, v]) => (
+            <div key={k} className="mb-2 flex flex-col sm:flex-row sm:gap-3">
+              <span className="font-label-md text-on-surface-variant w-48 shrink-0">{k}</span>
+              <input
+                className={inputCls}
+                value={v ?? ""}
+                onChange={(e) => setResult((r) => ({ ...r, [k]: e.target.value }))}
+              />
+            </div>
+          ))}
+          {kind === "student" && (
+            <button className="mt-3 bg-primary text-on-primary px-5 py-2 rounded font-label-md" onClick={updateStudent} disabled={busy}>
+              Update Student
+            </button>
+          )}
+        </Card>
+      )}
+
+      {records.length > 0 && (
+        <Card className="p-5">
+          <h3 className="font-headline-sm font-semibold text-primary mb-3">{kind === "student" ? "Students" : "Staff"} ({records.length})</h3>
+          <div className="overflow-x-auto text-sm">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-on-surface-variant border-b border-outline-variant">
+                  <th className="py-2">{kind === "student" ? "Matric No" : "Staff ID"}</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2">Department</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container">
+                {records.map((r) => (
+                  <tr key={pk(r)}>
+                    <td className="py-2 font-medium text-on-surface">{r.MatricNo ?? r.staffId ?? r.Id}</td>
+                    <td className="py-2 text-on-surface-variant">{r.FirstName} {r.LastName}</td>
+                    <td className="py-2 text-on-surface-variant">{r.DepartmentName || r.DepartmentId || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function CustomField({ label, children }) {
+  return (
+    <label className="block flex-1">
+      <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{label}</span>
+      <div className="mt-1">{children}</div>
+    </label>
   );
 }

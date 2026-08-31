@@ -181,6 +181,152 @@ export const authApi = {
   },
 };
 
+// ---- User Management (IAM Section 6) ----
+export const userApi = {
+  async getUser(id) {
+    const res = await apiFetch("api/usermgt/get-user/" + encodeURIComponent(id), { method: "GET" });
+    if (!res.ok) throw new Error("Could not get user");
+    return res.json();
+  },
+  async createUser(payload) {
+    const res = await apiFetch("api/usermgt/create-user", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return parseSimple(res, "User created");
+  },
+  async updateUser(id, payload) {
+    const res = await apiFetch("api/usermgt/update-user/" + encodeURIComponent(id), {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    return parseSimple(res, "User updated");
+  },
+  async deleteUser(id) {
+    const res = await apiFetch("api/usermgt/delete-user/" + encodeURIComponent(id), {
+      method: "DELETE",
+    });
+    return parseSimple(res, "User deleted");
+  },
+  // createOwner needs ownerType enum (Institution=1, Personal=2)
+  async createOwner(payload) {
+    const res = await apiFetch("api/usermgt/create-owner", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return parseSimple(res, "Owner created");
+  },
+};
+
+// ---- Owner Management (IAM Section 7) ----
+export const ownerApi = {
+  async getAllOwners() {
+    const res = await apiFetch("api/usermgt/get-all-owners", { method: "GET" });
+    if (!res.ok) throw new Error("Could not load owners");
+    return res.json();
+  },
+  async getOwnerByName(username) {
+    const res = await apiFetch(
+      "api/usermgt/get-owner-by-name" + qs({ username }),
+      { method: "GET" }
+    );
+    if (!res.ok) throw new Error("Could not find owner");
+    return res.json();
+  },
+  async getOwnerByCode(code) {
+    const res = await apiFetch(
+      "api/usermgt/get-owner-by-code" + qs({ code }),
+      { method: "GET" }
+    );
+    if (!res.ok) throw new Error("Could not find owner");
+    return res.json();
+  },
+  async getMiniOwnerByCode(ownerCode) {
+    const res = await apiFetch(
+      "api/usermgt/get-miniowner-by-code/" + encodeURIComponent(ownerCode),
+      { method: "GET" }
+    );
+    if (!res.ok) throw new Error("Could not find owner");
+    return res.json();
+  },
+  async getActiveOwners() {
+    const res = await apiFetch("api/usermgt/get-active-owners", { method: "GET" });
+    if (!res.ok) throw new Error("Could not load active owners");
+    return res.json();
+  },
+};
+
+// ---- Role Management (IAM Section 9) ----
+export const roleApi = {
+  async getRoles() {
+    const res = await apiFetch("api/usermgt/get-app-roles", { method: "GET" });
+    if (!res.ok) throw new Error("Could not load roles");
+    return res.json();
+  },
+  async assignRoles(userName, roles) {
+    const res = await apiFetch("api/usermgt/assign-roles", {
+      method: "POST",
+      body: JSON.stringify({ userName, roles }),
+    });
+    return parseSimple(res, "Roles assigned");
+  },
+};
+
+// ---- Mail (IAM Section 5.2-5.3, 8) ----
+export const mailApi = {
+  async sendEmail({ toEmail, subject, message }) {
+    const res = await apiFetch("api/Mail/send", {
+      method: "POST",
+      body: JSON.stringify({ toEmail, subject, message }),
+    });
+    return parseSimple(res, "Email sent");
+  },
+  async sendVerification(email) {
+    const res = await apiFetch(
+      "api/Mail/send-verification" + qs({ email }),
+      { method: "POST" }
+    );
+    return parseSimple(res, "Verification email sent");
+  },
+  async resendVerificationEmail(email) {
+    const res = await apiFetch("api/usermgt/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return parseSimple(res, "Verification email resent");
+  },
+};
+
+// Small helper: parse ServiceResult-ish envelope (message may be in {message})
+async function parseSimple(res, fallback) {
+  let body = null;
+  try {
+    body = await res.json();
+  } catch (e) {
+    body = null;
+  }
+  if (!res.ok) {
+    const msg =
+      (body && (body.message || body.errorCode || (body.errors && body.errors.join(" ")))) ||
+      "Request failed (" + res.status + ")";
+    throw new Error(msg);
+  }
+  if (body && body.success === false) {
+    throw new Error(body.message || body.errors?.join(" ") || "Operation failed");
+  }
+  if (body && typeof body === "object" && body.message) return body.message;
+  return body || fallback;
+}
+
+function qs(params) {
+  const us = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") us.append(k, v);
+  });
+  const s = us.toString();
+  return s ? "?" + s : "";
+}
+
 const ROLE_CLAIM = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
 
 export function decodeToken(token) {

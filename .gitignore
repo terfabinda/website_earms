@@ -15,3 +15,6 @@ dist/stitch/
 # Microsoft Word documents
 *.docx
 ~$*.docx
+
+# Local implementation report (not committed)
+IMPLEMENTATION_REPORT.md

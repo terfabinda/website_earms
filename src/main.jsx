@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { authApi, tokenService, getRoleFromToken, routeForRole } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
+import { IamAdmin } from './iam-admin.jsx'
 
 // ----- Routing -----
 const pages = {
@@ -16,6 +17,7 @@ const pages = {
   student: { label: 'Student' },
   faculty: { label: 'Faculty' },
   admin: { label: 'Admin' },
+  system: { label: 'System Admin' },
 }
 function usePage() {
   const getInitial = () => {
@@ -763,6 +765,7 @@ function DashShell({ go, active, title, subtitle, children, role }) {
               {navItems.slice(1).map(it=>(
                 <li key={it.key}><a className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg" href="#"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</a></li>
               ))}
+              <li><button onClick={()=>go('system')} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li>
             </>
           ) : role==='faculty' ? (
             <>
@@ -1018,7 +1021,7 @@ function App() {
   useEffect(()=>{ window.EARMS_GO = go },[go])
   // protect authenticated routes: bounce to login when there is no token
   useEffect(() => {
-    if (['dashboard','student','faculty','admin'].includes(page) && !tokenService.isAuthenticated()) {
+    if (['dashboard','student','faculty','admin','system'].includes(page) && !tokenService.isAuthenticated()) {
       go('login')
     }
   }, [page])
@@ -1034,6 +1037,11 @@ function App() {
       {page==='student' && <StudentDashboard go={go} />}
       {page==='faculty' && <FacultyDashboard go={go} />}
       {page==='admin' && <AdminPanel go={go} />}
+      {page==='system' && (
+        <DashShell go={go} active="admin" role="admin" title="System Administration" subtitle="IAM user, owner, role and mail management.">
+          <IamAdmin go={go} />
+        </DashShell>
+      )}
     </div>
   )
 }

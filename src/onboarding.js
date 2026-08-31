@@ -69,14 +69,59 @@ export const onboardingApi = {
   async getInstitutionsDropdown() {
     return obFetch("get-institutions-dropdown");
   },
+  async getInstitutions() {
+    return obFetch("get-institution");
+  },
+  async getInstitutionByCode(code) {
+    return obFetch("get-institution/" + encodeURIComponent(code));
+  },
+  async getMinInstitutions() {
+    return obFetch("min-institutions");
+  },
+  async getMinInstitution(id) {
+    return obFetch("get-mininstitution/" + encodeURIComponent(id));
+  },
+  async getInstitutionId() {
+    return obFetch("get-institionid");
+  },
   async getColleges(institutionId) {
     return obFetch("get-colleges" + qs({ institutionId }));
+  },
+  async createCollege(payload) {
+    return obFetch("create-college", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  async getLevels(institutionId) {
+    return obFetch("get-levels/" + encodeURIComponent(institutionId));
+  },
+  async createLevel(payload) {
+    return obFetch("create-level", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   async getDepartments(institutionId) {
     return obFetch(institutionId + "/get-depts");
   },
+  async getMiniDepartments(id) {
+    return obFetch("get-minidepts/" + encodeURIComponent(id));
+  },
+  async getMiniDepartment(id) {
+    return obFetch("get-minidept/" + encodeURIComponent(id));
+  },
   async getPrograms(institutionId, departmentId) {
     return obFetch("get-programs/" + institutionId + "/" + departmentId);
+  },
+  async getProgram(id) {
+    return obFetch("programs/" + encodeURIComponent(id));
+  },
+  async updateProgram(id, payload) {
+    return obFetch("programs/" + encodeURIComponent(id), {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
   },
   async getAcademicStaff({ programId, departmentId, institutionId }) {
     return obFetch(
@@ -87,6 +132,56 @@ export const onboardingApi = {
     return obFetch(
       "unassigned-students" + qs({ programId, departmentId, institutionId })
     );
+  },
+  async getStaffList(departmentId) {
+    return obFetch("departments/" + encodeURIComponent(departmentId) + "/stafflist");
+  },
+  async getStaff(staffId, institutionId) {
+    return obFetch("staff/" + encodeURIComponent(staffId) + "/" + encodeURIComponent(institutionId));
+  },
+  async updateStaff(staffId, payload) {
+    return obFetch("staff/" + encodeURIComponent(staffId), {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+  async getStudent(matricNo) {
+    return obFetch("get_student/" + encodeURIComponent(matricNo));
+  },
+  async getStudentIam(matricNo) {
+    return obFetch("get_student_iam" + qs({ matricNo }));
+  },
+  async getStaffIam(staffId) {
+    return obFetch("get_staff_iam" + qs({ staffId }));
+  },
+  async getStudentsByInstitution(institutionId) {
+    return obFetch("get_student_by_institution" + qs({ institutionId }));
+  },
+  async getDepartmentStudents(departmentId, institutionId) {
+    return obFetch(
+      "get_department_student/" + encodeURIComponent(departmentId) + "/" + encodeURIComponent(institutionId)
+    );
+  },
+  async getStudentDepartment(matricNo, institutionId) {
+    return obFetch(
+      "get_student_department/" + encodeURIComponent(matricNo) + "/" + encodeURIComponent(institutionId)
+    );
+  },
+  async updateStudent(matricNo, payload) {
+    return obFetch("update_student/" + encodeURIComponent(matricNo), {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+  async getPostgraduates(id) {
+    // API expects the institution as `id`, not `institutionId`
+    return obFetch("GetPG" + qs({ id }));
+  },
+  async createPostgraduate(payload) {
+    return obFetch("create-pg", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
   // ---- Create ----
