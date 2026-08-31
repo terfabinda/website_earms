@@ -761,31 +761,31 @@ function DashShell({ go, active, title, subtitle, children, role }) {
           {/* Dynamic nav - for admin, highlight System Topology etc */}
           {role==='admin' ? (
             <>
-              <li><a className="flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg" href="#"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</a></li>
+              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><a className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg" href="#"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</a></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
               <li><button onClick={()=>go('system')} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li>
             </>
           ) : role==='faculty' ? (
             <>
-              <li><a className="flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg" href="#"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</a></li>
+              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><a className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg" href="#"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</a></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           ) : (
             // student
             <>
-              <li><a className="flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg" href="#"><span className="material-symbols-outlined">dashboard</span> Dashboard</a></li>
+              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><a className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg" href="#"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</a></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           )}
         </ul>
         <div className="pt-4 border-t border-outline-variant mt-auto space-y-1">
-          <a className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg" href="#"><span className="material-symbols-outlined text-[20px]">help_outline</span> Help Center</a>
+          <button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">help_outline</span> Help Center</button>
           <button onClick={logout} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg cursor-pointer w-full text-left"><span className="material-symbols-outlined text-[20px]">logout</span> Logout</button>
           <div className="flex gap-1 pt-2">
             <button onClick={()=>go('student')} className={`flex-1 py-1.5 rounded text-[11px] font-bold ${active==='student' ? 'bg-primary text-on-primary' : 'bg-surface-variant'}`}>Student</button>
@@ -823,10 +823,10 @@ function DashShell({ go, active, title, subtitle, children, role }) {
             <h2 className="hidden md:block font-headline-md font-bold text-primary truncate">{title}</h2>
             <div className="flex md:hidden items-center gap-2"><span className="font-headline-sm font-bold">{title}</span></div>
             <nav className="hidden md:flex gap-6 items-center">
-              <a className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm" href="#">Research</a>
-              <a className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm" href="#">Grants</a>
-              <a className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm" href="#">Compliance</a>
-              <a className="text-primary border-b-2 border-primary font-bold pb-1 text-sm" href="#">Analytics</a>
+              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Research</button>
+              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Grants</button>
+              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Compliance</button>
+              <button type="button" className="text-primary border-b-2 border-primary font-bold pb-1 text-sm">Analytics</button>
             </nav>
             <div className="flex items-center gap-2 md:gap-3">
               <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>
