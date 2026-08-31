@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, tokenService, getRoleFromToken, routeForRole } from './iam'
+import { authApi, userApi, tokenService, getRoleFromToken, routeForRole } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { IamAdmin } from './iam-admin.jsx'
 
@@ -10,6 +10,7 @@ const pages = {
   landing: { label: 'Landing' },
   gateway: { label: 'Gateway' },
   login: { label: 'Login' },
+  signup: { label: 'Sign Up' },
   forgot: { label: 'Forgot' },
   reset: { label: 'Reset' },
   verify: { label: 'Verify' },
@@ -398,12 +399,17 @@ function Login({ go }) {
   const [show, setShow] = useState(false)
   const [email, setEmail] = useState('')
   const [pwd, setPwd] = useState('')
+  const [remember, setRemember] = useState(() => localStorage.getItem('earms_remember') === '1')
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     const q = new URLSearchParams((window.location.hash.split('?')[1]) || window.location.search)
     if (q.get('reset') === 'success') setInfo('Your password has been reset. Please sign in with your new password.')
+    if (localStorage.getItem('earms_remember') === '1') {
+      const saved = localStorage.getItem('earms_savedUser')
+      if (saved) setEmail(saved)
+    }
   }, [])
   const submit = async (e) => {
     e.preventDefault()
@@ -412,6 +418,13 @@ function Login({ go }) {
     setBusy(true)
     try {
       await authApi.login(email.trim(), pwd)
+      if (remember) {
+        localStorage.setItem('earms_remember', '1')
+        localStorage.setItem('earms_savedUser', email.trim())
+      } else {
+        localStorage.removeItem('earms_remember')
+        localStorage.removeItem('earms_savedUser')
+      }
       go(routeForRole(getRoleFromToken()))
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.')
@@ -453,10 +466,7 @@ function Login({ go }) {
               </div>
             </div>
             <div className="space-y-xs">
-              <div className="flex items-center justify-between">
-                <label className="font-label-md text-label-md text-on-surface block" htmlFor="password">Password</label>
-                <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer" onClick={(e)=>{e.preventDefault(); go('forgot')}}>Forgot Password?</a>
-              </div>
+              <label className="font-label-md text-label-md text-on-surface block" htmlFor="password">Password</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">lock</span>
                 <input className="w-full pl-xl pr-xl py-[12px] bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md" id="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="••••••••" required type={show ? 'text':'password'} />
@@ -465,7 +475,14 @@ function Login({ go }) {
                 </button>
               </div>
             </div>
-            <button className="w-full bg-primary text-on-primary font-label-md text-label-md py-[14px] rounded-lg hover:bg-primary-fixed-dim transition-colors duration-200 flex justify-center items-center gap-sm mt-md shadow-sm" type="submit" disabled={busy}>
+            <div className="flex items-center justify-between mt-md mb-xs">
+              <label className="flex items-center gap-sm cursor-pointer select-none">
+                <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} className="w-4 h-4 rounded border-outline-variant accent-primary" />
+                <span className="font-label-md text-label-md text-on-surface-variant">Remember Me</span>
+              </label>
+              <a className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer" onClick={(e)=>{e.preventDefault(); go('forgot')}}>Forgot Password?</a>
+            </div>
+            <button className="w-full bg-primary text-on-primary font-label-md text-label-md py-[14px] rounded-lg hover:bg-primary-fixed-dim transition-colors duration-200 flex justify-center items-center gap-sm mt-sm shadow-sm" type="submit" disabled={busy}>
               {busy ? 'Signing in…' : 'Sign In'} <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </button>
             <div className="relative flex items-center py-sm">
@@ -476,6 +493,10 @@ function Login({ go }) {
             <button type="button" onClick={()=>setError('SSO / Institutional Login is not available yet.')} className="w-full bg-surface-container text-on-surface font-label-md text-label-md py-[14px] rounded-lg border border-outline-variant hover:bg-surface-variant transition-colors duration-200 flex justify-center items-center gap-sm shadow-sm">
               <span className="material-symbols-outlined text-[18px] text-secondary">domain</span> SSO / Institutional Login
             </button>
+            <p className="text-center font-body-sm text-body-sm text-on-surface-variant pt-sm">
+              Don't have an account?{" "}
+              <button type="button" onClick={()=>go('signup')} className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer">Sign Up</button>
+            </p>
           </form>
         </div>
         <div className="mt-xl text-center pb-md border-t border-outline-variant pt-md">
@@ -488,6 +509,111 @@ function Login({ go }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/* ---------- Sign Up / Create Account (POST /api/usermgt/create-user) ---------- */
+function Signup({ go }) {
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [userName, setUserName] = useState('')
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('Student')
+  const [pwd, setPwd] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
+  const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setError(''); setInfo('')
+    if (!firstName.trim() || !lastName.trim() || !userName.trim() || !email.trim()) {
+      setError('Please fill in your name, username and email.'); return
+    }
+    if (!pwd) { setError('Please choose a password.'); return }
+    if (pwd !== confirm) { setError('Passwords do not match.'); return }
+    setBusy(true)
+    try {
+      await userApi.createUser({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        userName: userName.trim(),
+        email: email.trim(),
+        password: pwd,
+        roles: [role],
+      })
+      setInfo('Account created. You can now sign in.')
+    } catch (err) {
+      setError(err.message || 'Could not create account.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const input = "w-full pl-3 pr-3 py-2.5 bg-surface-bright border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-body-md font-body-md placeholder-outline-variant"
+  return (
+    <AuthCard go={go}>
+      <h1 className="font-headline-md text-headline-md text-on-surface text-center">Create Account</h1>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Register to access the EARMS research portal.</p>
+      {error && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{error}</div>}
+      {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{info}</div>}
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="font-label-md text-label-md text-on-surface block" htmlFor="firstName">First Name</label>
+            <input className={input} id="firstName" value={firstName} onChange={e=>setFirstName(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <label className="font-label-md text-label-md text-on-surface block" htmlFor="lastName">Last Name</label>
+            <input className={input} id="lastName" value={lastName} onChange={e=>setLastName(e.target.value)} required />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suUsername">Username</label>
+          <input className={input} id="suUsername" value={userName} onChange={e=>setUserName(e.target.value)} autoComplete="username" required />
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suEmail">Email</label>
+          <input className={input} id="suEmail" type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required />
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suRole">Account Type</label>
+          <select className={input} id="suRole" value={role} onChange={e=>setRole(e.target.value)}>
+            <option value="Student">Student</option>
+            <option value="Faculty">Faculty / Researcher</option>
+            <option value="InstitutionAdmin">Institution Admin</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="font-label-md text-label-md text-on-surface block" htmlFor="suPassword">Password</label>
+            <div className="relative">
+              <input className={input + " pr-10"} id="suPassword" type={show ? 'text' : 'password'} value={pwd} onChange={e=>setPwd(e.target.value)} autoComplete="new-password" required />
+              <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface" aria-label="Show password">
+                <span className="material-symbols-outlined text-[20px]">{show ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="font-label-md text-label-md text-on-surface block" htmlFor="suConfirm">Confirm Password</label>
+            <div className="relative">
+              <input className={input + " pr-10"} id="suConfirm" type={show ? 'text' : 'password'} value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required />
+              <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface" aria-label="Show password">
+                <span className="material-symbols-outlined text-[20px]">{show ? 'visibility_off' : 'visibility'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button className="w-full bg-primary text-on-primary font-label-md text-label-md py-[14px] rounded-lg hover:bg-primary-fixed-dim transition-colors duration-200 flex justify-center items-center gap-2 shadow-sm" type="submit" disabled={busy}>
+          {busy ? 'Creating…' : 'Create Account'}
+        </button>
+        <p className="text-center font-body-sm text-body-sm text-on-surface-variant">
+          Already have an account?{" "}
+          <button type="button" onClick={()=>go('login')} className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer">Sign In</button>
+        </p>
+      </form>
+    </AuthCard>
   )
 }
 
@@ -1030,6 +1156,7 @@ function App() {
       {page==='landing' && <Landing go={go} />}
       {page==='gateway' && <Gateway go={go} />}
       {page==='login' && <Login go={go} />}
+      {page==='signup' && <Signup go={go} />}
       {page==='forgot' && <ForgotPassword go={go} />}
       {page==='reset' && <ResetPassword go={go} />}
       {page==='verify' && <VerifyEmail go={go} />}
