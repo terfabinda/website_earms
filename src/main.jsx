@@ -512,16 +512,35 @@ function Login({ go }) {
   )
 }
 
-/* ---------- Sign Up / Create Account (POST /api/usermgt/create-user) ---------- */
+/* ---------- Sign Up / Create Account (POST /api/usermgt/create-owner) ---------- */
+const AFRICAN_REGIONS = [
+  { id: 1, name: "Nigeria" },
+  { id: 2, name: "Ghana" },
+  { id: 3, name: "Kenya" },
+  { id: 4, name: "Zambia" },
+  { id: 5, name: "Zimbabwe" },
+  { id: 6, name: "South Africa" },
+  { id: 7, name: "Egypt" },
+  { id: 8, name: "Morocco" },
+  { id: 9, name: "Ethiopia" },
+  { id: 10, name: "Uganda" },
+  { id: 11, name: "Namibia" },
+  { id: 12, name: "Tanzania" },
+  { id: 13, name: "Botswana" },
+  { id: 14, name: "Mozambique" },
+];
+
 function Signup({ go }) {
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
+  const [ownerType, setOwnerType] = useState(1) // 1 = Institution, 2 = Personal
+  const [ownerName, setOwnerName] = useState('')
+  const [institutionCode, setInstitutionCode] = useState('')
+  const [region, setRegion] = useState('')
   const [userName, setUserName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState('Student')
   const [pwd, setPwd] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
+  const [terms, setTerms] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [busy, setBusy] = useState(false)
@@ -529,20 +548,32 @@ function Signup({ go }) {
   const submit = async (e) => {
     e.preventDefault()
     setError(''); setInfo('')
-    if (!firstName.trim() || !lastName.trim() || !userName.trim() || !email.trim()) {
-      setError('Please fill in your name, username and email.'); return
+    if (!ownerName.trim() || !userName.trim() || !email.trim()) {
+      setError('Please fill in the name, username and email.'); return
     }
+    if (ownerType === 1 && !institutionCode.trim()) {
+      setError('Please provide an institution code.'); return
+    }
+    if (!region) { setError('Please select a region.'); return }
     if (!pwd) { setError('Please choose a password.'); return }
     if (pwd !== confirm) { setError('Passwords do not match.'); return }
+    if (!terms) { setError('You must accept the Terms and Conditions.'); return }
     setBusy(true)
     try {
-      await userApi.createUser({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+      await userApi.createOwner({
+        ownerName: ownerName.trim(),
+        ownerType: Number(ownerType),
+        ownerEmail: email.trim(),
         userName: userName.trim(),
-        email: email.trim(),
         password: pwd,
-        roles: [role],
+        region: Number(region),
+        userRoles: [ownerType === 1 ? 'InstitutionAdmin' : 'Admin'],
+        institutionCode: ownerType === 1 ? institutionCode.trim() : '',
+        institutionName: ownerType === 1 ? ownerName.trim() : '',
+        isActive: true,
+        preferredLanguage: 'en',
+        preferredCurrency: 'NGN',
+        timeZone: 'Africa/Lagos',
       })
       setInfo('Account created. You can now sign in.')
     } catch (err) {
@@ -555,19 +586,36 @@ function Signup({ go }) {
   return (
     <AuthCard go={go}>
       <h1 className="font-headline-md text-headline-md text-on-surface text-center">Create Account</h1>
-      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Register to access the EARMS research portal.</p>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Register a new institution or personal account for EARMS.</p>
       {error && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{error}</div>}
       {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{info}</div>}
       <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface block" htmlFor="firstName">First Name</label>
-            <input className={input} id="firstName" value={firstName} onChange={e=>setFirstName(e.target.value)} required />
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suType">Account Type</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={()=>setOwnerType(1)} className={`py-2.5 rounded-lg border font-label-md transition-colors ${ownerType===1 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-bright border-outline-variant text-on-surface-variant hover:bg-surface-variant'}`}>Institution</button>
+            <button type="button" onClick={()=>setOwnerType(2)} className={`py-2.5 rounded-lg border font-label-md transition-colors ${ownerType===2 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-bright border-outline-variant text-on-surface-variant hover:bg-surface-variant'}`}>Personal</button>
           </div>
+          <input type="hidden" id="suType" value={ownerType} />
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suOwnerName">{ownerType === 1 ? 'Institution Name' : 'Full Name'}</label>
+          <input className={input} id="suOwnerName" value={ownerName} onChange={e=>setOwnerName(e.target.value)} autoComplete="organization" required />
+        </div>
+        {ownerType === 1 && (
           <div className="space-y-1">
-            <label className="font-label-md text-label-md text-on-surface block" htmlFor="lastName">Last Name</label>
-            <input className={input} id="lastName" value={lastName} onChange={e=>setLastName(e.target.value)} required />
+            <label className="font-label-md text-label-md text-on-surface block" htmlFor="suInstCode">Institution Code</label>
+            <input className={input} id="suInstCode" value={institutionCode} onChange={e=>setInstitutionCode(e.target.value)} placeholder="e.g. 50F" required />
           </div>
+        )}
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suRegion">Region</label>
+          <select className={input} id="suRegion" value={region} onChange={e=>setRegion(e.target.value)} required>
+            <option value="">-- Select Region --</option>
+            {AFRICAN_REGIONS.map(r => (
+              <option key={r.id} value={String(r.id)}>{r.name}</option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1">
           <label className="font-label-md text-label-md text-on-surface block" htmlFor="suUsername">Username</label>
@@ -576,14 +624,6 @@ function Signup({ go }) {
         <div className="space-y-1">
           <label className="font-label-md text-label-md text-on-surface block" htmlFor="suEmail">Email</label>
           <input className={input} id="suEmail" type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required />
-        </div>
-        <div className="space-y-1">
-          <label className="font-label-md text-label-md text-on-surface block" htmlFor="suRole">Account Type</label>
-          <select className={input} id="suRole" value={role} onChange={e=>setRole(e.target.value)}>
-            <option value="Student">Student</option>
-            <option value="Faculty">Faculty / Researcher</option>
-            <option value="InstitutionAdmin">Institution Admin</option>
-          </select>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
@@ -605,6 +645,13 @@ function Signup({ go }) {
             </div>
           </div>
         </div>
+        <label className="flex items-start gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={terms} onChange={e=>setTerms(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-outline-variant accent-primary" />
+          <span className="font-body-sm text-body-sm text-on-surface-variant">
+            I agree to the{" "}<button type="button" className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer underline">Terms and Conditions</button>{" "}
+            and{" "}<button type="button" className="font-label-md text-label-md text-primary hover:text-primary-fixed-dim cursor-pointer underline">Privacy Policy</button>.
+          </span>
+        </label>
         <button className="w-full bg-primary text-on-primary font-label-md text-label-md py-[14px] rounded-lg hover:bg-primary-fixed-dim transition-colors duration-200 flex justify-center items-center gap-2 shadow-sm" type="submit" disabled={busy}>
           {busy ? 'Creating…' : 'Create Account'}
         </button>
