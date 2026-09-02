@@ -47,7 +47,7 @@ function Card({ children, className = "" }) {
 /* ---------- top-level Admin Onboarding ---------- */
 const TABS = [
   "overview", "departments", "programs", "staff", "students",
-  "colleges", "levels", "postgraduate", "lookup", "institution",
+  "colleges", "levels", "postgraduate", "lookup",
 ];
 
 function tabFromHash() {
@@ -88,7 +88,6 @@ export function AdminOnboarding({ go }) {
     { key: "levels", label: "Levels", icon: "format_list_numbered" },
     { key: "postgraduate", label: "Postgraduate", icon: "workspaces" },
     { key: "lookup", label: "Lookup & Edit", icon: "travel_explore" },
-    { key: "institution", label: "New Institution", icon: "add_business" },
   ];
 
   return (
@@ -134,7 +133,6 @@ export function AdminOnboarding({ go }) {
       {tab === "levels" && <LevelsTab instId={instId} />}
       {tab === "postgraduate" && <PostgraduateTab instId={instId} />}
       {tab === "lookup" && <LookupTab instId={instId} />}
-      {tab === "institution" && <InstitutionTab />}
     </div>
   );
 }
