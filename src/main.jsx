@@ -915,15 +915,11 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   ]
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Onboarding', icon: 'assignment'},
-    {label: 'Subscriber', icon: 'groups', subitems: ['PG','College','Department','Programme']},
-    {label: 'Staff', icon: 'badge'},
-    {label: 'Student', icon: 'school'},
-    {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade','Payment History','Subscription History','Failed Payments']},
-    {label: 'Role Management', icon: 'admin_panel_settings', subitems: ['Assign Role','Remove Role']},
+    {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG','College','Department','Programme','Staff','Student']},
+    {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade']},
+    {label: 'Payment History', icon: 'receipt_long', subitems: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role']},
     {label: 'Analytics', icon: 'insights', subitems: ['Summary']},
-    {label: 'Remove Role', icon: 'person_remove'},
-    {label: 'Reset Password', icon: 'lock_reset'},
+    {label: 'Settings', icon: 'settings'},
     {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   // map active to highlight
@@ -965,7 +961,8 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
+                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : undefined
+                    return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
                     <li key={it.label}>
@@ -975,7 +972,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                       {isOpen && (
                         <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
                           {it.subitems.map(sub => (
-                            <li key={sub}><button type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
+                            <li key={sub}><button onClick={()=>go(`admin?section=${it.label.toLowerCase().replace(/\s+/g, '-')}&item=${encodeURIComponent(sub)}`)} type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
                           ))}
                         </ul>
                       )}
@@ -1220,6 +1217,124 @@ function SystemHome({ go }) {
   )
 }
 
+/* ---------- Institution Home Dashboard ---------- */
+function InstitutionHome({ go }) {
+  const q = useHashQuery()
+  const section = (q.get('section') || '').toLowerCase()
+  const item = q.get('item') || ''
+  const sectionKey = section.replace(/-/g, ' ')
+
+  if (section) {
+    const isSettings = section === 'settings'
+    const isOnboarding = section === 'onboarding'
+    return (
+      <div className="space-y-6 max-w-5xl">
+        <button onClick={()=>go('admin')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Home
+        </button>
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">{section==='onboarding'?'assignment':section==='subscription'?'card_membership':section==='payment history'?'receipt_long':section==='analytics'?'insights':'settings'}</span></div>
+            <div>
+              <h2 className="font-headline-md font-bold text-primary capitalize">{section} {item ? `— ${item}` : ''}</h2>
+              <p className="font-body-sm text-on-surface-variant">Manage {sectionKey} {item ? `· ${item}` : 'overview'}</p>
+            </div>
+          </div>
+          {isSettings ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">lock_reset</span> Change Password</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">Update your institution admin password.</p>
+                <button onClick={()=>go('forgot')} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Go to Reset Password</button>
+              </div>
+              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">tune</span> Institution Settings</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">Preferences, notifications and audit logs will appear here.</p>
+                <p className="font-body-sm text-[12px] text-outline text-center">More settings coming soon.</p>
+              </div>
+            </div>
+          ) : isOnboarding ? (
+            <div className="space-y-4">
+              <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
+              <AdminOnboarding go={go} />
+            </div>
+          ) : (
+            <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
+              <span className="material-symbols-outlined text-4xl text-outline mb-2">construction</span>
+              <p className="font-headline-sm text-on-surface">Placeholder for {section} {item && `· ${item}`}</p>
+              <p className="font-body-sm text-on-surface-variant mt-1">This view will host the {sectionKey} functionality ({item || 'overview'}).</p>
+              <button onClick={()=>go('admin')} className="mt-4 px-5 py-2 bg-primary text-on-primary rounded-lg font-label-md">Return to Dashboard</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const stats = [
+    {label: 'Total Students', value: '—', sub: 'Across all programmes', icon: 'school', color: 'bg-primary-container text-primary'},
+    {label: 'Academic Staff', value: '—', sub: 'Supervisors & lecturers', icon: 'badge', color: 'bg-secondary-container text-secondary'},
+    {label: 'Departments', value: '—', sub: 'Under colleges', icon: 'account_tree', color: 'bg-tertiary-container text-tertiary'},
+    {label: 'Active Subscription', value: 'Inactive', sub: 'Check status in Subscription', icon: 'card_membership', color: 'bg-surface-container-high text-on-surface'},
+  ]
+  const groups = [
+    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG','College','Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Subscribe, check and upgrade plans', subs: ['Subscribe','Check Status','Upgrade'], color: 'bg-secondary-fixed'},
+    {key: 'payment history', label: 'Payment History', icon: 'receipt_long', desc: 'History, failures and role assignments', subs: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role'], color: 'bg-tertiary-fixed'},
+    {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: ['Summary'], color: 'bg-surface-container-high'},
+    {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
+  ]
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {stats.map(s=>(
+          <div key={s.label} className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
+            <div>
+              <p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">{s.label}</p>
+              <p className="font-headline-lg font-bold text-primary leading-none mt-1">{s.value}</p>
+              <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{s.sub}</p>
+            </div>
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}><span className="material-symbols-outlined">{s.icon}</span></div>
+          </div>
+        ))}
+      </div>
+      <div>
+        <h3 className="font-headline-sm font-bold text-primary mb-3">Quick Access</h3>
+        <p className="font-body-sm text-on-surface-variant mb-4">Icons map directly to the sidebar — click a card or any sub-item to open its view.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {groups.map(g=>(
+            <div key={g.key} className="glass-card ambient-shadow rounded-xl border border-surface-container p-5 flex flex-col hover:shadow-elevated transition-shadow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${g.color}`}><span className="material-symbols-outlined">{g.icon}</span></div>
+                <div>
+                  <h4 className="font-label-md font-bold text-on-surface capitalize">{g.label}</h4>
+                  <p className="font-body-sm text-on-surface-variant text-[12px]">{g.desc}</p>
+                </div>
+              </div>
+              {g.subs.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1 mb-3">
+                  {g.subs.map(sub=>(
+                    <button key={sub} onClick={()=>go(`admin?section=${encodeURIComponent(g.key)}&item=${encodeURIComponent(sub)}`)} className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface-variant font-label-md text-[12px] border border-outline-variant">{sub}</button>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-body-sm text-outline text-[12px] mb-3">No sub-items</p>
+              )}
+              <button onClick={()=>go(g.key==='settings' ? 'admin?section=settings' : `admin?section=${encodeURIComponent(g.key)}`)} className="mt-auto w-full bg-primary text-on-primary py-2 rounded-lg font-label-md hover:bg-primary-fixed-dim flex items-center justify-center gap-1.5">
+                Open {g.label} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex items-start gap-3">
+        <span className="material-symbols-outlined text-primary">info</span>
+        <p className="font-body-sm text-on-surface-variant">Use the left sidebar — submenus are collapsed by default; click <span className="font-label-md text-on-surface">Home</span> to return here. Every card above mirrors a sidebar function with the same icon and stats.</p>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Student Dashboard (Stitch: 6cac2f74a4d34ab79e8c434ea4373e91) ---------- */
 function StudentDashboard({ go }) {
   return (
@@ -1374,8 +1489,8 @@ function FacultyDashboard({ go }) {
 /* ---------- Admin Control Panel (onboarding module) ---------- */
 function AdminPanel({ go }) {
   return (
-    <DashShell go={go} active="admin" role="admin" subrole="institution" title="Admin Overview" subtitle="Manage institutions, users, approvals, and platform operations.">
-      <AdminOnboarding go={go} />
+    <DashShell go={go} active="admin" role="admin" subrole="institution" title="Institution Administration" subtitle="Home dashboard with quick access to onboarding, subscription and payment history.">
+      <InstitutionHome go={go} />
     </DashShell>
   )
 }
