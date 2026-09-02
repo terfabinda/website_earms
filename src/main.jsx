@@ -889,7 +889,7 @@ function Dashboard({ go }) {
 }
 
 /* ---------- Shared Dashboard Shell ---------- */
-function DashShell({ go, active, title, subtitle, children, role }) {
+function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const [mobileNav, setMobileNav] = useState(false)
   const logout = async () => {
     try { await authApi.logout() } catch (e) {}
@@ -902,6 +902,31 @@ function DashShell({ go, active, title, subtitle, children, role }) {
     {key:'milestones', label:'Milestones', icon:'flag'},
     {key:'pubs', label:'Publications', icon:'article'},
     {key:'team', label:'Team Settings', icon:'group'},
+  ]
+  const systemAdminNavItems = [
+    {key: 'dashboard', label: 'Dashboard', icon: 'dashboard'},
+    {key: 'subscription-management', label: 'Subscription Management', icon: 'subscriptions'},
+    {key: 'plan-management', label: 'Plan Management', icon: 'folder'},
+    {key: 'subscription-analytics', label: 'Subscription Analytics', icon: 'analytics'},
+    {key: 'region-management', label: 'Region Management', icon: 'public'},
+    {label: 'Reset Password', icon: 'lock'},
+    {onClick: logout, label: 'Logout', icon: 'logout'},
+  ]
+  const institutionAdminNavItems = [
+    {label: 'Home', icon: 'home'},
+    {label: 'Onboarding', icon: 'drag_handle'},
+    {key: 'subscriber', label: 'Subscriber', icon: 'subscriptions'},
+    {subitem: {label: 'PG'}, subitem: {label: 'College'}, subitem: {label: 'Department'}, subitem: {label: 'Program'}},
+    {label: 'Staff', icon: 'group'},
+    {label: 'Student', icon: 'person'},
+    {key: 'subscription', label: 'Subscription', icon: 'subscriptions'},
+    {subitem: {label: 'Subscribe'}, subitem: {label: 'Check Status'}, subitem: {label: 'Upgrade'}, subitem: {label: 'Payment History'}, subitem: {label: 'Subscription History'}, subitem: {label: 'Failed Payments'}},
+    {key: 'role-management', label: 'Role Management', icon: 'manage'},
+    {subitem: {label: 'Assign Role'}, subitem: {label: 'Remove Role'}},
+    {label: 'Analytics', icon: 'analytics'},
+    {label: 'Summary', icon: 'insert_chart'},
+    {label: 'Reset Password', icon: 'lock'},
+    {onClick: logout, label: 'Logout', icon: 'logout'},
   ]
   // map active to highlight
   const isActive = (k) => {
@@ -931,28 +956,68 @@ function DashShell({ go, active, title, subtitle, children, role }) {
           <span className="material-symbols-outlined text-[18px]">add</span> {role==='admin' ? 'Add Institution' : 'New Grant Application'}
         </button>
         <ul className="flex-1 space-y-1 overflow-y-auto">
-          {/* Dynamic nav - for admin, highlight System Topology etc */}
+{/* Admin sidebar navigation */}
           {role==='admin' ? (
-            <>
-              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
-              {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
-              ))}
-              <li><button onClick={()=>go('system')} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li>
-            </>
+            // Determine if system admin or institution admin based on subrole
+            {subrole === 'institution' ? (
+              <>{institutionAdminNavItems.map(it => {
+                if (it.onClick) {
+                  return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                }
+                const subitems = it.subitem ? it.subitem : []
+                return (
+                  <li key={it.label}>
+                    <button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                      <span className="material-symbols-outlined">{it.icon}</span>
+                      {it.label}
+                      <span className="material-symbols-outlined text-[12px] ml-2">arrow_drop_down</span>
+                    </button>
+                    <ul className="ml-6 space-y-0.5 overflow-hidden">
+                      {subitems.map(sub => (
+                        <li key={sub.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-1 text-xs text-on-surface-variant rounded-lg hover:bg-surface-container-low text-left">{sub.label}</button></li>
+                      ))}
+                    </ul>
+                  </li>
+                )
+              })}</><li><button onClick={()=>go('system')} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li></>
+            ) : (
+              <>
+                <li><button type="button" className="w-full flex items-center gap-3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
+                {systemAdminNavItems.slice(0, -2).map(it => {
+                  if (it.onClick) {
+                    return <li key={it.key || it.label}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                  }
+                  return (
+                    <li key={it.key || it.label}>
+                      <button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                        <span className="material-symbols-outlined">{it.icon}</span>
+                        {it.label}
+                        <span className="material-symbols-outlined text-[12px] ml-2">arrow_drop_down</span>
+                      </button>
+                      <ul className="ml-6 space-y-0.5 overflow-hidden">
+                        {it.subitems?.map(sub => (
+                          <li key={sub.label}><button type="button" className="w-full flex items-center gap_3 px_3 py_1 text-xs text-on-surface-variant rounded-lg hover:bg-surface-container-low text-left">{sub.label}</button></li>
+                        ))}
+                      </ul>
+                    </li>
+                  )
+                })}
+                <li><button onClick={()=>go('system')} className="flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li>
+              </>
+            )}
           ) : role==='faculty' ? (
             <>
-              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
+              <li><button type="button" className="w-full flex items-center gap_3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           ) : (
             // student
             <>
-              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
+              <li><button type="button" className="w-full flex items-center gap_3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           )}
@@ -1182,7 +1247,7 @@ function FacultyDashboard({ go }) {
 /* ---------- Admin Control Panel (onboarding module) ---------- */
 function AdminPanel({ go }) {
   return (
-    <DashShell go={go} active="admin" role="admin" title="Admin Overview" subtitle="Manage institutions, users, approvals, and platform operations.">
+    <DashShell go={go} active="admin" role="admin" subrole="institution" title="Admin Overview" subtitle="Manage institutions, users, approvals, and platform operations.">
       <AdminOnboarding go={go} />
     </DashShell>
   )
