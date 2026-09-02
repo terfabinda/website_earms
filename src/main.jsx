@@ -906,6 +906,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {key:'team', label:'Team Settings', icon:'group'},
   ]
   const systemAdminNavItems = [
+    {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership', subitems: ['Verification','View','Pricing','Active','Suspend']},
     {label: 'Plan', icon: 'inventory_2', subitems: ['View Plans']},
     {label: 'Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Subscription Status','Ratings']},
@@ -983,7 +984,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 })}
               </>
             ) : (
-              // System admin - system route (role="admin" no subrole) -> Subscription, Plan, Analytics, Regional, Settings, Logout
+              // System admin - system route (role="admin" no subrole) -> Home, Subscription, Plan, Analytics, Regional, Settings
               <>
                 {systemAdminNavItems.map(it => {
                   const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
@@ -992,7 +993,8 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : undefined
+                    return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
                     <li key={it.label}>
@@ -1002,7 +1004,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                       {isOpen && (
                         <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
                           {it.subitems.map(sub => (
-                            <li key={sub}><button type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
+                            <li key={sub}><button onClick={()=>go(`system?section=${it.label.toLowerCase()}&item=${encodeURIComponent(sub)}`)} type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
                           ))}
                         </ul>
                       )}
@@ -1089,6 +1091,130 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           </header>
           {children}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- System Admin Home Dashboard ---------- */
+function SystemHome({ go }) {
+  const q = useHashQuery()
+  const section = (q.get('section') || '').toLowerCase()
+  const item = q.get('item') || ''
+
+  // If a specific section is requested, show placeholder for that section
+  if (section) {
+    const isSettings = section === 'settings'
+    return (
+      <div className="space-y-6 max-w-5xl">
+        <button onClick={()=>go('system')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Home
+        </button>
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">{section==='subscription'?'card_membership':section==='plan'?'inventory_2':section==='analytics'?'analytics':section==='regional'?'public':'settings'}</span></div>
+            <div>
+              <h2 className="font-headline-md font-bold text-primary capitalize">{section} {item ? `— ${item}` : ''}</h2>
+              <p className="font-body-sm text-on-surface-variant">Manage {section} {item ? `· ${item}` : 'overview and actions'}</p>
+            </div>
+          </div>
+          {isSettings ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">lock_reset</span> Change Password</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">Update your system admin password. You will be logged out after a successful change.</p>
+                <button onClick={()=>go('forgot')} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Go to Reset Password</button>
+              </div>
+              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">manage_accounts</span> System Preferences</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">IAM configuration, owner and mail management.</p>
+                <div className="space-y-2">
+                  <button onClick={()=>{const el=document.getElementById('iam-panel'); if(el) el.scrollIntoView({behavior:'smooth'});}} className="w-full border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">View IAM Panel Below</button>
+                  <p className="font-body-sm text-[12px] text-outline text-center">More settings (notifications, audit logs) will appear here.</p>
+                </div>
+              </div>
+              <div id="iam-panel" className="lg:col-span-2">
+                <IamAdmin go={go} />
+              </div>
+            </div>
+          ) : (
+            <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
+              <span className="material-symbols-outlined text-4xl text-outline mb-2">construction</span>
+              <p className="font-headline-sm text-on-surface">Placeholder for {section} {item && `· ${item}`}</p>
+              <p className="font-body-sm text-on-surface-variant mt-1">This view will host the {section} functionality ({item || 'overview'}).</p>
+              <button onClick={()=>go('system')} className="mt-4 px-5 py-2 bg-primary text-on-primary rounded-lg font-label-md">Return to Dashboard</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Home dashboard - stat cards + icon grid mapping to sidebar
+  const stats = [
+    {label: 'Total Subscriptions', value: '1,248', sub: 'Verification pending: 23', icon: 'card_membership', color: 'bg-primary-container text-primary'},
+    {label: 'Active Plans', value: '8', sub: 'View Plans: 8', icon: 'inventory_2', color: 'bg-secondary-container text-secondary'},
+    {label: 'Analytics Reports', value: '42', sub: 'Subscription Status: 31 active', icon: 'analytics', color: 'bg-tertiary-container text-tertiary'},
+    {label: 'Regions', value: '14', sub: 'View Region: 14', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
+  ]
+  const groups = [
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Verification, pricing and lifecycle control', subs: ['Verification','View','Pricing','Active','Suspend'], color: 'bg-primary-fixed'},
+    {key: 'plan', label: 'Plan', icon: 'inventory_2', desc: 'Create and manage subscription plans', subs: ['View Plans'], color: 'bg-secondary-fixed'},
+    {key: 'analytics', label: 'Analytics', icon: 'analytics', desc: 'Dashboards, revenue and ratings insight', subs: ['Dashboard','Revenue Reports','Subscription Status','Ratings'], color: 'bg-tertiary-fixed'},
+    {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: ['View Region'], color: 'bg-surface-container-high'},
+    {key: 'settings', label: 'Settings', icon: 'settings', desc: 'System settings, password and preferences', subs: [], color: 'bg-surface-container-low'},
+  ]
+  return (
+    <div className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {stats.map(s=>(
+          <div key={s.label} className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
+            <div>
+              <p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">{s.label}</p>
+              <p className="font-headline-lg font-bold text-primary leading-none mt-1">{s.value}</p>
+              <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{s.sub}</p>
+            </div>
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}><span className="material-symbols-outlined">{s.icon}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Icon grid mapping to sidebar */}
+      <div>
+        <h3 className="font-headline-sm font-bold text-primary mb-3">Quick Access</h3>
+        <p className="font-body-sm text-on-surface-variant mb-4">Icons map directly to the sidebar — click a card or any sub-item to open its view.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {groups.map(g=>(
+            <div key={g.key} className="glass-card ambient-shadow rounded-xl border border-surface-container p-5 flex flex-col hover:shadow-elevated transition-shadow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${g.color}`}><span className="material-symbols-outlined">{g.icon}</span></div>
+                <div>
+                  <h4 className="font-label-md font-bold text-on-surface">{g.label}</h4>
+                  <p className="font-body-sm text-on-surface-variant text-[12px]">{g.desc}</p>
+                </div>
+              </div>
+              {g.subs.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1 mb-3">
+                  {g.subs.map(sub=>(
+                    <button key={sub} onClick={()=>go(`system?section=${g.key}&item=${encodeURIComponent(sub)}`)} className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface-variant font-label-md text-[12px] border border-outline-variant">{sub}</button>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-body-sm text-outline text-[12px] mb-3">No sub-items</p>
+              )}
+              <button onClick={()=>go(g.key==='settings' ? 'system?section=settings' : `system?section=${g.key}`)} className="mt-auto w-full bg-primary text-on-primary py-2 rounded-lg font-label-md hover:bg-primary-fixed-dim flex items-center justify-center gap-1.5">
+                Open {g.label} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom hint */}
+      <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex items-start gap-3">
+        <span className="material-symbols-outlined text-primary">info</span>
+        <p className="font-body-sm text-on-surface-variant">Use the left sidebar to navigate — submenus are collapsed by default; click any parent to expand and select a sub-item. The <span className="font-label-md text-on-surface">Home</span> dashboard above mirrors every sidebar function with matching icons and stats.</p>
       </div>
     </div>
   )
@@ -1278,8 +1404,8 @@ function App() {
       {page==='faculty' && <FacultyDashboard go={go} />}
       {page==='admin' && <AdminPanel go={go} />}
       {page==='system' && (
-        <DashShell go={go} active="admin" role="admin" title="System Administration" subtitle="IAM user, owner, role and mail management.">
-          <IamAdmin go={go} />
+        <DashShell go={go} active="admin" role="admin" title="System Administration" subtitle="Home dashboard with quick access to subscription, plan, analytics and regional management.">
+          <SystemHome go={go} />
         </DashShell>
       )}
     </div>
