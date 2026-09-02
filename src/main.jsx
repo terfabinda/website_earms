@@ -31,7 +31,7 @@ function usePage() {
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
-  const go = (next) => { window.location.hash = `/${next}`; setPage(next); window.scrollTo(0,0) }
+  const go = (next) => { window.location.hash = `/${next}`; setPage(next.split('?')[0]); window.scrollTo(0,0) }
   return [page, go]
 }
 
@@ -685,8 +685,18 @@ function AuthCard({ go, children }) {
 }
 
 function useHashQuery() {
-  const h = window.location.hash || ''
-  const q = h.split('?')[1] || window.location.search
+  const [q, setQ] = useState(() => {
+    const h = window.location.hash || ''
+    return h.split('?')[1] || window.location.search.replace(/^\?/, '')
+  })
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash || ''
+      setQ(h.split('?')[1] || window.location.search.replace(/^\?/, ''))
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   return new URLSearchParams(q)
 }
 
