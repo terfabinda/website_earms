@@ -913,9 +913,19 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Regional', icon: 'public', subitems: ['View Region']},
     {label: 'Settings', icon: 'settings'},
   ]
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG','College','Department','Programme','Staff','Student']},
+    {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG', collegeTerm,'Department','Programme','Staff','Student']},
     {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade']},
     {label: 'Payment History', icon: 'receipt_long', subitems: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role']},
     {label: 'Analytics', icon: 'insights', subitems: ['Summary']},
@@ -1224,6 +1234,14 @@ function InstitutionHome({ go }) {
   const section = (q.get('section') || '').toLowerCase()
   const item = q.get('item') || ''
   const sectionKey = section.replace(/-/g, ' ')
+  const [collegeChoice, setCollegeChoice] = useState(() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      return localStorage.getItem(key) || "College"
+    } catch { return "College" }
+  })
 
   if (section) {
     const isSettings = section === 'settings'
@@ -1249,6 +1267,30 @@ function InstitutionHome({ go }) {
                 <button onClick={()=>go('forgot')} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Go to Reset Password</button>
               </div>
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">account_balance</span> Academic Structure Terminology</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">In Nigeria, institutions use <span className="font-label-md">College</span>, <span className="font-label-md">School</span> or <span className="font-label-md">Faculty</span> interchangeably. Choose your preference — <span className="font-label-md">{collegeChoice}</span> will replace <span className="font-label-md">College</span> in the Onboarding menu and wherever it appears.</p>
+                <label className="block mb-3">
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Preferred Term</span>
+                  <select value={collegeChoice} onChange={e=>setCollegeChoice(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <option value="College">College</option>
+                    <option value="School">School</option>
+                    <option value="Faculty">Faculty</option>
+                  </select>
+                </label>
+                <button onClick={()=>{
+                  try {
+                    const tok = decodeToken()
+                    const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+                    const key = code ? `earms_college_term_${code}` : "earms_college_term"
+                    localStorage.setItem(key, collegeChoice)
+                    window.dispatchEvent(new Event('storage'))
+                    go('admin?section=settings')
+                    setTimeout(()=>window.location.reload(), 200)
+                  } catch {}
+                }} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Save Preference</button>
+                <p className="font-body-sm text-[11px] text-outline mt-2 text-center">Current: <span className="font-label-md text-on-surface">{collegeChoice}</span> — Onboarding submenu will show “{collegeChoice}” instead of “College”.</p>
+              </div>
+              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant lg:col-span-2">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">tune</span> Institution Settings</h3>
                 <p className="font-body-sm text-on-surface-variant mb-3">Preferences, notifications and audit logs will appear here.</p>
                 <p className="font-body-sm text-[12px] text-outline text-center">More settings coming soon.</p>
@@ -1279,7 +1321,7 @@ function InstitutionHome({ go }) {
     {label: 'Active Subscription', value: 'Inactive', sub: 'Check status in Subscription', icon: 'card_membership', color: 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG','College','Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
+    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
     {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Subscribe, check and upgrade plans', subs: ['Subscribe','Check Status','Upgrade'], color: 'bg-secondary-fixed'},
     {key: 'payment history', label: 'Payment History', icon: 'receipt_long', desc: 'History, failures and role assignments', subs: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role'], color: 'bg-tertiary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: ['Summary'], color: 'bg-surface-container-high'},

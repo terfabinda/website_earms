@@ -96,13 +96,24 @@ export function AdminOnboarding({ go }) {
       .catch((e) => setInstErr(e.message || "Could not load institutions"));
   }, []);
 
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
+  const collegeLabel = collegeTerm === "Faculty" ? "Faculties" : collegeTerm === "School" ? "Schools" : "Colleges"
   const tabs = [
     { key: "overview", label: "Overview", icon: "dashboard" },
     { key: "departments", label: "Departments", icon: "account_tree" },
     { key: "programs", label: "Programs", icon: "menu_book" },
     { key: "staff", label: "Staff", icon: "group" },
     { key: "students", label: "Students", icon: "school" },
-    { key: "colleges", label: "Colleges", icon: "account_balance" },
+    { key: "colleges", label: collegeLabel, icon: "account_balance" },
     { key: "levels", label: "Levels", icon: "format_list_numbered" },
     { key: "postgraduate", label: "Postgraduate", icon: "workspaces" },
     { key: "lookup", label: "Lookup & Edit", icon: "travel_explore" },
@@ -820,6 +831,17 @@ function InstitutionTab() {
 
 /* ---------- Colleges (create + list) ---------- */
 function CollegesTab({ instId }) {
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
+  const collegeLabel = collegeTerm === "Faculty" ? "Faculties" : collegeTerm === "School" ? "Schools" : "Colleges"
   const { items, error, reload } = useList(() => onboardingApi.getColleges(instId), instId);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -830,7 +852,7 @@ function CollegesTab({ instId }) {
     e.preventDefault();
     setMsg("");
     if (!name.trim()) {
-      setMsg("College name is required.");
+      setMsg(`${collegeTerm} name is required.`);
       return;
     }
     setBusy(true);
@@ -840,7 +862,7 @@ function CollegesTab({ instId }) {
         Code: code.trim(),
         InstitutionId: Number(instId),
       });
-      setMsg("College created.");
+      setMsg(`${collegeTerm} created.`);
       setName("");
       setCode("");
       reload();
@@ -854,10 +876,10 @@ function CollegesTab({ instId }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <Card className="p-5 xl:col-span-2">
-        <h3 className="font-headline-sm font-semibold text-primary mb-3">Colleges</h3>
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">{collegeLabel}</h3>
         <Msg kind="err" text={error} />
         {items.length === 0 ? (
-          <p className="font-body-sm text-on-surface-variant">No colleges found.</p>
+          <p className="font-body-sm text-on-surface-variant">No {collegeLabel.toLowerCase()} found.</p>
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
@@ -880,13 +902,13 @@ function CollegesTab({ instId }) {
         )}
       </Card>
       <Card className="p-5">
-        <h3 className="font-headline-sm font-semibold text-primary mb-3">New College</h3>
+        <h3 className="font-headline-sm font-semibold text-primary mb-3">New {collegeTerm}</h3>
         <form onSubmit={submit} className="space-y-3">
-          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="College of Science" /></Field>
+          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`${collegeTerm} of Science`} /></Field>
           <Field label="Code"><TextInput value={code} onChange={(e) => setCode(e.target.value)} placeholder="COS" /></Field>
           <Msg kind="err" text={msg} />
           <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
-            {busy ? "Saving…" : "Create College"}
+            {busy ? "Saving…" : `Create ${collegeTerm}`}
           </button>
         </form>
       </Card>
