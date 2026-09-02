@@ -911,7 +911,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Subscription Status','Ratings']},
     {label: 'Regional', icon: 'public', subitems: ['View Region']},
     {label: 'Settings', icon: 'settings'},
-    {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
@@ -1032,11 +1031,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         <div className="pt-4 border-t border-outline-variant mt-auto space-y-1">
           <button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">help_outline</span> Help Center</button>
           <button onClick={logout} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg cursor-pointer w-full text-left"><span className="material-symbols-outlined text-[20px]">logout</span> Logout</button>
-          <div className="flex gap-1 pt-2">
-            <button onClick={()=>go('student')} className={`flex-1 py-1.5 rounded text-[11px] font-bold ${active==='student' ? 'bg-primary text-on-primary' : 'bg-surface-variant'}`}>Student</button>
-            <button onClick={()=>go('faculty')} className={`flex-1 py-1.5 rounded text-[11px] font-bold ${active==='faculty' ? 'bg-primary text-on-primary' : 'bg-surface-variant'}`}>Faculty</button>
-            <button onClick={()=>go('admin')} className={`flex-1 py-1.5 rounded text-[11px] font-bold ${active==='admin' ? 'bg-primary text-on-primary' : 'bg-surface-variant'}`}>Admin</button>
-          </div>
         </div>
       </nav>
 
