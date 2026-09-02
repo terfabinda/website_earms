@@ -891,6 +891,8 @@ function Dashboard({ go }) {
 /* ---------- Shared Dashboard Shell ---------- */
 function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const [mobileNav, setMobileNav] = useState(false)
+  const [openGroups, setOpenGroups] = useState({})
+  const toggleGroup = (key) => setOpenGroups(s => ({...s, [key]: !s[key]}))
   const logout = async () => {
     try { await authApi.logout() } catch (e) {}
     go('login')
@@ -904,29 +906,26 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {key:'team', label:'Team Settings', icon:'group'},
   ]
   const systemAdminNavItems = [
-    {key: 'dashboard', label: 'Dashboard', icon: 'dashboard'},
-    {key: 'subscription-management', label: 'Subscription Management', icon: 'subscriptions'},
-    {key: 'plan-management', label: 'Plan Management', icon: 'folder'},
-    {key: 'subscription-analytics', label: 'Subscription Analytics', icon: 'analytics'},
-    {key: 'region-management', label: 'Region Management', icon: 'public'},
-    {label: 'Reset Password', icon: 'lock'},
-    {onClick: logout, label: 'Logout', icon: 'logout'},
+    {label: 'Dashboard', icon: 'dashboard'},
+    {label: 'Subscription Management', icon: 'card_membership', subitems: ['Verify Subscription','View Subscription','Pricing','Active Subscriptions','Suspend']},
+    {label: 'Plan Management', icon: 'inventory_2', subitems: ['View Plans']},
+    {label: 'Subscription Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Active vs Expired Subscriptions','Plan Popularity']},
+    {label: 'Region Management', icon: 'public', subitems: ['View Region']},
+    {label: 'Reset Password', icon: 'lock_reset'},
+    {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Onboarding', icon: 'drag_handle'},
-    {key: 'subscriber', label: 'Subscriber', icon: 'subscriptions'},
-    {subitem: {label: 'PG'}, subitem: {label: 'College'}, subitem: {label: 'Department'}, subitem: {label: 'Program'}},
-    {label: 'Staff', icon: 'group'},
-    {label: 'Student', icon: 'person'},
-    {key: 'subscription', label: 'Subscription', icon: 'subscriptions'},
-    {subitem: {label: 'Subscribe'}, subitem: {label: 'Check Status'}, subitem: {label: 'Upgrade'}, subitem: {label: 'Payment History'}, subitem: {label: 'Subscription History'}, subitem: {label: 'Failed Payments'}},
-    {key: 'role-management', label: 'Role Management', icon: 'manage'},
-    {subitem: {label: 'Assign Role'}, subitem: {label: 'Remove Role'}},
-    {label: 'Analytics', icon: 'analytics'},
-    {label: 'Summary', icon: 'insert_chart'},
-    {label: 'Reset Password', icon: 'lock'},
-    {onClick: logout, label: 'Logout', icon: 'logout'},
+    {label: 'Onboarding', icon: 'assignment'},
+    {label: 'Subscriber', icon: 'groups', subitems: ['PG','College','Department','Programme']},
+    {label: 'Staff', icon: 'badge'},
+    {label: 'Student', icon: 'school'},
+    {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade','Payment History','Subscription History','Failed Payments']},
+    {label: 'Role Management', icon: 'admin_panel_settings', subitems: ['Assign Role','Remove Role']},
+    {label: 'Analytics', icon: 'insights', subitems: ['Summary']},
+    {label: 'Remove Role', icon: 'person_remove'},
+    {label: 'Reset Password', icon: 'lock_reset'},
+    {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   // map active to highlight
   const isActive = (k) => {
@@ -956,55 +955,65 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           <span className="material-symbols-outlined text-[18px]">add</span> {role==='admin' ? 'Add Institution' : 'New Grant Application'}
         </button>
         <ul className="flex-1 space-y-1 overflow-y-auto">
-{/* Admin sidebar navigation */}
           {role==='admin' ? (
-            // Determine if system admin or institution admin based on subrole
-            {subrole === 'institution' ? (
-              <>{institutionAdminNavItems.map(it => {
-                if (it.onClick) {
-                  return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
-                }
-                const subitems = it.subitem ? it.subitem : []
-                return (
-                  <li key={it.label}>
-                    <button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
-                      <span className="material-symbols-outlined">{it.icon}</span>
-                      {it.label}
-                      <span className="material-symbols-outlined text-[12px] ml-2">arrow_drop_down</span>
-                    </button>
-                    <ul className="ml-6 space-y-0.5 overflow-hidden">
-                      {subitems.map(sub => (
-                        <li key={sub.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-1 text-xs text-on-surface-variant rounded-lg hover:bg-surface-container-low text-left">{sub.label}</button></li>
-                      ))}
-                    </ul>
-                  </li>
-                )
-              })}</><li><button onClick={()=>go('system')} className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li></>
-            ) : (
+            subrole === 'institution' ? (
+              // Institution admin - AdminPanel (subrole="institution") -> Home, Onboarding, Subscriber, Staff, Student, Subscription, Role Management, Analytics
               <>
-                <li><button type="button" className="w-full flex items-center gap-3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
-                {systemAdminNavItems.slice(0, -2).map(it => {
+                {institutionAdminNavItems.map(it => {
+                  const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
+                  const isOpen = openGroups[it.label] !== false
                   if (it.onClick) {
-                    return <li key={it.key || it.label}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                    return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
+                  }
+                  if (!hasSub) {
+                    return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
-                    <li key={it.key || it.label}>
-                      <button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
-                        <span className="material-symbols-outlined">{it.icon}</span>
-                        {it.label}
-                        <span className="material-symbols-outlined text-[12px] ml-2">arrow_drop_down</span>
+                    <li key={it.label}>
+                      <button onClick={()=>toggleGroup(it.label)} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                        <span className="material-symbols-outlined text-[20px]">{it.icon}</span> <span className="flex-1 text-left">{it.label}</span> <span className="material-symbols-outlined text-[18px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
                       </button>
-                      <ul className="ml-6 space-y-0.5 overflow-hidden">
-                        {it.subitems?.map(sub => (
-                          <li key={sub.label}><button type="button" className="w-full flex items-center gap_3 px_3 py_1 text-xs text-on-surface-variant rounded-lg hover:bg-surface-container-low text-left">{sub.label}</button></li>
-                        ))}
-                      </ul>
+                      {isOpen && (
+                        <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
+                          {it.subitems.map(sub => (
+                            <li key={sub}><button type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   )
                 })}
-                <li><button onClick={()=>go('system')} className="flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg w-full text-left"><span className="material-symbols-outlined">manage_accounts</span> System Admin (IAM)</button></li>
               </>
-            )}
+            ) : (
+              // System admin - system route (role="admin" no subrole) -> Dashboard, Subscription Mgmt, Plan Mgmt, Analytics, Region
+              <>
+                {systemAdminNavItems.map(it => {
+                  const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
+                  const isOpen = openGroups[it.label] !== false
+                  const isActive = it.label === 'Dashboard'
+                  if (it.onClick) {
+                    return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
+                  }
+                  if (!hasSub) {
+                    return <li key={it.label}><button type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${isActive ? 'bg-secondary-fixed text-on-secondary-fixed font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]" style={isActive?{fontVariationSettings:"'FILL' 1"}:undefined}>{it.icon}</span> {it.label}</button></li>
+                  }
+                  return (
+                    <li key={it.label}>
+                      <button onClick={()=>toggleGroup(it.label)} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                        <span className="material-symbols-outlined text-[20px]">{it.icon}</span> <span className="flex-1 text-left">{it.label}</span> <span className="material-symbols-outlined text-[18px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
+                      </button>
+                      {isOpen && (
+                        <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
+                          {it.subitems.map(sub => (
+                            <li key={sub}><button type="button" className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] text-on-surface-variant rounded hover:bg-surface-container-high text-left"><span className="material-symbols-outlined text-[14px]">chevron_right</span> {sub}</button></li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  )
+                })}
+              </>
+            )
           ) : role==='faculty' ? (
             <>
               <li><button type="button" className="w-full flex items-center gap_3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>

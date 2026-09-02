@@ -356,7 +356,10 @@ export function getRoleFromToken(token) {
 export function routeForRole(role) {
   if (!role) return "dashboard";
   const r = String(role).toLowerCase();
-  if (r.includes("admin")) return "admin";
+  // systemadmin contains "admin" so check system first
+  if (r.includes("system")) return "system";
+  if (r.includes("institution")) return "admin";
+  if (r === "admin" || r.includes("admin")) return "system";
   if (r.includes("faculty") || r.includes("supervisor")) return "faculty";
   if (r.includes("student")) return "student";
   return "dashboard";
