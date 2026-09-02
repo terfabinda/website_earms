@@ -920,7 +920,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Payment History', icon: 'receipt_long', subitems: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role']},
     {label: 'Analytics', icon: 'insights', subitems: ['Summary']},
     {label: 'Settings', icon: 'settings'},
-    {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   // map active to highlight
   const isActive = (k) => {
