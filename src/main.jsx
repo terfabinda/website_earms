@@ -906,12 +906,11 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {key:'team', label:'Team Settings', icon:'group'},
   ]
   const systemAdminNavItems = [
-    {label: 'Dashboard', icon: 'dashboard'},
-    {label: 'Subscription Management', icon: 'card_membership', subitems: ['Verify Subscription','View Subscription','Pricing','Active Subscriptions','Suspend']},
-    {label: 'Plan Management', icon: 'inventory_2', subitems: ['View Plans']},
-    {label: 'Subscription Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Active vs Expired Subscriptions','Plan Popularity']},
-    {label: 'Region Management', icon: 'public', subitems: ['View Region']},
-    {label: 'Reset Password', icon: 'lock_reset'},
+    {label: 'Subscription', icon: 'card_membership', subitems: ['Verification','View','Pricing','Active','Suspend']},
+    {label: 'Plan', icon: 'inventory_2', subitems: ['View Plans']},
+    {label: 'Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Subscription Status','Ratings']},
+    {label: 'Regional', icon: 'public', subitems: ['View Region']},
+    {label: 'Settings', icon: 'settings'},
     {label: 'Logout', icon: 'logout', onClick: logout},
   ]
   const institutionAdminNavItems = [
@@ -961,7 +960,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
               <>
                 {institutionAdminNavItems.map(it => {
                   const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
-                  const isOpen = openGroups[it.label] !== false
+                  const isOpen = !!openGroups[it.label]
                   if (it.onClick) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
@@ -985,17 +984,16 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 })}
               </>
             ) : (
-              // System admin - system route (role="admin" no subrole) -> Dashboard, Subscription Mgmt, Plan Mgmt, Analytics, Region
+              // System admin - system route (role="admin" no subrole) -> Subscription, Plan, Analytics, Regional, Settings, Logout
               <>
                 {systemAdminNavItems.map(it => {
                   const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
-                  const isOpen = openGroups[it.label] !== false
-                  const isActive = it.label === 'Dashboard'
+                  const isOpen = !!openGroups[it.label]
                   if (it.onClick) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    return <li key={it.label}><button type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${isActive ? 'bg-secondary-fixed text-on-secondary-fixed font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]" style={isActive?{fontVariationSettings:"'FILL' 1"}:undefined}>{it.icon}</span> {it.label}</button></li>
+                    return <li key={it.label}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
                     <li key={it.label}>
@@ -1016,17 +1014,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
             )
           ) : role==='faculty' ? (
             <>
-              <li><button type="button" className="w-full flex items-center gap_3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
+              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           ) : (
             // student
             <>
-              <li><button type="button" className="w-full flex items-center gap_3 px_3 py_2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
+              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap_3 px_3 py_2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           )}
