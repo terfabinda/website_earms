@@ -2,6 +2,7 @@
 // Renders inside the shared DashShell (sidebar/header) from main.jsx.
 import React, { useState, useEffect, useCallback } from "react";
 import { onboardingApi, STAFF_CATEGORIES, STUDENT_CATEGORIES } from "./onboarding";
+import { decodeToken } from "./iam";
 
 /* ---------- small shared field primitives ---------- */
 function Field({ label, children }) {
@@ -69,11 +70,28 @@ export function AdminOnboarding({ go }) {
   }, []);
 
   useEffect(() => {
+    const tokenData = decodeToken()
+    const tokenInstName = tokenData?.institutionName || tokenData?.InstitutionName || ""
+    const tokenInstCode = tokenData?.institutionCode || tokenData?.InstitutionCode || ""
+    const tokenOwnerId = tokenData?.ownerId || tokenData?.OwnerId || ""
     onboardingApi
       .getInstitutionsDropdown()
       .then((list) => {
-        setInstitutions(list || []);
-        if (list && list.length) setInstId(String(list[0].Id));
+        const arr = list || []
+        // Try to find user's institution in the dropdown by id, code or name from token
+        let match = null
+        if (tokenOwnerId) match = arr.find((i) => String(i.Id ?? i.id) === String(tokenOwnerId))
+        if (!match && tokenInstCode) match = arr.find((i) => (i.Code ?? i.code ?? i.code) === tokenInstCode || (i.code ?? i.Code) === tokenInstCode)
+        if (!match && tokenInstName) match = arr.find((i) => (i.Name ?? i.name) === tokenInstName)
+        // If user's institution not in dropdown (e.g. University of Gboko not yet onboarded), inject it so UI shows correct name instead of hardcoded first item
+        if (!match && (tokenInstName || tokenInstCode)) {
+          const synthetic = { Id: tokenOwnerId ? Number(tokenOwnerId) : 9999, id: tokenOwnerId ? Number(tokenOwnerId) : 9999, Name: tokenInstName || tokenInstCode, name: tokenInstName || tokenInstCode, Code: tokenInstCode, code: tokenInstCode }
+          arr.unshift(synthetic)
+          match = synthetic
+        }
+        setInstitutions(arr)
+        if (match) setInstId(String(match.Id ?? match.id))
+        else if (arr.length) setInstId(String(arr[0].Id ?? arr[0].id))
       })
       .catch((e) => setInstErr(e.message || "Could not load institutions"));
   }, []);

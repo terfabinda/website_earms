@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, tokenService, getRoleFromToken, routeForRole } from './iam'
+import { authApi, userApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { IamAdmin } from './iam-admin.jsx'
 
@@ -1285,8 +1285,17 @@ function InstitutionHome({ go }) {
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: ['Summary'], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
   ]
+  const tokenData = decodeToken()
+  const activeInstName = tokenData?.institutionName || tokenData?.InstitutionName || tokenData?.institutionCode || tokenData?.InstitutionCode || "—"
+  const activeInstCode = tokenData?.institutionCode || tokenData?.InstitutionCode || ""
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-2 rounded-lg border border-primary/20 w-fit">
+        <span className="material-symbols-outlined text-[18px]">account_balance</span>
+        <span className="font-label-md">Active Institution:</span>
+        <span className="font-headline-sm font-bold">{activeInstName}</span>
+        {activeInstCode && <span className="font-body-sm opacity-80">({activeInstCode})</span>}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {stats.map(s=>(
           <div key={s.label} className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
