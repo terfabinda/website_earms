@@ -2077,11 +2077,15 @@ function StaffManagementPage({ go }) {
                 </select>
               </label>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Specialization</span><input value={form.specialization} onChange={set("specialization")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-surface-container-low rounded-lg p-3 border border-outline-variant">
-                <label className="block"><span className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">ProgramId (from JWT)</span><input value={form.programId} onChange={set("programId")} placeholder="0" className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">DepartmentId (JWT)</span><input value={form.departmentId} readOnly className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container text-sm" /></label>
-                <label className="block"><span className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">InstitutionId (JWT: {jwtInstId || jwtInstCode || "—"})</span><input value={jwtInstId} readOnly className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container text-sm" /></label>
-              </div>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme</span>
+                <select value={form.programId} onChange={set("programId")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                  <option value="">Select Programme</option>
+                  {programs.map(p=>(
+                    <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                  ))}
+                </select>
+              </label>
               {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
               {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
               <div className="flex gap-3 pt-2">
