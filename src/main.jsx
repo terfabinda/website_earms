@@ -1715,6 +1715,125 @@ function DepartmentPage({ go }) {
   )
 }
 
+function ProgrammeCreate({ go }) {
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
+  const [colleges, setColleges] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [collegeId, setCollegeId] = useState("")
+  const [deptId, setDeptId] = useState("")
+  const [name, setName] = useState("")
+  const [msg, setMsg] = useState("")
+  const [err, setErr] = useState("")
+  const [busy, setBusy] = useState(false)
+  const tok = decodeToken()
+  const instId = tok?.ownerId || tok?.OwnerId || ""
+  useEffect(() => {
+    const loadColleges = async () => {
+      try {
+        const { onboardingApi } = await import("./onboarding")
+        let id = instId
+        if (!id) {
+          const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+          if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+        }
+        if (id) {
+          const cols = await onboardingApi.getColleges(String(id)).catch(()=>[])
+          setColleges(Array.isArray(cols) ? cols : [])
+          if (Array.isArray(cols) && cols.length) setCollegeId(String(cols[0].Id ?? cols[0].id))
+        }
+      } catch {}
+    }
+    loadColleges()
+  }, [instId])
+  useEffect(() => {
+    const loadDepts = async () => {
+      try {
+        const { onboardingApi } = await import("./onboarding")
+        let id = instId
+        if (!id) {
+          const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+          if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+        }
+        if (id) {
+          const depts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+          setDepartments(Array.isArray(depts) ? depts : [])
+          if (Array.isArray(depts) && depts.length) setDeptId(String(depts[0].Id ?? depts[0].id))
+        }
+      } catch {}
+    }
+    loadDepts()
+  }, [instId])
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!collegeId) { setErr(`${collegeTerm} is required.`); return }
+    if (!deptId) { setErr("Department is required."); return }
+    if (!name.trim()) { setErr("Programme Name is required."); return }
+    setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = instId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      await onboardingApi.createProgram(deptId, { name: name.trim(), institutionId: String(id), departmentId: deptId })
+      setMsg(`Programme "${name.trim()}" created.`)
+      setName("")
+    } catch (e2) {
+      setErr(e2.message || "Could not create programme")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const cancel = () => { setName(""); setErr(""); setMsg(""); go('admin') }
+  return (
+    <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 max-w-2xl">
+      <h3 className="font-headline-sm font-bold text-primary mb-1">Create Programme</h3>
+      <p className="font-body-sm text-on-surface-variant mb-4">Cascading flow — select {collegeTerm.toLowerCase()} then department, then programme name</p>
+      <form onSubmit={submit} className="space-y-4">
+        <label className="block">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
+          <select value={collegeId} onChange={e=>setCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">Select {collegeTerm}</option>
+            {colleges.map(c=>(
+              <option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{c.Name ?? c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+          <select value={deptId} onChange={e=>setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">Select Department</option>
+            {departments.map(d=>(
+              <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme Name</span>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. B.Sc. Computer Science" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+        </label>
+        {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+        {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+        <div className="flex gap-3">
+          <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
+          <button type="button" onClick={cancel} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function InstitutionHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
@@ -1791,6 +1910,8 @@ function InstitutionHome({ go }) {
               <CollegePage go={go} />
             ) : item && item.toLowerCase() === 'department' ? (
               <DepartmentPage go={go} />
+            ) : item && ['programme','program'].includes(item.toLowerCase()) ? (
+              <ProgrammeCreate go={go} />
             ) : (
               <div className="space-y-4">
                 <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
