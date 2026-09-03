@@ -2106,9 +2106,10 @@ function StudentManagementPage({ go }) {
   const [err, setErr] = useState("")
   const [msg, setMsg] = useState("")
   const [showModal, setShowModal] = useState(false)
+  const [faculties, setFaculties] = useState([])
   const [departments, setDepartments] = useState([])
   const [programs, setPrograms] = useState([])
-  const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", departmentId:"", programId:"", level:"", status:"Active" })
+  const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", departmentId:"", programId:"", level:"", status:"Active", facultyId:"" })
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
   const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
@@ -2122,10 +2123,12 @@ function StudentManagementPage({ go }) {
         if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
       }
       if (id) {
-        const [depts, studs] = await Promise.all([
+        const [cols, depts, studs] = await Promise.all([
+          onboardingApi.getColleges(String(id)).catch(()=>[]),
           onboardingApi.getDepartments(String(id)).catch(()=>[]),
           onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
         ])
+        setFaculties(Array.isArray(cols) ? cols : [])
         setDepartments(Array.isArray(depts) ? depts : [])
         // Normalize students: ensure they have matricNo, firstName etc.
         const arr = Array.isArray(studs) ? studs : []
@@ -2205,7 +2208,7 @@ function StudentManagementPage({ go }) {
           <p className="font-body-sm text-on-surface-variant">Manage students — exquisite grid with Matric No, Name, Email, Department, Institution, Level, Status and actions</p>
         </div>
         <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
-          <span className="material-symbols-outlined text-[18px]">add</span> Add New Student
+          <span className="material-symbols-outlined text-[18px]">add</span> Add Student
         </button>
       </div>
       {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
@@ -2216,7 +2219,7 @@ function StudentManagementPage({ go }) {
         <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
           <span className="material-symbols-outlined text-4xl text-outline mb-2">school</span>
           <p className="font-headline-sm text-on-surface">No students yet</p>
-          <p className="font-body-sm text-on-surface-variant mt-1">Click Add New Student to create your first student.</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">Click Add Student to create your first student.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -2263,10 +2266,19 @@ function StudentManagementPage({ go }) {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowModal(false)}></div>
           <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline-sm font-bold text-primary">Add New Student</h3>
+              <h3 className="font-headline-sm font-bold text-primary">Add Student</h3>
               <button onClick={()=>setShowModal(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
             </div>
             <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Faculty</span>
+                <select value={form.facultyId || ""} onChange={e=>setForm(f=>({...f, facultyId: e.target.value}))} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                  <option value="">Select Faculty</option>
+                  {faculties.map(f=>(
+                    <option key={f.Id ?? f.id} value={String(f.Id ?? f.id)}>{f.Name ?? f.name}</option>
+                  ))}
+                </select>
+              </label>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={form.matricNo} onChange={set("matricNo")} placeholder="e.g. CSC/2024/001" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={form.firstName} onChange={set("firstName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
