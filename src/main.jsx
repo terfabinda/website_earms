@@ -2100,6 +2100,224 @@ function StaffManagementPage({ go }) {
   )
 }
 
+function StudentManagementPage({ go }) {
+  const [students, setStudents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [msg, setMsg] = useState("")
+  const [showModal, setShowModal] = useState(false)
+  const [departments, setDepartments] = useState([])
+  const [programs, setPrograms] = useState([])
+  const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", departmentId:"", programId:"", level:"", status:"Active" })
+  const tok = decodeToken()
+  const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
+  const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
+  const load = async () => {
+    setLoading(true); setErr("")
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = jwtInstId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (id) {
+        const [depts, studs] = await Promise.all([
+          onboardingApi.getDepartments(String(id)).catch(()=>[]),
+          onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
+        ])
+        setDepartments(Array.isArray(depts) ? depts : [])
+        // Normalize students: ensure they have matricNo, firstName etc.
+        const arr = Array.isArray(studs) ? studs : []
+        setStudents(arr)
+        if (Array.isArray(depts) && depts.length && !form.departmentId) {
+          const firstDept = String(depts[0].Id ?? depts[0].id)
+          setForm(f=>({...f, departmentId: firstDept}))
+          try {
+            const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[])
+            setPrograms(Array.isArray(progs) ? progs : [])
+          } catch {}
+        }
+      }
+    } catch (e) { setErr(e.message || "Could not load") } finally { setLoading(false) }
+  }
+  useEffect(()=>{ load() }, [])
+  const onDeptChange = async (val) => {
+    setForm(f=>({...f, departmentId: val, programId:"" }))
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = jwtInstId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (id && val) {
+        const progs = await onboardingApi.getPrograms(String(id), val).catch(()=>[])
+        setPrograms(Array.isArray(progs) ? progs : [])
+      } else setPrograms([])
+    } catch {}
+  }
+  const set = (k) => (e) => setForm(f=>({...f, [k]: e.target.value}))
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!form.matricNo.trim() || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.departmentId || !form.level.trim()) {
+      setErr("Matric No, First Name, Last Name, Email, Department and Level are required.")
+      return
+    }
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let instId = jwtInstId
+      if (!instId) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) instId = String(list[0].Id ?? list[0].id)
+      }
+      await onboardingApi.registerStudent({
+        MatricNo: form.matricNo.trim(),
+        FirstName: form.firstName.trim(),
+        LastName: form.lastName.trim(),
+        Email: form.email.trim(),
+        PhoneNo: "",
+        ProgramId: form.programId ? Number(form.programId) : 0,
+        StudentCategory: 2,
+        AreaOfInterest: "",
+        DepartmentId: Number(form.departmentId),
+        InstitutionId: Number(instId),
+        Level: form.level.trim(),
+      })
+      setMsg(`Student ${form.matricNo.trim()} created.`)
+      setForm(f=>({...f, matricNo:"", firstName:"", lastName:"", email:"", level:"", programId:"", status:"Active" }))
+      setShowModal(false)
+      load()
+    } catch (e2) {
+      setErr(e2.message || "Could not create student")
+    }
+  }
+  const getDeptName = (id) => {
+    const d = departments.find(x=> String(x.Id ?? x.id) === String(id))
+    return d ? (d.Name ?? d.name) : (id || "—")
+  }
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">school</span> Student Management</h2>
+          <p className="font-body-sm text-on-surface-variant">Manage students — exquisite grid with Matric No, Name, Email, Department, Institution, Level, Status and actions</p>
+        </div>
+        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+          <span className="material-symbols-outlined text-[18px]">add</span> Add New Student
+        </button>
+      </div>
+      {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+      {loading ? (
+        <p className="font-body-sm text-on-surface-variant">Loading students…</p>
+      ) : students.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2">school</span>
+          <p className="font-headline-sm text-on-surface">No students yet</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">Click Add New Student to create your first student.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {students.map(s=>(
+            <div key={s.Id ?? s.id ?? s.MatricNo} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
+              <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px] border border-primary/20">{s.MatricNo ?? s.matricNo ?? "—"}</span>
+                  <span className={`px-2.5 py-1 rounded-full font-label-md text-[11px] border ${String(s.Status ?? s.status ?? "Active").toLowerCase()==="active" ? "bg-green-100 text-green-800 border-green-200" : "bg-surface-container-high text-on-surface-variant border-outline-variant"}`}>{s.Status ?? s.status ?? "Active"}</span>
+                </div>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{(s.FirstName ?? s.firstName ?? "") + " " + (s.LastName ?? s.lastName ?? "")}</h4>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1 truncate">{s.Email ?? s.email ?? "—"}</p>
+                <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
+                  <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
+                    <p className="font-label-md text-outline uppercase tracking-wide">Department</p>
+                    <p className="font-body-sm text-on-surface truncate">{getDeptName(s.DepartmentId ?? s.departmentId)}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
+                    <p className="font-label-md text-outline uppercase tracking-wide">Institution</p>
+                    <p className="font-body-sm text-on-surface truncate">{jwtInstName || s.InstitutionName || "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
+                    <p className="font-label-md text-outline uppercase tracking-wide">Level</p>
+                    <p className="font-body-sm text-on-surface">{s.Level ?? s.level ?? "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
+                    <p className="font-label-md text-outline uppercase tracking-wide">Matric No</p>
+                    <p className="font-body-sm text-on-surface truncate">{s.MatricNo ?? s.matricNo ?? "—"}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowModal(false)}></div>
+          <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Add New Student</h3>
+              <button onClick={()=>setShowModal(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={form.matricNo} onChange={set("matricNo")} placeholder="e.g. CSC/2024/001" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={form.firstName} onChange={set("firstName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={form.lastName} onChange={set("lastName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={form.email} onChange={set("email")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                  <select value={form.departmentId} onChange={e=>onDeptChange(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <option value="">Select Department</option>
+                    {departments.map(d=>(
+                      <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme</span>
+                  <select value={form.programId} onChange={set("programId")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <option value="">Select Programme</option>
+                    {programs.map(p=>(
+                      <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution</span><input value={jwtInstName} readOnly className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Level</span><input value={form.level} onChange={set("level")} placeholder="e.g. 400" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Status</span>
+                  <select value={form.status} onChange={set("status")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Graduated">Graduated</option>
+                  </select>
+                </label>
+              </div>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim">Create</button>
+                <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InstitutionHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
@@ -2180,6 +2398,8 @@ function InstitutionHome({ go }) {
               <ProgrammeCreate go={go} />
             ) : item && item.toLowerCase() === 'staff' ? (
               <StaffManagementPage go={go} />
+            ) : item && item.toLowerCase() === 'student' ? (
+              <StudentManagementPage go={go} />
             ) : (
               <div className="space-y-4">
                 <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
