@@ -1239,6 +1239,172 @@ function SystemHome({ go }) {
 }
 
 /* ---------- Institution Home Dashboard ---------- */
+function InstitutionProfile({ go }) {
+  const [inst, setInst] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [msg, setMsg] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ code:"", name:"", email:"", phoneNo:"", institutionType:"", address:"", website:"", facebookUrl:"", linkedinUrl:"" })
+  const [logoFile, setLogoFile] = useState(null)
+  const [logoPreview, setLogoPreview] = useState("")
+  const tok = decodeToken()
+  const tokenCode = tok?.institutionCode || tok?.InstitutionCode || ""
+  const tokenName = tok?.institutionName || tok?.InstitutionName || ""
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setErr("")
+    // Try to fetch via onboarding API by code, fallback to token values
+    const fetchInst = async () => {
+      try {
+        // First try to get the user's institution via owner API (more reliable for GHH)
+        let owner = null
+        try {
+          const { ownerApi } = await import("./iam")
+          owner = await ownerApi.getOwnerByName(tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || "")
+        } catch {}
+        let data = null
+        if (tokenCode) {
+          try { data = await (await import("./onboarding")).onboardingApi.getInstitutionByCode(tokenCode) } catch {}
+        }
+        if (!data && owner?.institutionCode) {
+          try { data = await (await import("./onboarding")).onboardingApi.getInstitutionByCode(owner.institutionCode) } catch {}
+        }
+        // Fallback to token values if onboarding has no record (e.g. University of Gboko not yet created)
+        if (!data) {
+          data = {
+            code: owner?.institutionCode || tokenCode,
+            name: owner?.institutionName || tokenName || owner?.ownerName || "",
+            email: owner?.ownerEmail || tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || "",
+            phoneNo: "",
+            institutionType: "",
+            address: "",
+            website: "",
+            facebookUrl: "",
+            linkedinUrl: "",
+            logoUrl: ""
+          }
+        }
+        if (cancelled) return
+        // Normalize fields (API returns Code/Name etc)
+        const code = data.code ?? data.Code ?? tokenCode ?? ""
+        const name = data.name ?? data.Name ?? tokenName ?? ""
+        const email = data.email ?? data.Email ?? owner?.ownerEmail ?? ""
+        const phoneNo = data.phoneNo ?? data.PhoneNo ?? ""
+        const institutionType = data.institutionType ?? data.InstitutionType ?? ""
+        const address = data.address ?? data.Address ?? ""
+        const website = data.website ?? data.Website ?? ""
+        const facebookUrl = data.facebookUrl ?? data.FacebookUrl ?? ""
+        const linkedinUrl = data.linkedinUrl ?? data.LinkedinUrl ?? ""
+        const logoUrl = data.logoUrl ?? data.LogoUrl ?? data.logo ?? ""
+        setInst(data)
+        setForm({ code, name, email, phoneNo, institutionType, address, website, facebookUrl, linkedinUrl })
+        if (logoUrl) setLogoPreview(logoUrl)
+      } catch (e) {
+        if (!cancelled) setErr(e.message || "Could not load institution profile")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchInst()
+    return () => { cancelled = true }
+  }, [tokenCode, tokenName])
+
+  const onLogoChange = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setLogoFile(f)
+    setLogoPreview(URL.createObjectURL(f))
+  }
+
+  const save = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!form.code.trim() || !form.name.trim()) { setErr("Code and Name are required."); return }
+    setSaving(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const fd = new FormData()
+      fd.append("Code", form.code.trim())
+      fd.append("Name", form.name.trim())
+      fd.append("Email", form.email.trim())
+      fd.append("PhoneNo", form.phoneNo.trim())
+      fd.append("InstitutionType", form.institutionType.trim())
+      fd.append("Address", form.address.trim())
+      fd.append("Website", form.website.trim())
+      fd.append("FacebookUrl", form.facebookUrl.trim())
+      fd.append("LinkedinUrl", form.linkedinUrl.trim())
+      if (logoFile) fd.append("logoFile", logoFile)
+      // Try to update if exists, otherwise create
+      try {
+        await onboardingApi.createInstitution(fd)
+        setMsg("Institution profile saved.")
+      } catch (err2) {
+        setErr(err2.message || "Could not save institution")
+      }
+    } catch (err) {
+      setErr(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const set = (k) => (e) => setForm(f => ({...f, [k]: e.target.value}))
+
+  if (loading) return <div className="glass-card rounded-xl p-6 border border-surface-container"><p className="font-body-sm text-on-surface-variant">Loading institution profile…</p></div>
+  return (
+    <div className="glass-card ambient-shadow rounded-xl border border-surface-container overflow-hidden">
+      <div className="bg-surface-container-low border-b border-outline-variant p-6 flex flex-col items-center gap-4 text-center">
+        <div className="w-24 h-24 rounded-xl bg-surface-container-highest border border-outline-variant overflow-hidden flex items-center justify-center">
+          {logoPreview ? <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-4xl text-outline">account_balance</span>}
+        </div>
+        <div>
+          <h3 className="font-headline-sm font-bold text-primary">{form.name || "Institution"}</h3>
+          <p className="font-body-sm text-on-surface-variant">{form.code ? `Code: ${form.code}` : ""} {form.institutionType ? `· ${form.institutionType}` : ""}</p>
+        </div>
+        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md cursor-pointer hover:bg-primary-fixed-dim">
+          <span className="material-symbols-outlined text-[18px]">upload</span> {logoPreview ? "Change Logo" : "Upload Logo"}
+          <input type="file" accept="image/*" onChange={onLogoChange} className="hidden" />
+        </label>
+        <p className="font-body-sm text-[11px] text-outline">Logo will be displayed at the very top of this page once uploaded.</p>
+      </div>
+      <form onSubmit={save} className="p-6 space-y-4">
+        {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+        {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Code</span><input value={form.code} onChange={set("code")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="e.g. GHH" /></label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Name</span><input value={form.name} onChange={set("name")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="University of Gboko" /></label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={form.email} onChange={set("email")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="info@univ.edu" /></label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Phone Number</span><input value={form.phoneNo} onChange={set("phoneNo")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="+234..." /></label>
+        </div>
+        <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution Type</span>
+          <select value={form.institutionType} onChange={set("institutionType")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">Select type</option>
+            <option value="University">University</option>
+            <option value="Polytechnic">Polytechnic</option>
+            <option value="College of Education">College of Education</option>
+            <option value="College">College</option>
+            <option value="School">School</option>
+            <option value="Faculty">Faculty</option>
+          </select>
+        </label>
+        <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Address</span><input value={form.address} onChange={set("address")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="Street, City, State" /></label>
+        <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Website</span><input value={form.website} onChange={set("website")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="https://" /></label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Facebook URL</span><input value={form.facebookUrl} onChange={set("facebookUrl")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="https://facebook.com/..." /></label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">LinkedIn URL</span><input value={form.linkedinUrl} onChange={set("linkedinUrl")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="https://linkedin.com/..." /></label>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="submit" disabled={saving} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+          <button type="button" onClick={()=>go('admin')} className="px-6 py-3 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Back to Home</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function InstitutionHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
@@ -1307,10 +1473,14 @@ function InstitutionHome({ go }) {
               </div>
             </div>
           ) : isOnboarding ? (
-            <div className="space-y-4">
-              <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
-              <AdminOnboarding go={go} />
-            </div>
+            item && item.toLowerCase() === 'subscriber' ? (
+              <InstitutionProfile go={go} />
+            ) : (
+              <div className="space-y-4">
+                <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
+                <AdminOnboarding go={go} />
+              </div>
+            )
           ) : (
             <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
               <span className="material-symbols-outlined text-4xl text-outline mb-2">construction</span>
