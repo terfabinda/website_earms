@@ -917,7 +917,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   ]
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Subscription', icon: 'card_membership', subitems: ['Verification','View','Pricing','Active','Suspend']},
+    {label: 'Subscription', icon: 'card_membership'},
     {label: 'Plan', icon: 'inventory_2', subitems: ['View Plans']},
     {label: 'Analytics', icon: 'analytics'},
     {label: 'Regional', icon: 'public', subitems: ['View Region']},
@@ -936,7 +936,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG', collegeTerm,'Department','Programme','Staff','Student']},
-    {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade']},
+    {label: 'Subscription', icon: 'card_membership'},
     {label: 'Payment History', icon: 'receipt_long'},
     {label: 'Analytics', icon: 'insights'},
     {label: 'Settings', icon: 'settings'},
@@ -982,7 +982,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : it.label === 'Payment History' ? ()=>go('admin?section=payment-history') : it.label === 'Analytics' ? ()=>go('admin?section=analytics') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : it.label === 'Subscription' ? ()=>go('admin?section=subscription') : it.label === 'Payment History' ? ()=>go('admin?section=payment-history') : it.label === 'Analytics' ? ()=>go('admin?section=analytics') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1011,7 +1011,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1136,7 +1136,9 @@ function SystemHome({ go }) {
               <p className="font-body-sm text-on-surface-variant">Manage {section} {item ? `· ${item}` : 'overview and actions'}</p>
             </div>
           </div>
-          {isSettings ? (
+          {section === 'subscription' ? (
+            <SubscriptionPage />
+          ) : isSettings ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">lock_reset</span> Change Password</h3>
@@ -1176,7 +1178,7 @@ function SystemHome({ go }) {
     {label: 'Regions', value: '14', sub: 'View Region: 14', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Verification, pricing and lifecycle control', subs: ['Verification','View','Pricing','Active','Suspend'], color: 'bg-primary-fixed'},
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Manage the current subscription plan', subs: [], color: 'bg-primary-fixed'},
     {key: 'plan', label: 'Plan', icon: 'inventory_2', desc: 'Create and manage subscription plans', subs: ['View Plans'], color: 'bg-secondary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'analytics', desc: 'Dashboards, revenue and ratings insight', subs: ['Dashboard','Revenue Reports','Subscription Status','Ratings'], color: 'bg-tertiary-fixed'},
     {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: ['View Region'], color: 'bg-surface-container-high'},
@@ -2330,6 +2332,46 @@ function StudentManagementPage({ go }) {
   )
 }
 
+function SubscriptionPage() {
+  const [showSubscribe, setShowSubscribe] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState('')
+  const [billingCycle, setBillingCycle] = useState('Annual')
+  const [provider, setProvider] = useState('')
+  const plans = [
+    {name: 'Institution Annual', detail: 'Full access for your institution', price: '₦250,000 / year', current: true},
+    {name: 'Institution Premium', detail: 'Advanced reporting and priority support', price: '₦400,000 / year', current: false},
+  ]
+  const submit = (event) => {
+    event.preventDefault()
+    setShowSubscribe(false)
+  }
+  return (
+    <div className="space-y-6">
+      {!showSubscribe ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5 md:col-span-2"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Subscription Plan</p><p className="font-headline-md font-bold text-primary mt-2">Institution Annual</p></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Billing Cycle</p><p className="font-headline-sm font-bold text-on-surface mt-2">Annual</p></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Provider</p><p className="font-headline-sm font-bold text-on-surface mt-2">Bank Transfer</p></div>
+          </div>
+          <div className="flex justify-end"><button type="button" onClick={()=>setShowSubscribe(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add_card</span> Subscribe Now</button></div>
+        </>
+      ) : (
+        <form onSubmit={submit} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {plans.map(plan=><label key={plan.name} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${selectedPlan === plan.name ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-low'}`}><input type="radio" name="plan" value={plan.name} checked={selectedPlan === plan.name} onChange={event=>setSelectedPlan(event.target.value)} className="sr-only" /><div className="flex items-start justify-between gap-4"><div><h3 className="font-headline-sm font-bold text-on-surface">{plan.name}</h3><p className="font-body-sm text-on-surface-variant mt-1">{plan.detail}</p></div><span className="material-symbols-outlined text-primary">{selectedPlan === plan.name ? 'radio_button_checked' : 'radio_button_unchecked'}</span></div><p className="font-headline-sm font-bold text-primary mt-5">{plan.price}</p>{plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}</label>)}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing Cycle</span><select value={billingCycle} onChange={event=>setBillingCycle(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={provider} onChange={event=>setProvider(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select Provider</option><option>Bank Transfer</option><option>Card</option><option>Paystack</option></select></label>
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end"><button type="button" onClick={()=>setShowSubscribe(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button><button type="submit" disabled={!selectedPlan || !provider} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-50">Submit</button></div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 function PaymentHistoryPage() {
   const [tab, setTab] = useState('subscriptions')
   const subscriptions = [
@@ -2388,7 +2430,9 @@ function InstitutionHome({ go }) {
               <p className="font-body-sm text-on-surface-variant">Manage {sectionKey} {item ? `· ${item}` : 'overview'}</p>
             </div>
           </div>
-          {isSettings ? (
+          {section === 'subscription' ? (
+            <SubscriptionPage />
+          ) : isSettings ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">lock_reset</span> Change Password</h3>
@@ -2469,7 +2513,7 @@ function InstitutionHome({ go }) {
   ]
   const groups = [
     {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
-    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Subscribe, check and upgrade plans', subs: ['Subscribe','Check Status','Upgrade'], color: 'bg-secondary-fixed'},
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Manage the current subscription plan', subs: [], color: 'bg-secondary-fixed'},
     {key: 'payment-history', label: 'Payment History', icon: 'receipt_long', desc: 'Subscription and payment records', subs: [], color: 'bg-tertiary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
