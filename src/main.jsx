@@ -919,7 +919,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership', subitems: ['Verification','View','Pricing','Active','Suspend']},
     {label: 'Plan', icon: 'inventory_2', subitems: ['View Plans']},
-    {label: 'Analytics', icon: 'analytics', subitems: ['Dashboard','Revenue Reports','Subscription Status','Ratings']},
+    {label: 'Analytics', icon: 'analytics'},
     {label: 'Regional', icon: 'public', subitems: ['View Region']},
     {label: 'Settings', icon: 'settings'},
   ]
@@ -937,8 +937,8 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Home', icon: 'home'},
     {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG', collegeTerm,'Department','Programme','Staff','Student']},
     {label: 'Subscription', icon: 'card_membership', subitems: ['Subscribe','Check Status','Upgrade']},
-    {label: 'Payment History', icon: 'receipt_long', subitems: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role']},
-    {label: 'Analytics', icon: 'insights', subitems: ['Summary']},
+    {label: 'Payment History', icon: 'receipt_long'},
+    {label: 'Analytics', icon: 'insights'},
     {label: 'Settings', icon: 'settings'},
   ]
   // map active to highlight
@@ -973,7 +973,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         <ul className="flex-1 space-y-1 overflow-y-auto">
           {role==='admin' ? (
             subrole === 'institution' ? (
-              // Institution admin - AdminPanel (subrole="institution") -> Home, Onboarding, Subscriber, Staff, Student, Subscription, Role Management, Analytics
+              // Institution admin - AdminPanel (subrole="institution") navigation
               <>
                 {institutionAdminNavItems.map(it => {
                   const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
@@ -982,7 +982,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : it.label === 'Payment History' ? ()=>go('admin?section=payment-history') : it.label === 'Analytics' ? ()=>go('admin?section=analytics') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1011,7 +1011,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -2279,12 +2279,6 @@ function StudentManagementPage({ go }) {
                   ))}
                 </select>
               </label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={form.matricNo} onChange={set("matricNo")} placeholder="e.g. CSC/2024/001" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={form.firstName} onChange={set("firstName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
-                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={form.lastName} onChange={set("lastName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
-              </div>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={form.email} onChange={set("email")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block">
                   <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
@@ -2305,6 +2299,12 @@ function StudentManagementPage({ go }) {
                   </select>
                 </label>
               </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={form.matricNo} onChange={set("matricNo")} placeholder="e.g. CSC/2024/001" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={form.firstName} onChange={set("firstName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={form.lastName} onChange={set("lastName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={form.email} onChange={set("email")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution</span><input value={jwtInstName} readOnly className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container text-sm" /></label>
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Level</span><input value={form.level} onChange={set("level")} placeholder="e.g. 400" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
@@ -2326,6 +2326,34 @@ function StudentManagementPage({ go }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function PaymentHistoryPage() {
+  const [tab, setTab] = useState('subscriptions')
+  const subscriptions = [
+    {plan: 'Institution Annual', reference: 'SUB-2024-001', start: '01 Jan 2024', end: '31 Dec 2024', status: 'Active', amount: '₦250,000'},
+    {plan: 'Institution Annual', reference: 'SUB-2023-001', start: '01 Jan 2023', end: '31 Dec 2023', status: 'Expired', amount: '₦200,000'},
+  ]
+  const payments = [
+    {reference: 'PAY-2024-001', date: '01 Jan 2024', description: 'Institution Annual subscription', amount: '₦250,000', method: 'Bank Transfer', status: 'Successful'},
+    {reference: 'PAY-2023-001', date: '01 Jan 2023', description: 'Institution Annual subscription', amount: '₦200,000', method: 'Card', status: 'Successful'},
+  ]
+  const isSubscriptions = tab === 'subscriptions'
+  return (
+    <div className="space-y-5">
+      <div className="flex border-b border-outline-variant">
+        <button type="button" onClick={()=>setTab('subscriptions')} className={`px-4 py-3 font-label-md border-b-2 ${isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Subscription History</button>
+        <button type="button" onClick={()=>setTab('payments')} className={`px-4 py-3 font-label-md border-b-2 ${!isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Payments History</button>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-outline-variant">
+        {isSubscriptions ? (
+          <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Plan</th><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Start Date</th><th className="px-4 py-3 font-label-md">End Date</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{subscriptions.map(row=><tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.plan}</td><td className="px-4 py-3 text-on-surface-variant">{row.reference}</td><td className="px-4 py-3">{row.start}</td><td className="px-4 py-3">{row.end}</td><td className="px-4 py-3"><span className="rounded-full bg-primary-container px-2.5 py-1 text-xs text-on-primary-container">{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}</tbody></table>
+        ) : (
+          <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Date</th><th className="px-4 py-3 font-label-md">Description</th><th className="px-4 py-3 font-label-md">Method</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{payments.map(row=><tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.reference}</td><td className="px-4 py-3">{row.date}</td><td className="px-4 py-3">{row.description}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><span className="rounded-full bg-primary-container px-2.5 py-1 text-xs text-on-primary-container">{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}</tbody></table>
+        )}
+      </div>
     </div>
   )
 }
@@ -2397,6 +2425,8 @@ function InstitutionHome({ go }) {
                 <p className="font-body-sm text-[12px] text-outline text-center">More settings coming soon.</p>
               </div>
             </div>
+          ) : section === 'payment history' || section === 'payment-history' ? (
+            <PaymentHistoryPage />
           ) : isOnboarding ? (
             item && item.toLowerCase() === 'subscriber' ? (
               <InstitutionProfile go={go} />
@@ -2440,8 +2470,8 @@ function InstitutionHome({ go }) {
   const groups = [
     {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
     {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Subscribe, check and upgrade plans', subs: ['Subscribe','Check Status','Upgrade'], color: 'bg-secondary-fixed'},
-    {key: 'payment history', label: 'Payment History', icon: 'receipt_long', desc: 'History, failures and role assignments', subs: ['Subscription History','Failed Payments','Role Management','Assign Role','Remove Role'], color: 'bg-tertiary-fixed'},
-    {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: ['Summary'], color: 'bg-surface-container-high'},
+    {key: 'payment-history', label: 'Payment History', icon: 'receipt_long', desc: 'Subscription and payment records', subs: [], color: 'bg-tertiary-fixed'},
+    {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
   ]
   const tokenData = decodeToken()
