@@ -1445,6 +1445,276 @@ function PGCreate({ go }) {
   )
 }
 
+function CollegePage({ go }) {
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
+  const collegePlural = collegeTerm === "Faculty" ? "Faculties" : collegeTerm === "School" ? "Schools" : "Colleges"
+  const [colleges, setColleges] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [showModal, setShowModal] = useState(false)
+  const [code, setCode] = useState("")
+  const [name, setName] = useState("")
+  const [msg, setMsg] = useState("")
+  const [busy, setBusy] = useState(false)
+  const tok = decodeToken()
+  const instId = tok?.ownerId || tok?.OwnerId || ""
+
+  const load = async () => {
+    setLoading(true); setErr("")
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      // Try to get institution id from token's ownerId or from dropdown's first institution
+      let id = instId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (id) {
+        const data = await onboardingApi.getColleges(String(id)).catch(()=>[])
+        setColleges(Array.isArray(data) ? data : [])
+      } else {
+        setColleges([])
+      }
+    } catch (e) {
+      setErr(e.message || "Could not load")
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(()=>{ load() }, [])
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!code.trim() || !name.trim()) { setErr(`${collegeTerm} Code and Name are required.`); return }
+    setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = instId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (!id) throw new Error("No institution found")
+      await onboardingApi.createCollege({ Name: name.trim(), Code: code.trim(), InstitutionId: Number(id) })
+      setMsg(`${collegeTerm} created.`)
+      setCode(""); setName("")
+      setShowModal(false)
+      load()
+    } catch (err2) {
+      setErr(err2.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">account_balance</span> {collegePlural}</h2>
+          <p className="font-body-sm text-on-surface-variant">Manage {collegePlural.toLowerCase()} — exquisite grid with actions</p>
+        </div>
+        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+          <span className="material-symbols-outlined text-[18px]">add</span> Add New {collegeTerm}
+        </button>
+      </div>
+
+      {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+
+      {/* Exquisite Grid Table - cards, not ordinary table */}
+      {loading ? (
+        <p className="font-body-sm text-on-surface-variant">Loading {collegePlural.toLowerCase()}…</p>
+      ) : colleges.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2">account_balance</span>
+          <p className="font-headline-sm text-on-surface">No {collegePlural.toLowerCase()} yet</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">Click Add New {collegeTerm} to create your first {collegeTerm.toLowerCase()}.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {colleges.map(c=>(
+            <div key={c.Id ?? c.id} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
+              <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">account_balance</span></div>
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{c.Code ?? c.code ?? "—"}</span>
+                </div>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{c.Name ?? c.name}</h4>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {c.Id ?? c.id} · {collegeTerm}</p>
+                <div className="flex gap-2 mt-4">
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowModal(false)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Add New {collegeTerm}</h3>
+              <button onClick={()=>setShowModal(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} Code</span>
+                <input value={code} onChange={e=>setCode(e.target.value)} placeholder="e.g. COS" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} Name</span>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder={`${collegeTerm} of Science`} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
+                <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DepartmentPage({ go }) {
+  const [depts, setDepts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const [msg, setMsg] = useState("")
+  const [showModal, setShowModal] = useState(false)
+  const [code, setCode] = useState("")
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState(false)
+  const tok = decodeToken()
+  const instId = tok?.ownerId || tok?.OwnerId || ""
+  const load = async () => {
+    setLoading(true); setErr("")
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = instId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (id) {
+        const data = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+        setDepts(Array.isArray(data) ? data : [])
+      } else setDepts([])
+    } catch (e) { setErr(e.message || "Could not load") } finally { setLoading(false) }
+  }
+  useEffect(()=>{ load() }, [])
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!code.trim() || !name.trim()) { setErr("Department Code and Name are required."); return }
+    setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let id = instId
+      if (!id) {
+        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
+      }
+      if (!id) throw new Error("No institution found")
+      await onboardingApi.createDepartment(String(id), { code: code.trim(), name: name.trim() })
+      setMsg("Department created.")
+      setCode(""); setName("")
+      setShowModal(false)
+      load()
+    } catch (err2) { setErr(err2.message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">account_tree</span> Departments</h2>
+          <p className="font-body-sm text-on-surface-variant">Manage departments — exquisite grid with actions</p>
+        </div>
+        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+          <span className="material-symbols-outlined text-[18px]">add</span> Add New Department
+        </button>
+      </div>
+      {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+      {loading ? (
+        <p className="font-body-sm text-on-surface-variant">Loading departments…</p>
+      ) : depts.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2">account_tree</span>
+          <p className="font-headline-sm text-on-surface">No departments yet</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">Click Add New Department to create your first department.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {depts.map(d=>(
+            <div key={d.Id ?? d.id} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
+              <div className="h-1.5 w-full bg-gradient-to-r from-secondary to-primary"></div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-secondary">account_tree</span></div>
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{d.Code ?? d.code ?? "—"}</span>
+                </div>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{d.Name ?? d.name}</h4>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {d.Id ?? d.id} · Department</p>
+                <div className="flex gap-2 mt-4">
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowModal(false)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Add New Department</h3>
+              <button onClick={()=>setShowModal(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department Code</span>
+                <input value={code} onChange={e=>setCode(e.target.value)} placeholder="e.g. CSC" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department Name</span>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="Computer Science" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
+                <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InstitutionHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
@@ -1517,6 +1787,10 @@ function InstitutionHome({ go }) {
               <InstitutionProfile go={go} />
             ) : item && item.toLowerCase() === 'pg' ? (
               <PGCreate go={go} />
+            ) : item && ['college','school','faculty'].includes(item.toLowerCase()) ? (
+              <CollegePage go={go} />
+            ) : item && item.toLowerCase() === 'department' ? (
+              <DepartmentPage go={go} />
             ) : (
               <div className="space-y-4">
                 <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
