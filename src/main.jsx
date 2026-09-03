@@ -1405,6 +1405,46 @@ function InstitutionProfile({ go }) {
   )
 }
 
+function PGCreate({ go }) {
+  const [name, setName] = useState("")
+  const [msg, setMsg] = useState("")
+  const [err, setErr] = useState("")
+  const [busy, setBusy] = useState(false)
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    if (!name.trim()) { setErr("Postgraduate School/College/Directorate Name is required."); return }
+    setBusy(true)
+    try {
+      await new Promise(r => setTimeout(r, 600))
+      setMsg(`"${name.trim()}" created successfully.`)
+      setName("")
+    } catch (e2) {
+      setErr(e2.message || "Could not create")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const cancel = () => { setName(""); setErr(""); setMsg(""); go('admin') }
+  return (
+    <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 max-w-2xl">
+      <h3 className="font-headline-sm font-bold text-primary mb-4">Create Postgraduate</h3>
+      <form onSubmit={submit} className="space-y-4">
+        <label className="block">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Postgraduate School/College/Directorate Name</span>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Postgraduate School of Science" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+        </label>
+        {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+        {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+        <div className="flex gap-3">
+          <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
+          <button type="button" onClick={cancel} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function InstitutionHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
@@ -1475,6 +1515,8 @@ function InstitutionHome({ go }) {
           ) : isOnboarding ? (
             item && item.toLowerCase() === 'subscriber' ? (
               <InstitutionProfile go={go} />
+            ) : item && item.toLowerCase() === 'pg' ? (
+              <PGCreate go={go} />
             ) : (
               <div className="space-y-4">
                 <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
