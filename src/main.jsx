@@ -4,6 +4,8 @@ import './styles.css'
 import { authApi, userApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { IamAdmin } from './iam-admin.jsx'
+import { AFRICAN_REGIONS } from './regions'
+import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 
 // ----- Routing -----
 const pages = {
@@ -513,23 +515,6 @@ function Login({ go }) {
 }
 
 /* ---------- Sign Up / Create Account (POST /api/usermgt/create-owner) ---------- */
-const AFRICAN_REGIONS = [
-  { id: 1, name: "Nigeria" },
-  { id: 2, name: "Ghana" },
-  { id: 3, name: "Kenya" },
-  { id: 4, name: "Zambia" },
-  { id: 5, name: "Zimbabwe" },
-  { id: 6, name: "South Africa" },
-  { id: 7, name: "Egypt" },
-  { id: 8, name: "Morocco" },
-  { id: 9, name: "Ethiopia" },
-  { id: 10, name: "Uganda" },
-  { id: 11, name: "Namibia" },
-  { id: 12, name: "Tanzania" },
-  { id: 13, name: "Botswana" },
-  { id: 14, name: "Mozambique" },
-];
-
 function Signup({ go }) {
   const [ownerType, setOwnerType] = useState(1) // 1 = Institution, 2 = Personal
   const [ownerName, setOwnerName] = useState('')
@@ -918,7 +903,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
-    {label: 'Plan', icon: 'inventory_2', subitems: ['View Plans']},
+    {label: 'Pricing', icon: 'sell'},
     {label: 'Analytics', icon: 'analytics'},
     {label: 'Regional', icon: 'public', subitems: ['View Region']},
     {label: 'Settings', icon: 'settings'},
@@ -1011,7 +996,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : it.label === 'Pricing' ? ()=>go('system?section=pricing') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1120,8 +1105,23 @@ function SystemHome({ go }) {
   const section = (q.get('section') || '').toLowerCase()
   const item = q.get('item') || ''
 
-  // If a specific section is requested, show placeholder for that section
+  // If a specific section is requested, render its dedicated page
   if (section) {
+    if (section === 'subscription' || section === 'pricing' || section === 'analytics' || section === 'regional') {
+      const page =
+        section === 'subscription' ? <SubscriptionManagementPage go={go} />
+        : section === 'pricing' ? <PricingManagementPage go={go} />
+        : section === 'analytics' ? <AnalyticsPage go={go} item={item} />
+        : <RegionManagementPage go={go} />
+      return (
+        <div className="space-y-6">
+          <button onClick={()=>go('system')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Home
+          </button>
+          {page}
+        </div>
+      )
+    }
     const isSettings = section === 'settings'
     return (
       <div className="space-y-6 max-w-5xl">
@@ -1130,15 +1130,13 @@ function SystemHome({ go }) {
         </button>
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">{section==='subscription'?'card_membership':section==='plan'?'inventory_2':section==='analytics'?'analytics':section==='regional'?'public':'settings'}</span></div>
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">settings</span></div>
             <div>
               <h2 className="font-headline-md font-bold text-primary capitalize">{section} {item ? `— ${item}` : ''}</h2>
               <p className="font-body-sm text-on-surface-variant">Manage {section} {item ? `· ${item}` : 'overview and actions'}</p>
             </div>
           </div>
-          {section === 'subscription' ? (
-            <SubscriptionPage />
-          ) : isSettings ? (
+          {isSettings ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">lock_reset</span> Change Password</h3>
@@ -1172,14 +1170,14 @@ function SystemHome({ go }) {
 
   // Home dashboard - stat cards + icon grid mapping to sidebar
   const stats = [
-    {label: 'Total Subscriptions', value: '1,248', sub: 'Verification pending: 23', icon: 'card_membership', color: 'bg-primary-container text-primary'},
-    {label: 'Active Plans', value: '8', sub: 'View Plans: 8', icon: 'inventory_2', color: 'bg-secondary-container text-secondary'},
-    {label: 'Analytics Reports', value: '42', sub: 'Subscription Status: 31 active', icon: 'analytics', color: 'bg-tertiary-container text-tertiary'},
-    {label: 'Regions', value: '14', sub: 'View Region: 14', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
+    {label: 'Total Subscriptions', value: '1,348', sub: 'Active: 1,042', icon: 'card_membership', color: 'bg-primary-container text-primary'},
+    {label: 'Active Plans', value: '5', sub: 'Across 3 billing cycles', icon: 'sell', color: 'bg-secondary-container text-secondary'},
+    {label: 'Institutions', value: '1,248', sub: 'Onboarded in 14 regions', icon: 'business', color: 'bg-tertiary-container text-tertiary'},
+    {label: 'Regions', value: '14', sub: 'Africa coverage', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Manage the current subscription plan', subs: [], color: 'bg-primary-fixed'},
-    {key: 'plan', label: 'Plan', icon: 'inventory_2', desc: 'Create and manage subscription plans', subs: ['View Plans'], color: 'bg-secondary-fixed'},
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'All subscriptions with live status and management actions', subs: [], color: 'bg-primary-fixed'},
+    {key: 'pricing', label: 'Pricing', icon: 'sell', desc: 'Structure plans and manage subscription pricing', subs: ['Subscription Pricing Management'], color: 'bg-secondary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'analytics', desc: 'Dashboards, revenue and ratings insight', subs: ['Dashboard','Revenue Reports','Subscription Status','Ratings'], color: 'bg-tertiary-fixed'},
     {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: ['View Region'], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'System settings, password and preferences', subs: [], color: 'bg-surface-container-low'},
