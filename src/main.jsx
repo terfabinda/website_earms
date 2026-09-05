@@ -905,7 +905,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Subscription', icon: 'card_membership'},
     {label: 'Pricing', icon: 'sell'},
     {label: 'Analytics', icon: 'analytics'},
-    {label: 'Regional', icon: 'public', subitems: ['View Region']},
+    {label: 'Regional', icon: 'public'},
     {label: 'Settings', icon: 'settings'},
   ]
   const collegeTerm = (() => {
@@ -996,7 +996,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : it.label === 'Pricing' ? ()=>go('system?section=pricing') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : it.label === 'Pricing' ? ()=>go('system?section=pricing') : it.label === 'Regional' ? ()=>go('system?section=regional') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1179,7 +1179,7 @@ function SystemHome({ go }) {
     {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'All subscriptions with live status and management actions', subs: [], color: 'bg-primary-fixed'},
     {key: 'pricing', label: 'Pricing', icon: 'sell', desc: 'Structure plans and manage subscription pricing', subs: ['Subscription Pricing Management'], color: 'bg-secondary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'analytics', desc: 'Dashboards, revenue and ratings insight', subs: ['Dashboard','Revenue Reports','Subscription Status','Ratings'], color: 'bg-tertiary-fixed'},
-    {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: ['View Region'], color: 'bg-surface-container-high'},
+    {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'System settings, password and preferences', subs: [], color: 'bg-surface-container-low'},
   ]
   return (
