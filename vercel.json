@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/iam/:path*", "destination": "https://iam.earmshub.com/:path*" },
-    { "source": "/api/onb/:path*", "destination": "https://onboarding.earmshub.com/:path*" }
+    { "source": "/api/onb/:path*", "destination": "https://onboarding.earmshub.com/:path*" },
+    { "source": "/api/billing/:path*", "destination": "https://billing.earmshub.com/:path*" }
   ]
 }

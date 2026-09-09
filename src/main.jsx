@@ -6,6 +6,7 @@ import { AdminOnboarding } from './onboarding.jsx'
 import { IamAdmin } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
+import { billingApi } from './billing'
 
 // ----- Routing -----
 const pages = {
@@ -1104,6 +1105,28 @@ function SystemHome({ go }) {
   const q = useHashQuery()
   const section = (q.get('section') || '').toLowerCase()
   const item = q.get('item') || ''
+  const [dashStats, setDashStats] = useState([
+    {label: 'Total Plans', value: '—', sub: 'Loading…', icon: 'sell', color: 'bg-primary-container text-primary'},
+    {label: 'Active Plans', value: '—', sub: 'Loading…', icon: 'card_membership', color: 'bg-secondary-container text-secondary'},
+    {label: 'Active Subscriptions', value: '—', sub: 'Loading…', icon: 'verified', color: 'bg-green-100 text-green-800'},
+    {label: 'Billing Cycles', value: '3', sub: 'Monthly · Quarterly · Annual', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
+  ])
+
+  useEffect(() => {
+    billingApi.getPlansSummary()
+      .then((res) => {
+        const plans = res.data || []
+        const total = plans.length
+        const active = plans.filter((p) => p.planStatus === 1).length
+        setDashStats([
+          {label: 'Total Plans', value: String(total), sub: total + ' plans in the catalogue', icon: 'sell', color: 'bg-primary-container text-primary'},
+          {label: 'Active Plans', value: String(active), sub: active + ' active plans', icon: 'card_membership', color: 'bg-secondary-container text-secondary'},
+          {label: 'Active Subscriptions', value: '—', sub: 'View subscription page for details', icon: 'verified', color: 'bg-green-100 text-green-800'},
+          {label: 'Billing Cycles', value: '3', sub: 'Monthly · Quarterly · Annual', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
+        ])
+      })
+      .catch(() => {})
+  }, [])
 
   // If a specific section is requested, render its dedicated page
   if (section) {
@@ -2333,37 +2356,111 @@ function StudentManagementPage({ go }) {
 function SubscriptionPage() {
   const [showSubscribe, setShowSubscribe] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState('')
+  const [selectedPlanPricingId, setSelectedPlanPricingId] = useState(0)
   const [billingCycle, setBillingCycle] = useState('Annual')
   const [provider, setProvider] = useState('')
-  const plans = [
-    {name: 'Institution Annual', detail: 'Full access for your institution', price: '₦250,000 / year', current: true},
-    {name: 'Institution Premium', detail: 'Advanced reporting and priority support', price: '₦400,000 / year', current: false},
-  ]
-  const submit = (event) => {
+  const [plans, setPlans] = useState([])
+  const [currentSub, setCurrentSub] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    const tok = decodeToken()
+    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    if (!username) { setLoading(false); return }
+
+    Promise.all([
+      billingApi.getUserSubscription(username).catch(() => ({ data: [] })),
+      billingApi.getPrices('NGN').catch(() => ({ data: [] })),
+    ]).then(([subRes, priceRes]) => {
+      const subs = subRes.data || []
+      if (subs.length > 0) setCurrentSub(subs[0])
+      const priceList = priceRes.data || []
+      setPlans(priceList.map((p) => ({
+        id: p.id,
+        name: p.planName,
+        detail: p.billingCycle === 12 ? 'Annual plan' : p.billingCycle === 3 ? 'Quarterly plan' : 'Monthly plan',
+        price: '\u20A6' + Number(p.price || 0).toLocaleString('en-NG') + ' / ' + (p.billingCycle === 12 ? 'year' : p.billingCycle === 3 ? 'quarter' : 'month'),
+        current: currentSub && currentSub.planName === p.planName,
+        pricingId: p.id,
+        billingCycle: p.billingCycle,
+      })))
+    }).finally(() => setLoading(false))
+  }, [])
+
+  const submit = async (event) => {
     event.preventDefault()
-    setShowSubscribe(false)
+    setError('')
+    setMsg('')
+    const tok = decodeToken()
+    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    const ownerName = tok?.name || tok?.unique_name || username
+    const ownerEmail = tok?.email || ''
+    if (!selectedPlan || !provider || !username) {
+      setError('Please select a plan and provider')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await billingApi.subscribe({
+        username,
+        ownerName,
+        ownerEmail,
+        ownerType: 1,
+        subscriptionType: 1,
+        planPricingId: selectedPlanPricingId,
+        aiUnit: 0,
+        remainingAIUnits: 0,
+        provider,
+        activatedBy: username,
+      })
+      const redirectUrl = res.data?.paymentRedirectUrl
+      if (redirectUrl) {
+        window.location.href = redirectUrl
+      } else {
+        setMsg('Subscription initialised. Reference: ' + (res.data?.paymentReference || '—'))
+        setShowSubscribe(false)
+      }
+    } catch (err) {
+      setError(err.message || 'Subscription failed')
+    } finally {
+      setSubmitting(false)
+    }
   }
+
+  if (loading) {
+    return <div className="py-8 text-center"><span className="material-symbols-outlined text-4xl text-outline animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading subscription…</p></div>
+  }
+
+  const cycleMap = { 12: 'Annual', 3: 'Quarterly', 1: 'Monthly' }
+  const providerMap = { credo: 'Card', bank: 'Bank Transfer', paystack: 'Paystack' }
+
   return (
     <div className="space-y-6">
+      {error && <div className="rounded-lg bg-error-container text-on-error-container px-4 py-2 text-sm">{error}</div>}
+      {msg && <div className="rounded-lg bg-primary-container text-on-primary-container px-4 py-2 text-sm">{msg}</div>}
       {!showSubscribe ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5 md:col-span-2"><div className="flex items-start justify-between gap-4"><div><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Subscription Plan</p><p className="font-headline-md font-bold text-primary mt-2">Institution Annual</p></div><div className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-green-100 px-3 py-1 text-xs font-label-md text-green-800">Current</span><button type="button" onClick={()=>{setSelectedPlan(''); setShowSubscribe(true)}} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-label-md text-white hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">upgrade</span> Upgrade</button></div></div></div>
-            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Billing Cycle</p><p className="font-headline-sm font-bold text-on-surface mt-2">Annual</p></div>
-            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Provider</p><p className="font-headline-sm font-bold text-on-surface mt-2">Bank Transfer</p></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5 md:col-span-2"><div className="flex items-start justify-between gap-4"><div><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Subscription Plan</p><p className="font-headline-md font-bold text-primary mt-2">{currentSub ? currentSub.planName : 'No active plan'}</p></div><div className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-label-md ${currentSub && currentSub.planStatus === 2 ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface-variant'}`}>{currentSub && currentSub.planStatus === 2 ? 'Current' : 'Inactive'}</span><button type="button" onClick={() => { setSelectedPlan(''); setShowSubscribe(true) }} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-label-md text-white hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">upgrade</span> Upgrade</button></div></div></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Billing Cycle</p><p className="font-headline-sm font-bold text-on-surface mt-2">{currentSub ? (cycleMap[currentSub.billingCycle] || currentSub.billingCycle + ' months') : '—'}</p></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Provider</p><p className="font-headline-sm font-bold text-on-surface mt-2">{currentSub ? (providerMap[currentSub.activatedBy] || currentSub.activatedBy || '—') : '—'}</p></div>
           </div>
-          <div className="flex justify-end"><button type="button" onClick={()=>setShowSubscribe(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add_card</span> Subscribe Now</button></div>
+          <div className="flex justify-end"><button type="button" onClick={() => setShowSubscribe(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add_card</span> Subscribe Now</button></div>
         </>
       ) : (
         <form onSubmit={submit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {plans.map(plan=><label key={plan.name} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${selectedPlan === plan.name ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-low'}`}><input type="radio" name="plan" value={plan.name} checked={selectedPlan === plan.name} onChange={event=>setSelectedPlan(event.target.value)} className="sr-only" /><div className="flex items-start justify-between gap-4"><div><h3 className="font-headline-sm font-bold text-on-surface">{plan.name}</h3><p className="font-body-sm text-on-surface-variant mt-1">{plan.detail}</p></div><span className="material-symbols-outlined text-primary">{selectedPlan === plan.name ? 'radio_button_checked' : 'radio_button_unchecked'}</span></div><p className="font-headline-sm font-bold text-primary mt-5">{plan.price}</p>{plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}</label>)}
+            {plans.length === 0 && <p className="text-on-surface-variant col-span-2">No plans available for this currency.</p>}
+            {plans.map(plan => <label key={plan.id} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${selectedPlan === plan.name ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-low'}`}><input type="radio" name="plan" value={plan.name} checked={selectedPlan === plan.name} onChange={() => { setSelectedPlan(plan.name); setSelectedPlanPricingId(plan.pricingId); setBillingCycle(cycleMap[plan.billingCycle] || 'Annual') }} className="sr-only" /><div className="flex items-start justify-between gap-4"><div><h3 className="font-headline-sm font-bold text-on-surface">{plan.name}</h3><p className="font-body-sm text-on-surface-variant mt-1">{plan.detail}</p></div><span className="material-symbols-outlined text-primary">{selectedPlan === plan.name ? 'radio_button_checked' : 'radio_button_unchecked'}</span></div><p className="font-headline-sm font-bold text-primary mt-5">{plan.price}</p>{plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}</label>)}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing Cycle</span><select value={billingCycle} onChange={event=>setBillingCycle(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
-            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={provider} onChange={event=>setProvider(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select Provider</option><option>Bank Transfer</option><option>Card</option><option>Paystack</option></select></label>
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing Cycle</span><select value={billingCycle} onChange={event => setBillingCycle(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={provider} onChange={event => setProvider(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select Provider</option><option value="bank">Bank Transfer</option><option value="credo">Card</option><option value="paystack">Paystack</option></select></label>
           </div>
-          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end"><button type="button" onClick={()=>setShowSubscribe(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button><button type="submit" disabled={!selectedPlan || !provider} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-50">Submit</button></div>
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end"><button type="button" onClick={() => setShowSubscribe(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button><button type="submit" disabled={!selectedPlan || !provider || submitting} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-50">{submitting ? 'Processing…' : 'Submit'}</button></div>
         </form>
       )}
     </div>
@@ -2372,28 +2469,68 @@ function SubscriptionPage() {
 
 function PaymentHistoryPage() {
   const [tab, setTab] = useState('subscriptions')
-  const subscriptions = [
-    {plan: 'Institution Annual', reference: 'SUB-2024-001', start: '01 Jan 2024', end: '31 Dec 2024', status: 'Active', amount: '₦250,000'},
-    {plan: 'Institution Annual', reference: 'SUB-2023-001', start: '01 Jan 2023', end: '31 Dec 2023', status: 'Expired', amount: '₦200,000'},
-  ]
-  const payments = [
-    {reference: 'PAY-2024-001', date: '01 Jan 2024', description: 'Institution Annual subscription', amount: '₦250,000', method: 'Bank Transfer', status: 'Successful'},
-    {reference: 'PAY-2023-001', date: '01 Jan 2023', description: 'Institution Annual subscription', amount: '₦200,000', method: 'Card', status: 'Successful'},
-  ]
+  const [subscriptions, setSubscriptions] = useState([])
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const tok = decodeToken()
+    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    if (!username) { setLoading(false); return }
+
+    billingApi.getUserSubscription(username)
+      .then((res) => {
+        const subs = (res.data || []).map((s) => ({
+          plan: s.planName || '—',
+          reference: 'SUB-' + s.id,
+          start: s.subscriptionStartDate ? new Date(s.subscriptionStartDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+          end: s.subscriptionEndDate ? new Date(s.subscriptionEndDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+          status: s.planStatus === 2 ? 'Active' : s.planStatus === 3 ? 'Expired' : s.planStatus === 1 ? 'Pending' : '—',
+          amount: '\u20A6' + Number(s.planPrice || 0).toLocaleString('en-NG'),
+          _raw: s,
+        }))
+        setSubscriptions(subs)
+
+        const paymentPromises = subs.filter((s) => s._raw.id).map((s) =>
+          billingApi.getPaymentDetails(s._raw.id).then((pres) => {
+            const pd = pres.data
+            return pd ? [{
+              reference: pd.reference || '—',
+              date: pd.createdAt ? new Date(pd.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+              description: s.plan + ' subscription',
+              method: pd.provider || '—',
+              status: pd.paymentStatus === 2 ? 'Successful' : pd.paymentStatus === 3 ? 'Failed' : 'Pending',
+              amount: '\u20A6' + Number(pd.amount || 0).toLocaleString('en-NG'),
+            }] : []
+          }).catch(() => [])
+        )
+        return Promise.all(paymentPromises)
+      })
+      .then((paymentArrays) => {
+        setPayments(paymentArrays.flat())
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
   const isSubscriptions = tab === 'subscriptions'
   return (
     <div className="space-y-5">
       <div className="flex border-b border-outline-variant">
-        <button type="button" onClick={()=>setTab('subscriptions')} className={`px-4 py-3 font-label-md border-b-2 ${isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Subscription History</button>
-        <button type="button" onClick={()=>setTab('payments')} className={`px-4 py-3 font-label-md border-b-2 ${!isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Payments History</button>
+        <button type="button" onClick={() => setTab('subscriptions')} className={`px-4 py-3 font-label-md border-b-2 ${isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Subscription History</button>
+        <button type="button" onClick={() => setTab('payments')} className={`px-4 py-3 font-label-md border-b-2 ${!isSubscriptions ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}>Payments History</button>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-outline-variant">
-        {isSubscriptions ? (
-          <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Plan</th><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Start Date</th><th className="px-4 py-3 font-label-md">End Date</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{subscriptions.map(row=><tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.plan}</td><td className="px-4 py-3 text-on-surface-variant">{row.reference}</td><td className="px-4 py-3">{row.start}</td><td className="px-4 py-3">{row.end}</td><td className="px-4 py-3"><span className="rounded-full bg-primary-container px-2.5 py-1 text-xs text-on-primary-container">{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}</tbody></table>
-        ) : (
-          <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Date</th><th className="px-4 py-3 font-label-md">Description</th><th className="px-4 py-3 font-label-md">Method</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{payments.map(row=><tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.reference}</td><td className="px-4 py-3">{row.date}</td><td className="px-4 py-3">{row.description}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><span className="rounded-full bg-primary-container px-2.5 py-1 text-xs text-on-primary-container">{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}</tbody></table>
-        )}
-      </div>
+      {loading ? (
+        <div className="py-8 text-center"><span className="material-symbols-outlined text-4xl text-outline animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading payment history…</p></div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-outline-variant">
+          {isSubscriptions ? (
+            <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Plan</th><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Start Date</th><th className="px-4 py-3 font-label-md">End Date</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{subscriptions.map(row => <tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.plan}</td><td className="px-4 py-3 text-on-surface-variant">{row.reference}</td><td className="px-4 py-3">{row.start}</td><td className="px-4 py-3">{row.end}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${row.status === 'Active' ? 'bg-green-100 text-green-800' : row.status === 'Expired' ? 'bg-red-100 text-red-700' : 'bg-primary-container text-on-primary-container'}`}>{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}{subscriptions.length === 0 && <tr><td colSpan="6" className="px-4 py-8 text-center text-on-surface-variant">No subscription history found.</td></tr>}</tbody></table>
+          ) : (
+            <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-container-low text-on-surface-variant"><tr><th className="px-4 py-3 font-label-md">Reference</th><th className="px-4 py-3 font-label-md">Date</th><th className="px-4 py-3 font-label-md">Description</th><th className="px-4 py-3 font-label-md">Method</th><th className="px-4 py-3 font-label-md">Status</th><th className="px-4 py-3 font-label-md text-right">Amount</th></tr></thead><tbody className="divide-y divide-outline-variant bg-surface-container-lowest">{payments.map(row => <tr key={row.reference} className="text-on-surface"><td className="px-4 py-3 font-medium">{row.reference}</td><td className="px-4 py-3">{row.date}</td><td className="px-4 py-3">{row.description}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${row.status === 'Successful' ? 'bg-green-100 text-green-800' : row.status === 'Failed' ? 'bg-red-100 text-red-700' : 'bg-primary-container text-on-primary-container'}`}>{row.status}</span></td><td className="px-4 py-3 text-right font-medium">{row.amount}</td></tr>)}{payments.length === 0 && <tr><td colSpan="6" className="px-4 py-8 text-center text-on-surface-variant">No payment records found.</td></tr>}</tbody></table>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2403,6 +2540,7 @@ function InstitutionHome({ go }) {
   const section = (q.get('section') || '').toLowerCase()
   const item = q.get('item') || ''
   const sectionKey = section.replace(/-/g, ' ')
+  const [instSubStatus, setInstSubStatus] = useState('Inactive')
   const [collegeChoice, setCollegeChoice] = useState(() => {
     try {
       const tok = decodeToken()
@@ -2411,6 +2549,19 @@ function InstitutionHome({ go }) {
       return localStorage.getItem(key) || "College"
     } catch { return "College" }
   })
+
+  useEffect(() => {
+    const tok = decodeToken()
+    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    if (!username) return
+    billingApi.getUserSubscription(username)
+      .then((res) => {
+        const subs = res.data || []
+        const active = subs.find((s) => s.planStatus === 2)
+        if (active) setInstSubStatus(active.planName || 'Active')
+      })
+      .catch(() => {})
+  }, [])
 
   if (section) {
     const isSettings = section === 'settings'
@@ -2507,7 +2658,7 @@ function InstitutionHome({ go }) {
     {label: 'Total Students', value: '—', sub: 'Across all programmes', icon: 'school', color: 'bg-primary-container text-primary'},
     {label: 'Academic Staff', value: '—', sub: 'Supervisors & lecturers', icon: 'badge', color: 'bg-secondary-container text-secondary'},
     {label: 'Departments', value: '—', sub: 'Under colleges', icon: 'account_tree', color: 'bg-tertiary-container text-tertiary'},
-    {label: 'Active Subscription', value: 'Inactive', sub: 'Check status in Subscription', icon: 'card_membership', color: 'bg-surface-container-high text-on-surface'},
+    {label: 'Active Subscription', value: instSubStatus, sub: 'Check status in Subscription', icon: 'card_membership', color: instSubStatus !== 'Inactive' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
     {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},

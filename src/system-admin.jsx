@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { AFRICAN_REGIONS } from './regions'
+import { billingApi } from './billing'
 
 /* ---------- Shared helpers ---------- */
 
@@ -180,20 +181,34 @@ const STATUS = {
   pending: { label: 'Pending', badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: 'schedule' },
 }
 
-const SEED_SUBSCRIPTIONS = [
-  { id: 'SUB-2026-0142', institution: 'Joseph Sarwuan Tarka University', ownerCode: 'BN10', email: 'it@unimak.edu.ng', plan: 'Institution Premium', status: 'active', billing: 'Annual', amount: 400000, seats: 1000, provider: 'Bank Transfer', features: ['Project Management', 'Advanced Analytics', 'API Access', 'Priority Support'], start: '2026-01-01', end: '2026-12-31', created: '2025-11-12', usage: 68, payments: [{ ref: 'PAY-2026-2201', date: '2025-12-30', amount: 400000, method: 'Bank Transfer', status: 'Successful' }] },
-  { id: 'SUB-2026-0138', institution: 'University of Lagos', ownerCode: 'UL01', email: 'it@unilag.edu.ng', plan: 'Institution Annual', status: 'pending', billing: 'Annual', amount: 250000, seats: 500, provider: 'Paystack', features: ['Project Management', 'Milestones', 'Publications', 'Grant Tracking'], start: '2026-02-01', end: '2027-01-31', created: '2026-01-18', usage: 0, payments: [] },
-  { id: 'SUB-2026-0129', institution: 'Kwame Nkrumah University of Science and Technology', ownerCode: 'KN05', email: 'office@knust.edu.gh', plan: 'Institution Starter', status: 'active', billing: 'Annual', amount: 150000, seats: 250, provider: 'Bank Transfer', features: ['Project Management', 'Milestones', 'Supervisor Allocation'], start: '2025-10-16', end: '2026-10-15', created: '2025-09-02', usage: 54, payments: [{ ref: 'PAY-2025-1874', date: '2025-10-01', amount: 150000, method: 'Bank Transfer', status: 'Successful' }] },
-  { id: 'SUB-2026-0117', institution: 'University of Nairobi', ownerCode: 'UN100', email: 'ict@uonbi.ac.ke', plan: 'Institution Premium', status: 'suspended', billing: 'Annual', amount: 400000, seats: 700, provider: 'Card', features: ['Project Management', 'Advanced Analytics', 'API Access'], start: '2026-04-12', end: '2027-04-12', created: '2026-03-20', usage: 41, payments: [{ ref: 'PAY-2026-1990', date: '2026-04-01', amount: 400000, method: 'Card', status: 'Successful' }] },
-  { id: 'SUB-2026-0105', institution: 'Cairo University', ownerCode: 'CU20', email: 'admin@cu.edu.eg', plan: 'Institution Annual', status: 'expired', billing: 'Annual', amount: 250000, seats: 600, provider: 'Bank Transfer', features: ['Project Management', 'Milestones', 'Publications'], start: '2024-08-01', end: '2025-07-31', created: '2024-07-10', usage: 92, payments: [{ ref: 'PAY-2024-1201', date: '2024-07-25', amount: 250000, method: 'Bank Transfer', status: 'Successful' }] },
-  { id: 'SUB-2026-0098', institution: 'Stellenbosch University', ownerCode: 'SU41', email: 'research@sun.ac.za', plan: 'Institution Quarterly', status: 'active', billing: 'Quarterly', amount: 80000, seats: 300, provider: 'Paystack', features: ['Project Management', 'Milestones', 'Support'], start: '2026-06-01', end: '2027-03-01', created: '2026-05-15', usage: 33, payments: [{ ref: 'PAY-2026-2098', date: '2026-06-01', amount: 80000, method: 'Paystack', status: 'Successful' }] },
-  { id: 'SUB-2026-0087', institution: 'Addis Ababa University', ownerCode: 'AA03', email: 'it@aau.edu.et', plan: 'Institution Premium', status: 'active', billing: 'Annual', amount: 400000, seats: 500, provider: 'Bank Transfer', features: ['Project Management', 'Advanced Analytics', 'API Access', 'Priority Support'], start: '2026-03-01', end: '2027-02-28', created: '2026-02-08', usage: 47, payments: [{ ref: 'PAY-2026-2033', date: '2026-03-01', amount: 400000, method: 'Bank Transfer', status: 'Successful' }] },
-  { id: 'SUB-2026-0072', institution: 'Makerere University', ownerCode: 'MK12', email: 'support@mak.ac.ug', plan: 'Institution Annual', status: 'suspended', billing: 'Annual', amount: 250000, seats: 400, provider: 'Card', features: ['Project Management', 'Milestones', 'Publications'], start: '2025-11-20', end: '2026-11-19', created: '2025-10-30', usage: 26, payments: [{ ref: 'PAY-2025-1901', date: '2025-11-01', amount: 250000, method: 'Card', status: 'Successful' }] },
-  { id: 'SUB-2026-0061', institution: 'University of Dar es Salaam', ownerCode: 'UD07', email: 'ict@udsm.ac.tz', plan: 'Institution Starter', status: 'active', billing: 'Monthly', amount: 30000, seats: 150, provider: 'Paystack', features: ['Project Management', 'Basic Reports'], start: '2026-07-01', end: '2026-08-01', created: '2026-06-21', usage: 12, payments: [{ ref: 'PAY-2026-2114', date: '2026-07-01', amount: 30000, method: 'Paystack', status: 'Successful' }] },
-  { id: 'SUB-2026-0043', institution: 'University of Zambia', ownerCode: 'UZ09', email: 'admin@unza.zm', plan: 'Institution Annual', status: 'pending', billing: 'Annual', amount: 250000, seats: 350, provider: 'Bank Transfer', features: ['Project Management', 'Milestones', 'Publications'], start: '2026-09-01', end: '2027-08-31', created: '2026-08-02', usage: 0, payments: [] },
-  { id: 'SUB-2026-0031', institution: 'University of Zimbabwe', ownerCode: 'UZW1', email: 'research@uz.ac.zw', plan: 'Institution Quarterly', status: 'expired', billing: 'Quarterly', amount: 80000, seats: 200, provider: 'Bank Transfer', features: ['Project Management', 'Milestones'], start: '2025-04-01', end: '2026-04-01', created: '2025-03-12', usage: 77, payments: [{ ref: 'PAY-2025-1600', date: '2025-04-01', amount: 80000, method: 'Bank Transfer', status: 'Successful' }] },
-  { id: 'SUB-2026-0022', institution: 'University of Namibia', ownerCode: 'UNI11', email: 'it@unam.na', plan: 'Institution Annual', status: 'active', billing: 'Annual', amount: 250000, seats: 220, provider: 'Paystack', features: ['Project Management', 'Milestones', 'Publications'], start: '2026-01-15', end: '2027-01-14', created: '2025-12-05', usage: 29, payments: [{ ref: 'PAY-2026-2010', date: '2026-01-10', amount: 250000, method: 'Paystack', status: 'Successful' }] },
-]
+const BILLING_CYCLE_MAP = { 12: 'Annual', 3: 'Quarterly', 1: 'Monthly' }
+
+const PLAN_STATUS_MAP = { 1: 'active', 2: 'expired' }
+
+const SUB_STATUS_MAP = { 1: 'pending', 2: 'active', 3: 'expired', 4: 'suspended' }
+
+function mapApiSubscriptions(apiSubs) {
+  if (!apiSubs || !Array.isArray(apiSubs)) return []
+  return apiSubs.map((s) => ({
+    id: 'SUB-' + s.id,
+    institution: s.ownerName || s.activatedBy || '—',
+    ownerCode: '',
+    email: '',
+    plan: s.planName || '—',
+    status: SUB_STATUS_MAP[s.planStatus] || 'pending',
+    billing: BILLING_CYCLE_MAP[s.billingCycle] || (s.billingCycle + ' mo'),
+    amount: s.planPrice || 0,
+    seats: 0,
+    provider: '',
+    features: [],
+    start: (s.subscriptionStartDate || '').slice(0, 10),
+    end: (s.subscriptionEndDate || '').slice(0, 10),
+    created: (s.subscriptionStartDate || '').slice(0, 10),
+    usage: 0,
+    payments: [],
+    _raw: s,
+  }))
+}
 
 function DetailTile({ label, value }) {
   return (
@@ -334,12 +349,70 @@ function SubCard({ s, onOpen, onToggle }) {
 }
 
 export function SubscriptionManagementPage({ go }) {
-  const [subs, setSubs] = useState(SEED_SUBSCRIPTIONS)
+  const [subs, setSubs] = useState([])
+  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('Newest first')
   const [selectedId, setSelectedId] = useState(null)
   const [toast, notify] = useToast()
+
+  useEffect(() => {
+    setLoading(true)
+    billingApi.getPlansSummary()
+      .then(async (res) => {
+        const plans = res.data || []
+        const allSubs = []
+        for (const plan of plans) {
+          try {
+            const detail = await billingApi.getPlanDetails(plan.id)
+            const d = detail.data || {}
+            allSubs.push({
+              id: 'PLAN-' + d.id,
+              institution: d.planeName || plan.planName || '—',
+              ownerCode: '',
+              email: '',
+              plan: d.planeName || plan.planName || '—',
+              status: PLAN_STATUS_MAP[d.planStatus] || PLAN_STATUS_MAP[plan.planStatus] || 'active',
+              billing: d.planPricings && d.planPricings[0] ? (BILLING_CYCLE_MAP[d.planPricings[0].billingCycle] || d.planPricings[0].billingCycle + ' mo') : '—',
+              amount: d.planPricings && d.planPricings[0] ? d.planPricings[0].price : 0,
+              seats: d.aiUnits || 0,
+              provider: '',
+              features: (d.planFeatures || []).map((f) => f.feature || f.description || ''),
+              start: '',
+              end: '',
+              created: '',
+              usage: 0,
+              payments: [],
+              _raw: d,
+            })
+          } catch (e) {
+            allSubs.push({
+              id: 'PLAN-' + plan.id,
+              institution: plan.planName || '—',
+              ownerCode: '',
+              email: '',
+              plan: plan.planName || '—',
+              status: PLAN_STATUS_MAP[plan.planStatus] || 'active',
+              billing: '—',
+              amount: 0,
+              seats: 0,
+              provider: '',
+              features: [],
+              start: '',
+              end: '',
+              created: '',
+              usage: 0,
+              payments: [],
+              _raw: plan,
+            })
+          }
+        }
+        setSubs(allSubs.length > 0 ? allSubs : [])
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const selected = subs.find((s) => s.id === selectedId) || null
   const counts = { all: subs.length, active: 0, suspended: 0, expired: 0, pending: 0 }
@@ -354,10 +427,22 @@ export function SubscriptionManagementPage({ go }) {
   if (sort === 'Institution A–Z') list = [...list].sort((a, b) => a.institution.localeCompare(b.institution))
   if (sort === 'Oldest first') list = [...list].sort((a, b) => a.created.localeCompare(b.created))
 
-  const toggle = (id) => {
+  const toggle = async (id) => {
     const s = subs.find((x) => x.id === id)
-    setSubs((prev) => prev.map((x) => (x.id !== id ? x : { ...x, status: x.status === 'active' ? 'suspended' : 'active' })))
-    if (s) notify(`${s.institution} was ${s.status === 'active' ? 'suspended' : 'reactivated'}`)
+    const isActive = s && (s.status === 'active')
+    const numericId = id.replace('PLAN-', '')
+    try {
+      if (isActive) {
+        await billingApi.deactivatePlan(numericId)
+        notify(`${s.institution} was suspended`)
+      } else {
+        await billingApi.activatePlan(numericId)
+        notify(`${s.institution} was reactivated`)
+      }
+      setSubs((prev) => prev.map((x) => (x.id !== id ? x : { ...x, status: isActive ? 'suspended' : 'active' })))
+    } catch (e) {
+      notify('Action failed: ' + e.message)
+    }
   }
   const renew = (id) => {
     const s = subs.find((x) => x.id === id)
@@ -381,6 +466,18 @@ export function SubscriptionManagementPage({ go }) {
 
   if (selected) {
     return <SubscriptionDetail sub={selected} onBack={() => setSelectedId(null)} onToggle={toggle} onRenew={renew} />
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader icon="card_membership" title="Subscriptions" desc="All institutional subscriptions with live status and management actions." />
+        <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">progress_activity</span>
+          <p className="font-headline-sm text-on-surface">Loading subscriptions…</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -429,19 +526,11 @@ export function SubscriptionManagementPage({ go }) {
 
 /* ---------- Subscription Pricing Management ---------- */
 
-const SEED_PLANS = [
-  { id: 1, name: 'Institution Starter', tagline: 'Core academic workflow for small institutions', ownerType: 'Institution', cycle: 'Annual', price: 150000, setupFee: 25000, seats: 100, active: true, features: 'Project Management, Milestones, Supervisor Allocation, Publications' },
-  { id: 2, name: 'Institution Annual', tagline: 'Full access for your institution', ownerType: 'Institution', cycle: 'Annual', price: 250000, setupFee: 0, seats: 500, active: true, features: 'Project Management, Milestones, Publications, Grant Tracking, Team Settings' },
-  { id: 3, name: 'Institution Premium', tagline: 'Advanced reporting and priority support', ownerType: 'Institution', cycle: 'Annual', price: 400000, setupFee: 0, seats: 1000, active: true, features: 'Everything in Annual, Advanced Analytics, API Access, Dedicated Support' },
-  { id: 4, name: 'Institution Quarterly', tagline: 'Quarterly invoicing for private institutions', ownerType: 'Institution', cycle: 'Quarterly', price: 80000, setupFee: 0, seats: 200, active: true, features: 'Project Management, Milestones, Support' },
-  { id: 5, name: 'Institution Monthly', tagline: 'Flexible monthly subscription', ownerType: 'Institution', cycle: 'Monthly', price: 30000, setupFee: 0, seats: 150, active: false, features: 'Project Management, Basic Reports' },
-  { id: 6, name: 'Personal Researcher', tagline: 'For independent researchers', ownerType: 'Personal', cycle: 'Annual', price: 40000, setupFee: 0, seats: 5, active: true, features: 'Project Management, Citation Management' },
-]
-
 const emptyForm = { name: '', tagline: '', ownerType: 'Institution', cycle: 'Annual', price: '', setupFee: 0, seats: '', active: true, features: '' }
 
 export function PricingManagementPage({ go }) {
-  const [plans, setPlans] = useState(SEED_PLANS)
+  const [plans, setPlans] = useState([])
+  const [loading, setLoading] = useState(true)
   const [cycles, setCycles] = useState([
     { name: 'Monthly', months: 1, note: 'No commitment, paid every month', factor: 1 },
     { name: 'Quarterly', months: 3, note: 'Billed every 3 months', factor: 3.2 },
@@ -452,27 +541,109 @@ export function PricingManagementPage({ go }) {
   const [form, setForm] = useState(emptyForm)
   const [toast, notify] = useToast()
 
+  useEffect(() => {
+    setLoading(true)
+    billingApi.getPlansSummary()
+      .then(async (res) => {
+        const summaries = res.data || []
+        const fullPlans = []
+        for (const s of summaries) {
+          try {
+            const detail = await billingApi.getPlanDetails(s.id)
+            const d = detail.data || {}
+            const pricing = (d.planPricings || [])[0] || {}
+            fullPlans.push({
+              id: d.id || s.id,
+              name: d.planeName || s.planName || '—',
+              tagline: '',
+              ownerType: 'Institution',
+              cycle: BILLING_CYCLE_MAP[pricing.billingCycle] || 'Annual',
+              price: pricing.price || 0,
+              setupFee: 0,
+              seats: d.aiUnits || 0,
+              active: (d.planStatus || s.planStatus) === 1,
+              features: (d.planFeatures || []).map((f) => f.feature || f.description || '').join(', '),
+              _raw: d,
+            })
+          } catch (e) {
+            fullPlans.push({
+              id: s.id,
+              name: s.planName || '—',
+              tagline: '',
+              ownerType: 'Institution',
+              cycle: 'Annual',
+              price: 0,
+              setupFee: 0,
+              seats: 0,
+              active: s.planStatus === 1,
+              features: '',
+              _raw: s,
+            })
+          }
+        }
+        setPlans(fullPlans)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
   const activeCount = plans.filter((p) => p.active).length
-  const cheapest = Math.min(...plans.map((p) => p.price || 0))
+  const cheapest = plans.length > 0 ? Math.min(...plans.map((p) => p.price || Infinity)) : 0
   const setFormField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader icon="sell" title="Subscription Pricing Management" desc="Structure plans, set prices and configure billing cycles." />
+        <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">progress_activity</span>
+          <p className="font-headline-sm text-on-surface">Loading plans…</p>
+        </div>
+      </div>
+    )
+  }
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setShowForm(true) }
   const openEdit = (p) => { setEditing(p); setForm({ name: p.name, tagline: p.tagline, ownerType: p.ownerType, cycle: p.cycle, price: p.price, setupFee: p.setupFee, seats: p.seats, active: p.active, features: p.features }); setShowForm(true) }
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault()
-    const payload = { ...form, price: Number(form.price) || 0, setupFee: Number(form.setupFee) || 0, seats: Number(form.seats) || 0 }
-    if (editing) {
-      setPlans((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...payload } : p)))
-      notify(`"${payload.name || editing.name}" updated`)
-    } else {
-      setPlans((prev) => [...prev, { ...payload, id: Math.max(0, ...prev.map((p) => p.id)) + 1 }])
-      notify(`"${payload.name || 'New plan'}" created`)
+    const cycleMonths = form.cycle === 'Monthly' ? 1 : form.cycle === 'Quarterly' ? 3 : 12
+    const payload = {
+      name: form.name,
+      aiUnits: Number(form.seats) || 100,
+      planStatus: form.active ? 1 : 2,
+      planFeatures: form.features ? form.features.split(',').map((f, i) => ({ featureId: i + 1 })).filter(Boolean) : [],
+      planPrices: [{ price: Number(form.price) || 0, currency: 'NGN', billingCycle: cycleMonths }],
+    }
+    try {
+      if (editing) {
+        await billingApi.updatePlan(editing.id, payload)
+        setPlans((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form, price: Number(form.price) || 0, seats: Number(form.seats) || 0 } : p)))
+        notify(`"${form.name || editing.name}" updated`)
+      } else {
+        const res = await billingApi.createPlan(payload)
+        const newId = res.data?.id || Math.max(0, ...plans.map((p) => p.id)) + 1
+        setPlans((prev) => [...prev, { ...form, id: newId, price: Number(form.price) || 0, seats: Number(form.seats) || 0 }])
+        notify(`"${form.name || 'New plan'}" created`)
+      }
+    } catch (err) {
+      notify('Save failed: ' + err.message)
     }
     setShowForm(false)
   }
-  const togglePlan = (id) => {
-    setPlans((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)))
-    notify('Plan status updated')
+  const togglePlan = async (id) => {
+    try {
+      const plan = plans.find((p) => p.id === id)
+      if (plan && plan.active) {
+        await billingApi.deactivatePlan(id)
+      } else {
+        await billingApi.activatePlan(id)
+      }
+      setPlans((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)))
+      notify('Plan status updated')
+    } catch (err) {
+      notify('Toggle failed: ' + err.message)
+    }
   }
   const setCycleField = (name, val) => setCycles((prev) => prev.map((c) => (c.name === name ? { ...c, factor: val } : c)))
 
