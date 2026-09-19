@@ -280,6 +280,11 @@ function DepartmentsTab({ instId }) {
   const [name, setName] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  function displayDeptName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    return s.replace(/^(department\s+of\s+)/i, "").trim() || s;
+  }
 
   const submit = async (e) => {
     e.preventDefault();
@@ -302,6 +307,60 @@ function DepartmentsTab({ instId }) {
     }
   };
 
+  const handleView = (s) => { setViewing(s); setError(""); setMsg(""); }
+  const handleEdit = (s) => {
+    setEditing(s); setError(""); setMsg("");
+    setEditForm({
+      staffId: s.StaffId ?? s.staffId ?? "",
+      title: s.Title ?? s.title ?? "",
+      firstName: s.FirstName ?? s.firstName ?? "",
+      lastName: s.LastName ?? s.lastName ?? "",
+      email: s.Email ?? s.email ?? "",
+      phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
+      highestQualification: s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? "",
+      staffCategory: Number(s.StaffCategory ?? s.staffCategory ?? 1),
+      specialization: s.Specialization ?? s.specialization ?? "",
+      programId: s.ProgramId ?? s.programId ? String(s.ProgramId ?? s.programId) : "",
+      departmentId: s.DepartmentId ?? s.departmentId ? String(s.DepartmentId ?? s.departmentId) : deptId,
+    })
+    if (s.DepartmentId ?? s.departmentId) {
+      const did = String(s.DepartmentId ?? s.departmentId)
+      setDeptId(did)
+      onboardingApi.getPrograms(instId, did).then(p=>setPrograms(p||[])).catch(()=>{})
+    }
+  }
+  const handleEditChange = (k) => (e) => setEditForm(f=>({...f, [k]: e.target.value}))
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+    if (!editing || !editForm) return
+    setError(""); setMsg("")
+    const numericId = editing.Id ?? editing.id
+    if (!numericId) { setError("Staff numeric Id missing — cannot update"); return }
+    if (!editForm.staffId.trim() || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) { setError("Staff ID, First/Last Name and Email are required."); return }
+    setBusy(true)
+    try {
+      const payload = {
+        StaffId: editForm.staffId.trim(),
+        Title: editForm.title.trim(),
+        FirstName: editForm.firstName.trim(),
+        LastName: editForm.lastName.trim(),
+        Email: editForm.email.trim(),
+        PhoneNo: editForm.phoneNo.trim(),
+        HighestQualification: editForm.highestQualification.trim(),
+        StaffCategory: Number(editForm.staffCategory),
+        Specialization: editForm.specialization.trim(),
+        ProgramId: editForm.programId ? Number(editForm.programId) : 0,
+        DepartmentId: Number(editForm.departmentId),
+        InstitutionId: Number(instId),
+      }
+      await onboardingApi.updateStaff(String(numericId), payload)
+      setMsg(`Staff ${editForm.staffId} updated.`)
+      setEditing(null); setEditForm(null)
+      reload()
+    } catch (err) { setError(err.message || "Could not update staff") } finally { setBusy(false) }
+  }
+  const handleDelete = (s) => { setError("Delete not available — no DELETE endpoint per doc."); }
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <Card className="p-5 xl:col-span-2">
@@ -319,9 +378,12 @@ function DepartmentsTab({ instId }) {
             </thead>
             <tbody className="divide-y divide-surface-container">
               {items.map((d) => (
-                <tr key={d.Id}>
-                  <td className="py-2 font-medium text-on-surface">{d.Code}</td>
-                  <td className="py-2 text-on-surface-variant">{d.Name}</td>
+                <tr key={d.Id ?? d.id}>
+                  <td className="py-2 font-medium text-on-surface">{d.Code ?? d.code}</td>
+                  <td className="py-2 text-on-surface-variant">
+                    <span className="font-label-md text-primary text-[11px] uppercase tracking-wide block">Department of</span>
+                    <span>{displayDeptName(d.Name ?? d.name)}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -351,6 +413,9 @@ function DepartmentsTab({ instId }) {
 function ProgramsTab({ instId }) {
   const [depts, setDepts] = useState([]);
   const [deptId, setDeptId] = useState("");
+  const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [filterDeptId, setFilterDeptId] = useState("");
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
@@ -656,13 +721,20 @@ function StaffTab({ instId }) {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {items.map(s=>(
-                <div key={s.Id ?? s.id ?? s.staffId ?? s.StaffId} className="rounded-xl border border-surface-container bg-surface-container-lowest p-3 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-label-md text-on-surface text-sm">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ")}</p>
-                    <p className="font-body-sm text-on-surface-variant text-[12px]">{s.Email ?? s.email} {s.Specialization ? `· ${s.Specialization}` : s.specialization ? `· ${s.specialization}` : ""}</p>
-                    <p className="font-body-sm text-outline text-[11px] mt-1">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? ""} {s.HighestQualification ?? s.highestQualification ? `· ${s.HighestQualification ?? s.highestQualification}` : ""}</p>
+                <div key={s.Id ?? s.id ?? s.staffId ?? s.StaffId} className="rounded-xl border border-surface-container bg-surface-container-lowest p-3 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-label-md text-on-surface text-sm">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ")}</p>
+                      <p className="font-body-sm text-on-surface-variant text-[12px]">{s.Email ?? s.email} {s.Specialization ? `· ${s.Specialization}` : s.specialization ? `· ${s.specialization}` : ""}</p>
+                      <p className="font-body-sm text-outline text-[11px] mt-1">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? ""} {s.HighestQualification ?? s.highestQualification ? `· ${s.HighestQualification ?? s.highestQualification}` : ""}</p>
+                    </div>
+                    <span className="shrink-0 px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? "—"}</span>
                   </div>
-                  <span className="shrink-0 px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? "—"}</span>
+                  <div className="flex gap-1.5">
+                    <button onClick={()=>handleView(s)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-[12px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[14px]">visibility</span> View</button>
+                    <button onClick={()=>handleEdit(s)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border border-outline-variant bg-surface font-label-md text-[12px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[14px]">edit</span> Edit</button>
+                    <button onClick={()=>handleDelete(s)} className="w-8 h-8 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -676,6 +748,7 @@ function StaffTab({ instId }) {
                   <th className="py-2">Dept</th>
                   <th className="py-2">Specialization</th>
                   <th className="py-2">Category</th>
+                  <th className="py-2">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-container">
@@ -687,6 +760,10 @@ function StaffTab({ instId }) {
                     <td className="py-2 text-on-surface-variant">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? "—"}</td>
                     <td className="py-2 text-on-surface-variant">{s.Specialization ?? s.specialization ?? "—"}</td>
                     <td className="py-2 text-on-surface-variant">{Number(s.StaffCategory ?? s.staffCategory)===1?"Academic":Number(s.StaffCategory ?? s.staffCategory)===2?"Technologist":Number(s.StaffCategory ?? s.staffCategory)===3?"Admin":"—"}</td>
+                    <td className="py-2 flex gap-1">
+                      <button onClick={()=>handleView(s)} className="px-2 py-1 rounded bg-primary text-on-primary text-[11px]">View</button>
+                      <button onClick={()=>handleEdit(s)} className="px-2 py-1 rounded border border-outline-variant bg-surface text-[11px]">Edit</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -742,6 +819,85 @@ function StaffTab({ instId }) {
           </button>
         </form>
       </Card>
+      {/* View Modal */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Staff Details</h3>
+              <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-label-md text-on-surface-variant">Staff ID:</span> {viewing.StaffId ?? viewing.staffId}</p>
+              <p><span className="font-label-md text-on-surface-variant">Name:</span> {[viewing.Title ?? viewing.title, viewing.FirstName ?? viewing.firstName, viewing.LastName ?? viewing.lastName].filter(Boolean).join(" ")}</p>
+              <p><span className="font-label-md text-on-surface-variant">Email:</span> {viewing.Email ?? viewing.email}</p>
+              <p><span className="font-label-md text-on-surface-variant">Phone:</span> {viewing.PhoneNo ?? viewing.phoneNo ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Qualification:</span> {viewing.HighestQualification ?? viewing.highestQualification ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Category:</span> {Number(viewing.StaffCategory ?? viewing.staffCategory)===1?"Academic":Number(viewing.StaffCategory ?? viewing.staffCategory)===2?"Technologist":"Admin"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Specialization:</span> {viewing.Specialization ?? viewing.specialization ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Department:</span> {viewing.DepartmentName ?? viewing.departmentName ?? ""}</p>
+              <p><span className="font-label-md text-on-surface-variant">Program:</span> {viewing.ProgramId ?? viewing.programId ?? "—"}</p>
+            </div>
+            <button onClick={()=>setViewing(null)} className="mt-4 w-full bg-primary text-on-primary py-2 rounded font-label-md">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editing && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>{setEditing(null); setEditForm(null)}}></div>
+          <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Edit Staff — {editing.StaffId ?? editing.staffId}</h3>
+              <button onClick={()=>{setEditing(null); setEditForm(null)}} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={handleUpdate} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Staff ID</span><input value={editForm.staffId} onChange={handleEditChange("staffId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Title</span><input value={editForm.title} onChange={handleEditChange("title")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={editForm.firstName} onChange={handleEditChange("firstName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={editForm.lastName} onChange={handleEditChange("lastName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={editForm.email} onChange={handleEditChange("email")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Phone</span><input value={editForm.phoneNo} onChange={handleEditChange("phoneNo")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Highest Qualification</span><input value={editForm.highestQualification} onChange={handleEditChange("highestQualification")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Category</span>
+                <select value={editForm.staffCategory} onChange={handleEditChange("staffCategory")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  <option value={1}>Academic</option>
+                  <option value={2}>Technologist</option>
+                  <option value={3}>Admin</option>
+                </select>
+              </label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Specialization</span><input value={editForm.specialization} onChange={handleEditChange("specialization")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Program</span>
+                <select value={editForm.programId} onChange={handleEditChange("programId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  <option value="">None</option>
+                  {programs.map(p=>(
+                    <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                <select value={editForm.departmentId} onChange={handleEditChange("departmentId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  {depts.map(d=>(
+                    <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                  ))}
+                </select>
+              </label>
+              <Msg kind="err" text={error} />
+              <div className="flex gap-3">
+                <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-2 rounded font-label-md">{busy ? "Saving…" : "Update Staff"}</button>
+                <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

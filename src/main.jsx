@@ -1647,6 +1647,12 @@ function DepartmentPage({ go }) {
   })()
   const [faculties, setFaculties] = useState([])
   const [facultyId, setFacultyId] = useState("")
+  function displayDeptName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    const core = s.replace(/^(department\s+of\s+)/i, "").trim() || s;
+    return core;
+  }
   const load = async () => {
     setLoading(true); setErr("")
     try {
@@ -1720,7 +1726,8 @@ function DepartmentPage({ go }) {
                   <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-secondary">account_tree</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{d.Code ?? d.code ?? "—"}</span>
                 </div>
-                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{d.Name ?? d.name}</h4>
+                <span className="font-label-md text-primary text-[11px] uppercase tracking-widest mt-3 block">Department of</span>
+                <h4 className="font-headline-sm font-bold text-on-surface line-clamp-1">{displayDeptName(d.Name ?? d.name)}</h4>
                 <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {d.Id ?? d.id} · Department</p>
                 <div className="flex gap-2 mt-4">
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
@@ -1742,11 +1749,11 @@ function DepartmentPage({ go }) {
             </div>
             <form onSubmit={submit} className="space-y-4">
               <label className="block">
-                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} / Faculty</span>
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
                 <select value={facultyId} onChange={e=>setFacultyId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
                   <option value="">Select {collegeTerm}</option>
                   {faculties.map(f=>(
-                    <option key={f.Id ?? f.id} value={String(f.Id ?? f.id)}>{f.Name ?? f.name}</option>
+                    <option key={f.Id ?? f.id} value={String(f.Id ?? f.id)}>{f.CollegeName ?? f.collegeName ?? f.Name ?? f.name}</option>
                   ))}
                 </select>
               </label>
@@ -2029,6 +2036,9 @@ function StaffManagementPage({ go }) {
   const [filterCategory, setFilterCategory] = useState("")
   const [search, setSearch] = useState("")
   const [form, setForm] = useState({ staffId:"", title:"", firstName:"", lastName:"", email:"", phoneNo:"", highestQualification:"", staffCategory:1, specialization:"", facultyId:"", departmentId:"", programId:"" })
+  const [viewing, setViewing] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState(null)
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
 
@@ -2168,6 +2178,62 @@ function StaffManagementPage({ go }) {
       setErr(e2.message || "Could not create staff")
     }
   }
+  const handleView = (s) => { setViewing(s); setErr(""); setMsg(""); }
+  const handleEdit = (s) => {
+    setEditing(s); setErr(""); setMsg("");
+    const progId = s.ProgramId ?? s.programId ?? ""
+    const deptIdVal = s.DepartmentId ?? s.departmentId ?? ""
+    setEditForm({
+      staffId: s.StaffId ?? s.staffId ?? "",
+      title: s.Title ?? s.title ?? "",
+      firstName: s.FirstName ?? s.firstName ?? "",
+      lastName: s.LastName ?? s.lastName ?? "",
+      email: s.Email ?? s.email ?? "",
+      phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
+      highestQualification: s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? "",
+      staffCategory: Number(s.StaffCategory ?? s.staffCategory ?? 1),
+      specialization: s.Specialization ?? s.specialization ?? "",
+      programId: progId ? String(progId) : "",
+      departmentId: deptIdVal ? String(deptIdVal) : "",
+      facultyId: form.facultyId || "",
+    })
+    // preload programs for that department
+    if (deptIdVal) onDeptChange(String(deptIdVal))
+  }
+  const handleEditChange = (k) => (e) => setEditForm(f=>({...f, [k]: e.target.value}))
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+    if (!editing || !editForm) return
+    setErr(""); setMsg("")
+    const numericId = editing.Id ?? editing.id
+    if (!numericId) { setErr("Staff numeric Id missing — cannot update (doc PUT /staff/{staffId} requires numeric Id)"); return }
+    if (!editForm.staffId.trim() || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) { setErr("Staff ID, First/Last Name and Email are required."); return }
+    try {
+      const id = await resolveInstId()
+      const payload = {
+        StaffId: editForm.staffId.trim(),
+        Title: editForm.title.trim(),
+        FirstName: editForm.firstName.trim(),
+        LastName: editForm.lastName.trim(),
+        Email: editForm.email.trim(),
+        PhoneNo: editForm.phoneNo.trim(),
+        HighestQualification: editForm.highestQualification.trim(),
+        StaffCategory: Number(editForm.staffCategory),
+        Specialization: editForm.specialization.trim(),
+        ProgramId: editForm.programId ? Number(editForm.programId) : 0,
+        DepartmentId: Number(editForm.departmentId || editing.DepartmentId || editing.departmentId),
+        InstitutionId: Number(id || editing.InstitutionId || editing.institutionId),
+      }
+      const { onboardingApi } = await import("./onboarding")
+      await onboardingApi.updateStaff(String(numericId), payload)
+      setMsg(`Staff ${editForm.staffId} updated.`)
+      setEditing(null); setEditForm(null)
+      loadStaff()
+    } catch (e2) { setErr(e2.message || "Could not update staff") }
+  }
+  const handleDelete = (s) => {
+    setErr("Delete not available — doc notes no DELETE endpoint (src/onboarding.js). Use deactivation via update if supported.")
+  }
   function displayCollegeName(raw){
     if(!raw) return "—";
     const s=String(raw).trim();
@@ -2243,9 +2309,9 @@ function StaffManagementPage({ go }) {
                 </div>
                 <p className="font-body-sm text-outline text-[11px] mt-2 truncate">{s.DepartmentName ?? s.departmentName ?? (()=>{ const d=departments.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId)); return d? (d.Name??d.name): `Dept ${s.DepartmentId??"—"}`})()} {s.ProgramId ? `· Prog ${s.ProgramId}` : ""}</p>
                 <div className="flex gap-2 mt-4">
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
-                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                  <button onClick={()=>handleView(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button onClick={()=>handleEdit(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button onClick={()=>handleDelete(s)} className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                 </div>
               </div>
             </div>
@@ -2263,7 +2329,7 @@ function StaffManagementPage({ go }) {
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} / Faculty</span>
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
                   <select value={form.facultyId} onChange={e=>onFacultyChange(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
                     <option value="">Select {collegeTerm}</option>
                     {faculties.map(f=>(
@@ -2328,6 +2394,84 @@ function StaffManagementPage({ go }) {
               <div className="flex gap-3 pt-2">
                 <button type="submit" className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim">Create</button>
                 <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* View Staff Modal */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Staff Details</h3>
+              <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-label-md text-on-surface-variant">Staff ID:</span> {viewing.StaffId ?? viewing.staffId}</p>
+              <p><span className="font-label-md text-on-surface-variant">Name:</span> {[viewing.Title ?? viewing.title, viewing.FirstName ?? viewing.firstName, viewing.LastName ?? viewing.lastName].filter(Boolean).join(" ")}</p>
+              <p><span className="font-label-md text-on-surface-variant">Email:</span> {viewing.Email ?? viewing.email}</p>
+              <p><span className="font-label-md text-on-surface-variant">Phone:</span> {viewing.PhoneNo ?? viewing.phoneNo ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Qualification:</span> {viewing.HighestQualification ?? viewing.highestQualification ?? viewing.Highestqualificattion ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Category:</span> {Number(viewing.StaffCategory ?? viewing.staffCategory)===1?"Academic":Number(viewing.StaffCategory ?? viewing.staffCategory)===2?"Technologist":"Admin"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Specialization:</span> {viewing.Specialization ?? viewing.specialization ?? "—"}</p>
+              <p><span className="font-label-md text-on-surface-variant">Department:</span> {viewing.DepartmentName ?? viewing.departmentName ?? ""}</p>
+              <p><span className="font-label-md text-on-surface-variant">Program:</span> {viewing.ProgramId ?? viewing.programId ?? "—"}</p>
+            </div>
+            <button onClick={()=>setViewing(null)} className="mt-4 w-full bg-primary text-on-primary py-2 rounded font-label-md">Close</button>
+          </div>
+        </div>
+      )}
+      {/* Edit Staff Modal */}
+      {editing && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>{setEditing(null); setEditForm(null)}}></div>
+          <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Edit Staff — {editing.StaffId ?? editing.staffId}</h3>
+              <button onClick={()=>{setEditing(null); setEditForm(null)}} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={handleUpdate} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Staff ID</span><input value={editForm.staffId} onChange={handleEditChange("staffId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Title</span><input value={editForm.title} onChange={handleEditChange("title")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={editForm.firstName} onChange={handleEditChange("firstName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={editForm.lastName} onChange={handleEditChange("lastName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={editForm.email} onChange={handleEditChange("email")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Phone</span><input value={editForm.phoneNo} onChange={handleEditChange("phoneNo")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Highest Qualification</span><input value={editForm.highestQualification} onChange={handleEditChange("highestQualification")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Category</span>
+                <select value={editForm.staffCategory} onChange={handleEditChange("staffCategory")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  <option value={1}>Academic</option>
+                  <option value={2}>Technologist</option>
+                  <option value={3}>Admin</option>
+                </select>
+              </label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Specialization</span><input value={editForm.specialization} onChange={handleEditChange("specialization")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Program</span>
+                <select value={editForm.programId} onChange={handleEditChange("programId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  <option value="">None</option>
+                  {programs.map(p=>(
+                    <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                <select value={editForm.departmentId} onChange={handleEditChange("departmentId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  {departments.map(d=>(
+                    <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                  ))}
+                </select>
+              </label>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+              <div className="flex gap-3">
+                <button type="submit" className="flex-1 bg-primary text-on-primary py-2 rounded font-label-md">Update Staff</button>
+                <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
               </div>
             </form>
           </div>
