@@ -45,6 +45,7 @@ function qs(params) {
 
 // The deployed API uses inconsistent JSON casing (doc warns: lowercase field names).
 // Alias every key to both lower-first and upper-first so UI code can use either case.
+// Also alias semantic DTO mismatches: CollegeName <-> Name (doc CollegeDto) and LevelName <-> Name.
 function caseAlias(v) {
   if (Array.isArray(v)) return v.map(caseAlias);
   if (v && typeof v === "object") {
@@ -55,6 +56,22 @@ function caseAlias(v) {
       const child = caseAlias(val);
       out[lower] = child;
       out[upper] = child;
+    }
+    // Semantic aliases for college/level DTOs so UI can use either CollegeName or Name
+    const collegeVal = out.CollegeName ?? out.collegeName;
+    if (collegeVal !== undefined && out.Name === undefined && out.name === undefined) {
+      out.Name = collegeVal;
+      out.name = collegeVal;
+    }
+    if ((out.Name !== undefined || out.name !== undefined) && collegeVal === undefined) {
+      const nv = out.Name ?? out.name;
+      out.CollegeName = nv;
+      out.collegeName = nv;
+    }
+    const levelVal = out.LevelName ?? out.levelName;
+    if (levelVal !== undefined && out.Name === undefined && out.name === undefined) {
+      out.Name = levelVal;
+      out.name = levelVal;
     }
     return out;
   }
@@ -88,9 +105,24 @@ export const onboardingApi = {
     return obFetch("get-colleges" + qs({ institutionId }));
   },
   async createCollege(payload) {
+    // Doc spec (TABLE 3): Code, CollegeName, InstitutionId
+    // Previous frontend sent Name (docs: CollegeDto CollegeName) causing "College data is required."
+    // Normalize to satisfy both PascalCase and case-insensitive backends.
+    const p = payload || {};
+    const nameVal = p.CollegeName ?? p.collegeName ?? p.Name ?? p.name ?? "";
+    const codeVal = p.Code ?? p.code ?? "";
+    const instVal = p.InstitutionId ?? p.institutionId ?? p.institutionID ?? 0;
+    const body = {
+      Code: String(codeVal),
+      CollegeName: String(nameVal),
+      // Keep Name alias for deployed variants that may still bind Name
+      Name: String(nameVal),
+      InstitutionId: Number(instVal),
+      institutionId: Number(instVal),
+    };
     return obFetch("create-college", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
   async getLevels(institutionId) {

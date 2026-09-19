@@ -16,5 +16,6 @@ dist/stitch/
 *.docx
 ~$*.docx
 
-# Local implementation report (not committed)
+# Local implementation reports (not committed)
 IMPLEMENTATION_REPORT.md
+IMPLEMENTATION-REPORT-*.md

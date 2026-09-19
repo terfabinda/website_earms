@@ -858,8 +858,9 @@ function CollegesTab({ instId }) {
     setBusy(true);
     try {
       await onboardingApi.createCollege({
-        Name: name.trim(),
         Code: code.trim(),
+        CollegeName: name.trim(),
+        Name: name.trim(),
         InstitutionId: Number(instId),
       });
       setMsg(`${collegeTerm} created.`);
@@ -891,10 +892,10 @@ function CollegesTab({ instId }) {
             </thead>
             <tbody className="divide-y divide-surface-container">
               {items.map((c) => (
-                <tr key={c.Id}>
-                  <td className="py-2 font-medium text-on-surface">{c.Id}</td>
-                  <td className="py-2 text-on-surface-variant">{c.Name}</td>
-                  <td className="py-2 text-on-surface-variant">{c.Code || "—"}</td>
+                <tr key={c.Id ?? c.id}>
+                  <td className="py-2 font-medium text-on-surface">{c.Id ?? c.id}</td>
+                  <td className="py-2 text-on-surface-variant">{c.CollegeName ?? c.collegeName ?? c.Name ?? c.name ?? "—"}</td>
+                  <td className="py-2 text-on-surface-variant">{c.Code ?? c.code ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
