@@ -3440,30 +3440,114 @@ function StudentDashboard({ go }) {
       try {
         const { onboardingApi } = await import("./onboarding")
         let s = null
-        // 1) Try direct get_student/{matricNo} (JWT institution)
+        // 1) Prioritize get_student_iam for matric with slashes (query param, no auth) — more reliable than path param
         if (matricNo) {
-          try { s = await onboardingApi.getStudent(matricNo) } catch {}
-          if (!s) {
-            try { s = await onboardingApi.getStudentIam(matricNo) } catch {}
-            // getStudentIam returns IAMDto with InstitutionId/DepartmentId — not full StudentDto, try to enrich
-            if (s && s.MatricNo) {
-              try { const full = await onboardingApi.getStudent(s.MatricNo) ; if (full) s = full } catch {}
+          // Try IAM first (no auth, query)
+          try {
+            const iam = await onboardingApi.getStudentIam(matricNo)
+            if (iam) {
+              // IAMDto: Id, ProgramId, DepartmentId, DepartmentName, InstitutionId — may not have MatricNo
+              const hasMatric = !!(iam.MatricNo ?? iam.matricNo)
+              if (hasMatric) s = iam
+              // If IAM has dept/inst, try to find full StudentDto via department list
+              const depId = iam.DepartmentId ?? iam.departmentId
+              const instFromIam = iam.InstitutionId ?? iam.institutionId ?? instId
+              if (depId && instFromIam) {
+                try {
+                  const list = await onboardingApi.getDepartmentStudents(String(depId), String(instFromIam))
+                  const arr = Array.isArray(list) ? list : []
+                  const found = arr.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
+                  if (found) s = found
+                  else if (!s && arr.length) {
+                    // try unassigned for same dept
+                    try {
+                      const unass = await onboardingApi.getUnassignedStudents({ departmentId: String(depId), institutionId: String(instFromIam) }).catch(()=>[])
+                      const arr2 = Array.isArray(unass)? unass : []
+                      const f2 = arr2.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
+                      if (f2) s = f2
+                    } catch {}
+                  }
+                } catch {}
+              }
+              // Fallback to iam as pseudo-student if no full found
+              if (!s) s = iam
+            }
+          } catch {}
+          // Try direct get_student (path param, JWT institution) — try both encoded (via onboardingApi) and raw splitted
+          if (!s || (s && !(s.FirstName ?? s.firstName) && !(s.MatricNo ?? s.matricNo))) {
+            const isProbablyIam = s && (s.DepartmentId || s.departmentId) && !(s.FirstName ?? s.firstName)
+            if (isProbablyIam) s = null // discard IAM-only, try full
+            try { const direct = await onboardingApi.getStudent(matricNo); if (direct && (direct.FirstName ?? direct.firstName ?? direct.MatricNo ?? direct.matricNo)) s = direct } catch {}
+            // Try raw matric without encode via direct apiFetch (handles slashes as path)
+            if (!s || !(s.FirstName ?? s.firstName)) {
+              try {
+                const { apiFetch } = await import("./iam")
+                const ONB_BASE = ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/")
+                // raw slashes as path segments — use matricNo directly (no encode)
+                const res = await apiFetch("api/onboarding/get_student/" + matricNo, {}, false, ONB_BASE)
+                if (res.ok) {
+                  const body = await res.json().catch(()=>null)
+                  const data = body?.data ?? body
+                  if (data && (data.MatricNo ?? data.matricNo ?? data.FirstName ?? data.firstName)) s = data
+                }
+              } catch {}
+            }
+            // Try get_student_department then department list as last resort
+            if (!s || !(s.FirstName ?? s.firstName)) {
+              try {
+                const deptInfo = await onboardingApi.getStudentDepartment(String(matricNo), String(instId || "")).catch(()=>null)
+                const depId = deptInfo?.DepartmentId ?? deptInfo?.departmentId
+                if (depId) {
+                  const instUse = instId || (depId ? String(depId) : "")
+                  try {
+                    const list2 = await onboardingApi.getDepartmentStudents(String(depId), String(instUse || instId))
+                    const arr2 = Array.isArray(list2)? list2 : []
+                    const f = arr2.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
+                    if (f) s = f
+                  } catch {}
+                }
+              } catch {}
             }
           }
         }
         // 2) Fallback: try by email from token
         if (!s && tok?.email) {
-          try { s = await onboardingApi.getStudent(tok.email) } catch {}
+          try { const byEmail = await onboardingApi.getStudent(tok.email); if (byEmail && (byEmail.MatricNo ?? byEmail.matricNo)) s = byEmail } catch {}
+          if (!s) {
+            try { const iamE = await onboardingApi.getStudentIam(tok.email); if (iamE && (iamE.MatricNo ?? iamE.matricNo)) s = iamE } catch {}
+          }
         }
-        // 3) Fallback: list by institution and find by matric/email
+        // 3) Fallback: list by institution and find by matric/email (try both institution-wide and per-dept)
         if (!s && instId) {
           try {
-            const list = await onboardingApi.getDepartmentStudents ? await onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>null) : null
-            // Actually getStudentsByInstitution returns list; try to find match
+            // Try institution-wide first (JWT)
+            let list = null
+            try { list = await onboardingApi.getStudentsByInstitution(String(instId)) } catch { list = null }
+            if (!list || (Array.isArray(list) && list.length===0)) {
+              try { list = await onboardingApi.getUnassignedStudents({ institutionId: String(instId) }) } catch {}
+            }
             const arr = Array.isArray(list) ? list : []
-            const found = arr.find(x=> String(x.MatricNo ?? x.matricNo ?? x.Email ?? x.email).toLowerCase() === String(matricNo).toLowerCase() || String(x.Email ?? x.email).toLowerCase() === String(tok?.email ?? "").toLowerCase())
+            const found = arr.find(x=> String(x.MatricNo ?? x.matricNo ?? x.Email ?? x.email).toLowerCase() === String(matricNo).toLowerCase() || (tok?.email && String(x.Email ?? x.email).toLowerCase() === String(tok.email).toLowerCase()))
             if (found) s = found
-            else if (arr.length === 1) s = arr[0] // single student in institution
+            else if (arr.length === 1 && !s) s = arr[0]
+            // If still not found and we have departments, try per-dept aggregation
+            if (!s && arr.length===0) {
+              try {
+                const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
+                const deptArr = Array.isArray(depts)? depts : []
+                const results = await Promise.all(deptArr.map(async d=>{
+                  const did = String(d.Id ?? d.id)
+                  const [deptSt, unass] = await Promise.all([
+                    onboardingApi.getDepartmentStudents(did, String(instId)).catch(()=>[]),
+                    onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(instId) }).catch(()=>[])
+                  ])
+                  return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+                }))
+                const allDept = results.flat()
+                const fDept = allDept.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
+                if (fDept) s = fDept
+              } catch {}
+            }
           } catch {}
         }
         if (!cancelled) {
