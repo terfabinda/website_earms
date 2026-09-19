@@ -617,6 +617,24 @@ function StaffTab({ instId }) {
       for (const s of all) {
         const key = String(s.staffId ?? s.StaffId ?? s.Id ?? s.id ?? s.Email ?? s.email ?? JSON.stringify(s))
         if (!map.has(key)) map.set(key, s)
+        else {
+          const existing = map.get(key)
+          const merged = { ...existing }
+          for (const [k,v] of Object.entries(s)) {
+            const cur = merged[k]
+            const isEmpty = (x)=> x===undefined || x===null || x==="" || x==="—" || (typeof x==="string" && !x.trim())
+            if (!isEmpty(v) && isEmpty(cur)) merged[k]=v
+            else if (!(k in merged) || isEmpty(cur)) merged[k]=v
+          }
+          for (const [k,v] of Object.entries(merged)) {
+            if (!v) continue
+            const lower = k.charAt(0).toLowerCase()+k.slice(1)
+            const upper = k.charAt(0).toUpperCase()+k.slice(1)
+            if (!(lower in merged) || !merged[lower]) merged[lower]=v
+            if (!(upper in merged) || !merged[upper]) merged[upper]=v
+          }
+          map.set(key, merged)
+        }
       }
       let filtered = Array.from(map.values())
       if (filterCategory) filtered = filtered.filter(s=> String(s.StaffCategory ?? s.staffCategory) === String(filterCategory))
@@ -819,27 +837,66 @@ function StaffTab({ instId }) {
           </button>
         </form>
       </Card>
-      {/* View Modal */}
+      {/* View Modal — stylized with Edit switch */}
       {viewing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
-          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline-sm font-bold text-primary">Staff Details</h3>
-              <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant overflow-hidden">
+            <div className="h-1.5 w-full bg-gradient-to-r from-primary to-tertiary"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                    {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm font-bold text-on-surface">{[viewing.Title ?? viewing.title, viewing.FirstName ?? viewing.firstName, viewing.LastName ?? viewing.lastName].filter(Boolean).join(" ")}</h3>
+                    <p className="font-body-sm text-on-surface-variant text-[12px]">{viewing.Email ?? viewing.email}</p>
+                  </div>
+                </div>
+                <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{viewing.StaffId ?? viewing.staffId}</span>
+                <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{Number(viewing.StaffCategory ?? viewing.staffCategory)===1?"Academic":Number(viewing.StaffCategory ?? viewing.staffCategory)===2?"Technologist":"Admin"}</span>
+                <span className="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-[11px]">{viewing.Specialization ?? viewing.specialization ?? "—"}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">mail</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Email</span></div>
+                  <p className="font-body-sm text-on-surface mt-1 truncate">{viewing.Email ?? viewing.email ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">call</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Phone</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.PhoneNo ?? viewing.phoneNo ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Qualification</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.HighestQualification ?? viewing.highestQualification ?? viewing.Highestqualificattion ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">psychology</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Specialization</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.Specialization ?? viewing.specialization ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">account_tree</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.DepartmentName ?? viewing.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(viewing.DepartmentId??viewing.departmentId))?.Name ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">menu_book</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Program</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.ProgramId ? (()=>{ const pr=programs.find(p=> String(p.Id??p.id)===String(viewing.ProgramId ?? viewing.programId)); return pr? (pr.Name??pr.name) : "Prog "+viewing.ProgramId})() : viewing.ProgramName ?? viewing.programName ?? "—"}</p>
+                </div>
+              </div>
+              <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-on-surface-variant"><span className="material-symbols-outlined text-[18px]">badge</span><span className="font-body-sm text-[12px]">ID {viewing.Id ?? viewing.id} · {viewing.InstitutionName ?? viewing.institutionName ?? ""}</span></div>
+                <span className={`w-2 h-2 rounded-full ${viewing.IsActive ?? viewing.isActive ? "bg-green-500" : "bg-outline"}`}></span>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button onClick={()=>{ const s=viewing; setViewing(null); handleEdit(s); }} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">edit</span> Edit</button>
+                <button onClick={()=>setViewing(null)} className="flex-1 border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
+              </div>
+              <p className="font-body-sm text-[11px] text-outline mt-2 text-center">Empty fields → backend returned null (dedup now merges stafflist + academic-staff).</p>
             </div>
-            <div className="space-y-2 text-sm">
-              <p><span className="font-label-md text-on-surface-variant">Staff ID:</span> {viewing.StaffId ?? viewing.staffId}</p>
-              <p><span className="font-label-md text-on-surface-variant">Name:</span> {[viewing.Title ?? viewing.title, viewing.FirstName ?? viewing.firstName, viewing.LastName ?? viewing.lastName].filter(Boolean).join(" ")}</p>
-              <p><span className="font-label-md text-on-surface-variant">Email:</span> {viewing.Email ?? viewing.email}</p>
-              <p><span className="font-label-md text-on-surface-variant">Phone:</span> {viewing.PhoneNo ?? viewing.phoneNo ?? "—"}</p>
-              <p><span className="font-label-md text-on-surface-variant">Qualification:</span> {viewing.HighestQualification ?? viewing.highestQualification ?? "—"}</p>
-              <p><span className="font-label-md text-on-surface-variant">Category:</span> {Number(viewing.StaffCategory ?? viewing.staffCategory)===1?"Academic":Number(viewing.StaffCategory ?? viewing.staffCategory)===2?"Technologist":"Admin"}</p>
-              <p><span className="font-label-md text-on-surface-variant">Specialization:</span> {viewing.Specialization ?? viewing.specialization ?? "—"}</p>
-              <p><span className="font-label-md text-on-surface-variant">Department:</span> {viewing.DepartmentName ?? viewing.departmentName ?? ""}</p>
-              <p><span className="font-label-md text-on-surface-variant">Program:</span> {viewing.ProgramId ?? viewing.programId ?? "—"}</p>
-            </div>
-            <button onClick={()=>setViewing(null)} className="mt-4 w-full bg-primary text-on-primary py-2 rounded font-label-md">Close</button>
           </div>
         </div>
       )}
