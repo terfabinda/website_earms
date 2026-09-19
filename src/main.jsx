@@ -2551,6 +2551,8 @@ function StudentManagementPage({ go }) {
   const [departments, setDepartments] = useState([])
   const [programs, setPrograms] = useState([])
   const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", departmentId:"", programId:"", level:"", status:"Active", facultyId:"" })
+  const [filterDeptId, setFilterDeptId] = useState("")
+  const [search, setSearch] = useState("")
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
   const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
@@ -2569,48 +2571,117 @@ function StudentManagementPage({ go }) {
     const core=s.replace(/^(college|school|faculty)\s+of\s+/i,"").replace(/^(college|school|faculty)\s+/i,"").trim()||s;
     return `${collegeTerm} of ${core}`;
   }
-  const load = async () => {
+  const resolveInstId = async () => {
+    let id = jwtInstId
+    if (!id) {
+      const { onboardingApi } = await import("./onboarding")
+      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+      if (Array.isArray(list) && list.length) id = String(list[0].Id ?? list[0].id)
+    }
+    return id ? String(id) : ""
+  }
+  const loadMeta = async () => {
+    try {
+      const id = await resolveInstId()
+      if (!id) return
+      const { onboardingApi } = await import("./onboarding")
+      const [cols, depts] = await Promise.all([
+        onboardingApi.getColleges(String(id)).catch(()=>[]),
+        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+      ])
+      const colArr = Array.isArray(cols) ? cols : []
+      const deptArr = Array.isArray(depts) ? depts : []
+      setFaculties(colArr)
+      setDepartments(deptArr)
+      if (deptArr.length && !form.departmentId) {
+        const firstDept = String(deptArr[0].Id ?? deptArr[0].id)
+        setForm(f=>({...f, departmentId: firstDept}))
+        try { const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[]); setPrograms(Array.isArray(progs) ? progs : []) } catch {}
+      }
+    } catch {}
+  }
+  const loadStudents = async () => {
     setLoading(true); setErr("")
     try {
+      const id = await resolveInstId()
+      if (!id) { setStudents([]); return }
       const { onboardingApi } = await import("./onboarding")
-      let id = jwtInstId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
-      if (id) {
-        const [cols, depts, studs] = await Promise.all([
-          onboardingApi.getColleges(String(id)).catch(()=>[]),
-          onboardingApi.getDepartments(String(id)).catch(()=>[]),
-          onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
+      let all = []
+      if (filterDeptId) {
+        const [deptStudents, unassigned] = await Promise.all([
+          onboardingApi.getDepartmentStudents(String(filterDeptId), String(id)).catch(()=>[]),
+          onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(id) }).catch(()=>[])
         ])
-        setFaculties(Array.isArray(cols) ? cols : [])
-        setDepartments(Array.isArray(depts) ? depts : [])
-        // Normalize students: ensure they have matricNo, firstName etc.
-        const arr = Array.isArray(studs) ? studs : []
-        setStudents(arr)
-        if (Array.isArray(depts) && depts.length && !form.departmentId) {
-          const firstDept = String(depts[0].Id ?? depts[0].id)
-          setForm(f=>({...f, departmentId: firstDept}))
-          try {
-            const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[])
-            setPrograms(Array.isArray(progs) ? progs : [])
-          } catch {}
+        all = [...(Array.isArray(deptStudents)?deptStudents:[]), ...(Array.isArray(unassigned)?unassigned:[])]
+        if (all.length===0) {
+          const fallback = await onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[])
+          const arr = Array.isArray(fallback)? fallback : []
+          const filtered = arr.filter(s=> String(s.DepartmentId ?? s.departmentId ?? "")===String(filterDeptId))
+          if (filtered.length) all = filtered
+        }
+      } else if (departments.length) {
+        const results = await Promise.all(departments.map(async d=>{
+          const did = String(d.Id ?? d.id)
+          const [deptSt, unass] = await Promise.all([
+            onboardingApi.getDepartmentStudents(did, String(id)).catch(()=>[]),
+            onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(id) }).catch(()=>[])
+          ])
+          return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+        }))
+        all = results.flat()
+        if (all.length===0) {
+          const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
+          all = Array.isArray(instSt)? instSt : []
+        }
+      } else {
+        const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
+        all = Array.isArray(instSt)? instSt : []
+      }
+      const map = new Map()
+      for (const s of all) {
+        const key = String(s.MatricNo ?? s.matricNo ?? s.Id ?? s.id ?? s.Email ?? s.email ?? JSON.stringify(s))
+        if (!map.has(key)) map.set(key, s)
+        else {
+          const existing = map.get(key)
+          const merged = { ...existing }
+          for (const [k,v] of Object.entries(s)) {
+            const cur = merged[k]
+            const isEmpty = (x)=> x===undefined || x===null || x==="" || x==="—" || (typeof x==="string" && !x.trim())
+            if (!isEmpty(v) && isEmpty(cur)) merged[k]=v
+            else if (!(k in merged) || isEmpty(cur)) merged[k]=v
+          }
+          for (const [k,v] of Object.entries(merged)) {
+            if (!v) continue
+            const lower = k.charAt(0).toLowerCase()+k.slice(1)
+            const upper = k.charAt(0).toUpperCase()+k.slice(1)
+            if (!(lower in merged) || !merged[lower]) merged[lower]=v
+            if (!(upper in merged) || !merged[upper]) merged[upper]=v
+          }
+          map.set(key, merged)
         }
       }
-    } catch (e) { setErr(e.message || "Could not load") } finally { setLoading(false) }
+      let filtered = Array.from(map.values())
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        filtered = filtered.filter(s=>{
+          const hay = [s.MatricNo, s.matricNo, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.DepartmentName, s.departmentName, s.Level, s.level].join(" ").toLowerCase()
+          return hay.includes(q)
+        })
+      }
+      setStudents(filtered)
+    } catch (e) { setErr(e.message || "Could not load students"); setStudents([]) } finally { setLoading(false) }
   }
-  useEffect(()=>{ load() }, [])
+
+  useEffect(()=>{ loadMeta() }, [])
+  useEffect(()=>{ if (departments.length || filterDeptId) loadStudents() }, [departments, filterDeptId])
+  useEffect(()=>{ if (departments.length) loadStudents() }, [search])
+
   const onDeptChange = async (val) => {
     setForm(f=>({...f, departmentId: val, programId:"" }))
     try {
-      const { onboardingApi } = await import("./onboarding")
-      let id = jwtInstId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
+      const id = await resolveInstId()
       if (id && val) {
+        const { onboardingApi } = await import("./onboarding")
         const progs = await onboardingApi.getPrograms(String(id), val).catch(()=>[])
         setPrograms(Array.isArray(progs) ? progs : [])
       } else setPrograms([])
@@ -2647,7 +2718,7 @@ function StudentManagementPage({ go }) {
       setMsg(`Student ${form.matricNo.trim()} created.`)
       setForm(f=>({...f, matricNo:"", firstName:"", lastName:"", email:"", level:"", programId:"", status:"Active" }))
       setShowModal(false)
-      load()
+      loadStudents()
     } catch (e2) {
       setErr(e2.message || "Could not create student")
     }
@@ -2656,15 +2727,83 @@ function StudentManagementPage({ go }) {
     const d = departments.find(x=> String(x.Id ?? x.id) === String(id))
     return d ? (d.Name ?? d.name) : (id || "—")
   }
+  const [viewing, setViewing] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState(null)
+  const handleView = (s)=>{ setViewing(s); setErr(""); setMsg("") }
+  const handleEdit = (s)=>{
+    setEditing(s); setErr(""); setMsg("")
+    setEditForm({
+      matricNo: s.MatricNo ?? s.matricNo ?? "",
+      firstName: s.FirstName ?? s.firstName ?? "",
+      lastName: s.LastName ?? s.lastName ?? "",
+      email: s.Email ?? s.email ?? "",
+      phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
+      level: s.Level ?? s.level ?? "",
+      departmentId: s.DepartmentId ? String(s.DepartmentId) : (s.departmentId ? String(s.departmentId) : form.departmentId || ""),
+      programId: s.ProgramId ? String(s.ProgramId) : (s.programId ? String(s.programId) : ""),
+      areaOfInterest: s.AreaOfInterest ?? s.areaOfInterest ?? "",
+    })
+    if (s.DepartmentId ?? s.departmentId) onDeptChange(String(s.DepartmentId ?? s.departmentId))
+  }
+  const handleEditChange = (k)=>(e)=> setEditForm(f=>({...f, [k]: e.target.value}))
+  const handleUpdate = async (e)=>{
+    e.preventDefault()
+    if (!editing || !editForm) return
+    setErr(""); setMsg("")
+    const matric = editing.MatricNo ?? editing.matricNo
+    if (!matric) { setErr("Matric No missing — cannot update"); return }
+    if (!editForm.matricNo.trim() || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) { setErr("Matric, First/Last Name and Email required."); return }
+    try {
+      const id = await resolveInstId()
+      const payload = {
+        MatricNo: editForm.matricNo.trim(),
+        FirstName: editForm.firstName.trim(),
+        LastName: editForm.lastName.trim(),
+        Email: editForm.email.trim(),
+        PhoneNo: editForm.phoneNo.trim(),
+        ProgramId: editForm.programId ? Number(editForm.programId) : 0,
+        StudentCategory: editing.StudentCategory ?? editing.studentCategory ?? 2,
+        AreaOfInterest: editForm.areaOfInterest.trim(),
+        DepartmentId: Number(editForm.departmentId),
+        InstitutionId: Number(id || editing.InstitutionId || editing.institutionId),
+        Level: editForm.level.trim(),
+      }
+      const { onboardingApi } = await import("./onboarding")
+      await onboardingApi.updateStudent(String(matric), payload)
+      setMsg(`Student ${editForm.matricNo} updated.`)
+      setEditing(null); setEditForm(null)
+      loadStudents()
+    } catch (e2) { setErr(e2.message || "Could not update student") }
+  }
+  const handleDelete = (s)=> setErr("Delete not available — no DELETE endpoint per doc.")
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">school</span> Student Management</h2>
-          <p className="font-body-sm text-on-surface-variant">Manage students — exquisite grid with Matric No, Name, Email, Department, Institution, Level, Status and actions</p>
+          <p className="font-body-sm text-on-surface-variant">Manage students — {students.length} {students.length===1?"student":"students"} {filterDeptId ? "in selected department" : "across all departments"} · via get_department_student + unassigned-students</p>
         </div>
         <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add Student
+        </button>
+      </div>
+      <div className="glass-card rounded-xl border border-surface-container p-4 flex flex-col lg:flex-row gap-3 lg:items-end">
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+          <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">All Departments</option>
+            {departments.map(d=>(
+              <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Search</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Matric / name / email" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+        </label>
+        <button onClick={loadStudents} className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">refresh</span> Refresh
         </button>
       </div>
       {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
@@ -2674,8 +2813,8 @@ function StudentManagementPage({ go }) {
       ) : students.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
           <span className="material-symbols-outlined text-4xl text-outline mb-2">school</span>
-          <p className="font-headline-sm text-on-surface">No students yet</p>
-          <p className="font-body-sm text-on-surface-variant mt-1">Click Add Student to create your first student.</p>
+          <p className="font-headline-sm text-on-surface">No students found</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">{filterDeptId || search ? "No students match filters" : "Click Add Student to create your first student."} — aggregated across departments.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -2708,9 +2847,9 @@ function StudentManagementPage({ go }) {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
-                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                  <button onClick={()=>handleView(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button onClick={()=>handleEdit(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button onClick={()=>handleDelete(s)} className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                 </div>
               </div>
             </div>
@@ -2782,9 +2921,113 @@ function StudentManagementPage({ go }) {
           </div>
         </div>
       )}
+      {/* View Student Modal — stylized */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant overflow-hidden">
+            <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                    {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm font-bold text-on-surface">{(viewing.FirstName ?? viewing.firstName ?? "") + " " + (viewing.LastName ?? viewing.lastName ?? "")}</h3>
+                    <p className="font-body-sm text-on-surface-variant text-[12px]">{viewing.Email ?? viewing.email}</p>
+                  </div>
+                </div>
+                <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{viewing.MatricNo ?? viewing.matricNo}</span>
+                <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">Level {viewing.Level ?? viewing.level ?? "—"}</span>
+                <span className="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-[11px]">{viewing.AreaOfInterest ?? viewing.areaOfInterest ?? "—"}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">mail</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Email</span></div>
+                  <p className="font-body-sm text-on-surface mt-1 truncate">{viewing.Email ?? viewing.email ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">badge</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.MatricNo ?? viewing.matricNo ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">account_tree</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.DepartmentName ?? viewing.departmentName ?? getDeptName(viewing.DepartmentId ?? viewing.departmentId)}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">menu_book</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Program</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.ProgramName ?? viewing.programName ?? (viewing.ProgramId ? `Prog ${viewing.ProgramId}` : "—")}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Level</span></div>
+                  <p className="font-body-sm text-on-surface mt-1">{viewing.Level ?? viewing.level ?? "—"}</p>
+                </div>
+                <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                  <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">apartment</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Institution</span></div>
+                  <p className="font-body-sm text-on-surface mt-1 truncate">{viewing.InstitutionName ?? viewing.institutionName ?? jwtInstName}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button onClick={()=>{ const s=viewing; setViewing(null); handleEdit(s); }} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">edit</span> Edit</button>
+                <button onClick={()=>setViewing(null)} className="flex-1 border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Student Modal */}
+      {editing && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>{setEditing(null); setEditForm(null)}}></div>
+          <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Edit Student — {editing.MatricNo ?? editing.matricNo}</h3>
+              <button onClick={()=>{setEditing(null); setEditForm(null)}} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={handleUpdate} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={editForm.matricNo} onChange={handleEditChange("matricNo")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Level</span><input value={editForm.level} onChange={handleEditChange("level")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">First Name</span><input value={editForm.firstName} onChange={handleEditChange("firstName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={editForm.lastName} onChange={handleEditChange("lastName")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              </div>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={editForm.email} onChange={handleEditChange("email")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Phone</span><input value={editForm.phoneNo} onChange={handleEditChange("phoneNo")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Area of Interest</span><input value={editForm.areaOfInterest} onChange={handleEditChange("areaOfInterest")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                <select value={editForm.departmentId} onChange={handleEditChange("departmentId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  {departments.map(d=>(
+                    <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Program</span>
+                <select value={editForm.programId} onChange={handleEditChange("programId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+                  <option value="">None</option>
+                  {programs.map(p=>(
+                    <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <Msg kind="err" text={err} />
+              <div className="flex gap-3">
+                <button type="submit" className="flex-1 bg-primary text-on-primary py-2 rounded font-label-md">Update Student</button>
+                <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 function SubscriptionPage() {
   const [showSubscribe, setShowSubscribe] = useState(false)
@@ -3162,15 +3405,172 @@ function InstitutionHome({ go }) {
 
 /* ---------- Student Dashboard (Stitch: 6cac2f74a4d34ab79e8c434ea4373e91) ---------- */
 function StudentDashboard({ go }) {
+  const [student, setStudent] = useState(null)
+  const [deptProg, setDeptProg] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState("")
+  const tok = decodeToken()
+  // Robust matricNo extraction from JWT claims (covers various claim names)
+  const matricNo = (() => {
+    if (!tok) return ""
+    const candidates = [
+      tok.matricNo, tok.MatricNo, tok.matric_no, tok.Matric_no,
+      tok.matricNumber, tok.MatricNumber,
+      tok.sub, tok.Sub,
+      tok.unique_name, tok.uniqueName,
+      tok.preferred_username, tok.preferredUsername,
+      tok.email, tok.Email,
+      tok["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"],
+      tok["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"],
+      tok.name, tok.Name,
+    ]
+    for (const c of candidates) if (c && typeof c === "string" && c.includes("/") ) return c // likely matric like CSC/2024/001
+    for (const c of candidates) if (c && typeof c === "string" && c.trim()) return c.trim()
+    return ""
+  })()
+  const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? tok?.OwnerId ?? ""
+  const displayName = student ? `${student.FirstName ?? student.firstName ?? ""} ${student.LastName ?? student.lastName ?? ""}`.trim() : (tok?.name ?? tok?.unique_name ?? tok?.email ?? "Student")
+  const firstName = displayName.split(" ")[0] || "Student"
+
+  useEffect(()=>{
+    let cancelled = false
+    const load = async () => {
+      if (!matricNo && !instId) { setLoading(false); return }
+      setLoading(true); setErr("")
+      try {
+        const { onboardingApi } = await import("./onboarding")
+        let s = null
+        // 1) Try direct get_student/{matricNo} (JWT institution)
+        if (matricNo) {
+          try { s = await onboardingApi.getStudent(matricNo) } catch {}
+          if (!s) {
+            try { s = await onboardingApi.getStudentIam(matricNo) } catch {}
+            // getStudentIam returns IAMDto with InstitutionId/DepartmentId — not full StudentDto, try to enrich
+            if (s && s.MatricNo) {
+              try { const full = await onboardingApi.getStudent(s.MatricNo) ; if (full) s = full } catch {}
+            }
+          }
+        }
+        // 2) Fallback: try by email from token
+        if (!s && tok?.email) {
+          try { s = await onboardingApi.getStudent(tok.email) } catch {}
+        }
+        // 3) Fallback: list by institution and find by matric/email
+        if (!s && instId) {
+          try {
+            const list = await onboardingApi.getDepartmentStudents ? await onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>null) : null
+            // Actually getStudentsByInstitution returns list; try to find match
+            const arr = Array.isArray(list) ? list : []
+            const found = arr.find(x=> String(x.MatricNo ?? x.matricNo ?? x.Email ?? x.email).toLowerCase() === String(matricNo).toLowerCase() || String(x.Email ?? x.email).toLowerCase() === String(tok?.email ?? "").toLowerCase())
+            if (found) s = found
+            else if (arr.length === 1) s = arr[0] // single student in institution
+          } catch {}
+        }
+        if (!cancelled) {
+          if (s) {
+            setStudent(s)
+            // Fetch department/program details if available
+            try {
+              const deptId = s.DepartmentId ?? s.departmentId ?? s.DepartmentId
+              const progName = s.ProgramName ?? s.programName ?? ""
+              const deptName = s.DepartmentName ?? s.departmentName ?? ""
+              const level = s.Level ?? s.level ?? ""
+              setDeptProg({ deptId, progName, deptName, level })
+              // Optionally fetch full department info
+              if (deptId && instId) {
+                try {
+                  const dInfo = await (await import("./onboarding")).onboardingApi.getStudentDepartment(String(s.MatricNo ?? s.matricNo ?? matricNo), String(instId)).catch(()=>null)
+                  if (dInfo) setDeptProg(prev=>({...prev, deptInfo: dInfo}))
+                } catch {}
+              }
+            } catch {}
+          } else {
+            setErr(matricNo ? `No student record found for ${matricNo}` : "No matric number in token — showing token info")
+            // Fallback to token-derived pseudo student
+            setStudent({
+              MatricNo: matricNo || tok?.sub || tok?.unique_name || "—",
+              FirstName: firstName,
+              LastName: displayName.split(" ").slice(1).join(" "),
+              Email: tok?.email ?? tok?.Email ?? "—",
+              DepartmentName: tok?.departmentName ?? tok?.DepartmentName ?? "—",
+              ProgramName: tok?.programName ?? tok?.ProgramName ?? "—",
+              InstitutionName: tok?.institutionName ?? tok?.InstitutionName ?? "",
+              Level: tok?.level ?? tok?.Level ?? "—",
+              PhoneNo: tok?.phoneNo ?? tok?.PhoneNo ?? "—",
+            })
+          }
+        }
+      } catch (e) { if (!cancelled) setErr(e.message || "Could not load student") }
+      finally { if (!cancelled) setLoading(false) }
+    }
+    load()
+    return ()=>{ cancelled = true }
+  }, [matricNo, instId])
+
+  const studentCategoryLabel = (()=> {
+    const cat = student?.StudentCategory ?? student?.studentCategory
+    if (cat===1) return "Non-Degree"
+    if (cat===2) return "Undergraduate"
+    if (cat===3) return "Postgraduate"
+    if (typeof cat==="string") return cat
+    return "—"
+  })()
+
   return (
-    <DashShell go={go} active="student" role="student" title="Welcome back, Sarah." subtitle="Here is an overview of your current research progress.">
+    <DashShell go={go} active="student" role="student" title={`Welcome back, ${firstName}.`} subtitle={loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
+      {loading ? (
+        <div className="py-12 text-center"><span className="material-symbols-outlined text-3xl animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading your dashboard…</p></div>
+      ) : (
+      <>
+      {err && <div className="mb-4 w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+
+      {/* Personalized student info card — actual data */}
+      <div className="glass-card rounded-xl p-5 border border-surface-container mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center font-headline-md font-bold text-primary text-xl">
+              {(student?.FirstName ?? student?.firstName ?? firstName).charAt(0)}{(student?.LastName ?? student?.lastName ?? "").charAt(0)}
+            </div>
+            <div>
+              <h3 className="font-headline-sm font-bold text-on-surface">{displayName}</h3>
+              <p className="font-body-sm text-on-surface-variant">{student?.Email ?? student?.email ?? tok?.email ?? "—"} · {studentCategoryLabel}</p>
+              <p className="font-body-sm text-outline text-[12px]">{student?.InstitutionName ?? student?.institutionName ?? tok?.institutionName ?? ""} {instId ? `· Inst ${instId}` : ""}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[12px]">{student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"}</span>
+            <span className="px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[12px] border border-outline-variant">Level {student?.Level ?? student?.level ?? deptProg?.level ?? "—"}</span>
+            <span className={`px-3 py-1 rounded-full font-label-md text-[12px] border ${student?.IsActive ?? student?.isActive ? "bg-green-100 text-green-800 border-green-200" : "bg-surface-container-high text-on-surface-variant"}`}>{student?.IsActive ?? student?.isActive ? "Active" : (student ? "—" : "Token")}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+          <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+            <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">account_tree</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span></div>
+            <p className="font-body-sm text-on-surface mt-1">{student?.DepartmentName ?? student?.departmentName ?? deptProg?.deptName ?? "—"}</p>
+          </div>
+          <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+            <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">menu_book</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span></div>
+            <p className="font-body-sm text-on-surface mt-1 truncate">{student?.ProgramName ?? student?.programName ?? deptProg?.progName ?? "—"}</p>
+          </div>
+          <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+            <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">call</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Phone</span></div>
+            <p className="font-body-sm text-on-surface mt-1">{student?.PhoneNo ?? student?.phoneNo ?? "—"}</p>
+          </div>
+          <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+            <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Area of Interest</span></div>
+            <p className="font-body-sm text-on-surface mt-1 truncate">{student?.AreaOfInterest ?? student?.areaOfInterest ?? "—"}</p>
+          </div>
+        </div>
+        {matricNo && <p className="font-body-sm text-[11px] text-outline mt-3">Source: <span className="font-label-md">GET /get_student/{matricNo}</span> via <span className="font-label-md">onboardingApi.getStudent</span> {student?.DepartmentName ? "· live" : "· token fallback"} · JWT inst {instId || "—"}</p>}
+      </div>
+
       <div className="bento-grid">
         <section className="col-span-12 lg:col-span-8 glass-card rounded-xl p-6 flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-secondary-fixed-dim rounded-full blur-3xl opacity-20 -mr-20 -mt-20 pointer-events-none"></div>
           <div>
             <div className="flex justify-between items-start mb-6">
-              <div><span className="inline-block px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-[12px] rounded-full mb-2">Active Thesis</span><h3 className="font-headline-lg text-headline-lg text-on-surface leading-tight">Impact of AI on Modern Architectural Paradigms</h3></div>
-              <span className="px-3 py-1 bg-[#e6f4ea] text-[#137333] font-label-md rounded-full border border-[#ceead6] text-[12px] whitespace-nowrap">On Track</span>
+              <div><span className="inline-block px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-[12px] rounded-full mb-2">{deptProg?.progName ? deptProg.progName : "Active Thesis"}</span><h3 className="font-headline-lg text-headline-lg text-on-surface leading-tight">{student?.ProgramName ? `Research in ${student.ProgramName}` : "Impact of AI on Modern Architectural Paradigms"}</h3><p className="font-body-sm text-on-surface-variant mt-1">{student?.DepartmentName ? `Dept: ${student.DepartmentName}` : ""} {student?.Level ? `· Level ${student.Level}` : ""}</p></div>
+              <span className="px-3 py-1 bg-[#e6f4ea] text-[#137333] font-label-md rounded-full border border-[#ceead6] text-[12px] whitespace-nowrap">{student?.IsActive ? "On Track" : "Active"}</span>
             </div>
             <div className="mb-6">
               <div className="flex justify-between font-label-md text-on-surface-variant mb-1"><span>Overall Progress</span><span>45%</span></div>
@@ -3178,21 +3578,21 @@ function StudentDashboard({ go }) {
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 border-t border-outline-variant pt-4">
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Next Deadline</p><p className="font-headline-sm text-on-surface">Oct 15, 2024</p></div>
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Primary Advisor</p><p className="font-headline-sm text-on-surface">Dr. A. Sterling</p></div>
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Recent Activity</p><p className="font-headline-sm text-on-surface">Draft Submitted</p></div>
+            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Matric No</p><p className="font-headline-sm text-on-surface truncate">{student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"}</p></div>
+            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Department</p><p className="font-headline-sm text-on-surface truncate">{student?.DepartmentName ?? student?.departmentName ?? "—"}</p></div>
+            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Level</p><p className="font-headline-sm text-on-surface">{student?.Level ?? student?.level ?? "—"}</p></div>
           </div>
         </section>
         <section className="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant flex flex-col">
           <h3 className="font-headline-md text-on-surface flex items-center gap-2 mb-4"><span className="material-symbols-outlined text-secondary-container">forum</span> Supervisor Feedback</h3>
           <div className="flex-1 space-y-3 overflow-auto">
             <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-secondary-container">
-              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Dr. A. Sterling</span><span className="text-[12px] text-outline">2 hours ago</span></div>
-              <p className="font-body-sm text-on-surface-variant">Your methodology section needs more clarity regarding the sampling constraints. Let's discuss this tomorrow.</p>
+              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Advisor</span><span className="text-[12px] text-outline">2 hours ago</span></div>
+              <p className="font-body-sm text-on-surface-variant">{student?.DepartmentName ? `Supervisor for ${student.DepartmentName}` : "Your methodology section needs more clarity regarding the sampling constraints. Let's discuss this tomorrow."}</p>
             </div>
             <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-outline-variant">
-              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Dr. A. Sterling</span><span className="text-[12px] text-outline">Yesterday</span></div>
-              <p className="font-body-sm text-on-surface-variant">Good progress on the initial literature review draft. Ensure citations follow APA strictly.</p>
+              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">System</span><span className="text-[12px] text-outline">Today</span></div>
+              <p className="font-body-sm text-on-surface-variant">Profile loaded via {matricNo ? `get_student/${matricNo}` : "token"} {student?.Email ? `· ${student.Email}` : ""}</p>
             </div>
           </div>
           <button className="mt-4 w-full bg-surface text-primary border border-outline-variant font-label-md py-2 rounded hover:bg-surface-variant">View All Comments</button>
@@ -3204,21 +3604,21 @@ function StudentDashboard({ go }) {
               <div className="timeline-line"></div>
               <div className="flex gap-3 relative z-10">
                 <div className="w-8 h-8 rounded-full bg-[#e6f4ea] text-[#137333] flex items-center justify-center shrink-0 border border-[#ceead6]"><span className="material-symbols-outlined text-[18px]">check</span></div>
-                <div><h4 className="font-headline-sm text-on-surface">Proposal Defense</h4><p className="font-body-sm text-on-surface-variant">Approved by committee.</p><span className="font-label-md text-[12px] text-outline">Aug 12, 2024</span></div>
+                <div><h4 className="font-headline-sm text-on-surface">Enrolled — {student?.Level ?? "—"}</h4><p className="font-body-sm text-on-surface-variant">Matric {student?.MatricNo ?? matricNo} · {student?.ProgramName ?? "Programme"}</p><span className="font-label-md text-[12px] text-outline">{student?.CreatedAt ? new Date(student.CreatedAt ?? student.createdAt).toLocaleDateString() : "Aug 12, 2024"}</span></div>
               </div>
             </div>
             <div className="timeline-item relative mb-6">
               <div className="timeline-line"></div>
               <div className="flex gap-3 relative z-10">
                 <div className="w-8 h-8 rounded-full bg-secondary-fixed text-secondary flex items-center justify-center shrink-0 border border-secondary-fixed-dim"><div className="w-3 h-3 bg-secondary rounded-full animate-pulse"></div></div>
-                <div><h4 className="font-headline-sm text-on-surface">Chapter 2: Literature Review</h4><p className="font-body-sm text-on-surface-variant">Drafting core arguments and synthesizing sources.</p><span className="font-label-md text-[12px] text-secondary-container">Due: Oct 15, 2024</span></div>
+                <div><h4 className="font-headline-sm text-on-surface">Current Programme</h4><p className="font-body-sm text-on-surface-variant">{student?.ProgramName ?? "Active programme"} — {student?.DepartmentName ?? "Department"}</p><span className="font-label-md text-[12px] text-secondary-container">Due: Oct 15, 2024</span></div>
               </div>
             </div>
             <div className="timeline-item relative">
               <div className="timeline-line"></div>
               <div className="flex gap-3 relative z-10 opacity-60">
                 <div className="w-8 h-8 rounded-full bg-surface-variant text-outline flex items-center justify-center shrink-0 border border-outline-variant"><span className="material-symbols-outlined text-[18px]">radio_button_unchecked</span></div>
-                <div><h4 className="font-headline-sm text-on-surface">Data Collection</h4><p className="font-body-sm text-on-surface-variant">Pending ethics board approval.</p><span className="font-label-md text-[12px] text-outline">Est. Nov 2024</span></div>
+                <div><h4 className="font-headline-sm text-on-surface">Next Level</h4><p className="font-body-sm text-on-surface-variant">Pending progress</p><span className="font-label-md text-[12px] text-outline">Est. 2025</span></div>
               </div>
             </div>
           </div>
@@ -3231,27 +3631,29 @@ function StudentDashboard({ go }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
               <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">folder</span><h4 className="font-headline-sm text-on-surface">Drafts</h4></div>
-              <p className="font-body-sm text-on-surface-variant">4 files • Updated 2d ago</p>
+              <p className="font-body-sm text-on-surface-variant">Programme: {student?.ProgramName ?? "—"}</p>
             </div>
             <div className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
               <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">folder</span><h4 className="font-headline-sm text-on-surface">References</h4></div>
-              <p className="font-body-sm text-on-surface-variant">128 files • Updated 1w ago</p>
+              <p className="font-body-sm text-on-surface-variant">Dept: {student?.DepartmentName ?? "—"}</p>
             </div>
             <div className="col-span-2 p-2 border border-outline-variant rounded-lg flex items-center justify-between hover:bg-surface-container-low">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#e8eaed] rounded flex items-center justify-center text-[#1a73e8]"><span className="material-symbols-outlined">description</span></div>
-                <div><p className="font-label-md text-on-surface">Lit_Review_v2_Draft.docx</p><p className="font-body-sm text-[12px] text-outline">Modified today by You</p></div>
+                <div><p className="font-label-md text-on-surface">{student?.MatricNo ? `${student.MatricNo}_Lit_Review.docx` : "Lit_Review_v2_Draft.docx"}</p><p className="font-body-sm text-[12px] text-outline">Modified today by {firstName}</p></div>
               </div>
               <button className="p-1 text-outline hover:text-on-surface"><span className="material-symbols-outlined">more_vert</span></button>
             </div>
           </div>
         </section>
       </div>
+      </>
+      )}
     </DashShell>
   )
 }
 
-/* ---------- Faculty Dashboard (Stitch: 6c68c2f0c2d74e1891b698f86351b70f) ---------- */
+
 function FacultyDashboard({ go }) {
   return (
     <DashShell go={go} active="faculty" role="faculty" title="Faculty Overview" subtitle="Manage supervisees, approvals, and research pipeline.">

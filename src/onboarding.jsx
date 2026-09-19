@@ -974,29 +974,111 @@ function StudentsTab({ instId }) {
     areaOfInterest: "",
     level: "",
   });
-  const { items, error, reload } = useList(
-    () => onboardingApi.getUnassignedStudents({ institutionId: instId, departmentId: deptId || undefined }),
-    instId + "|" + deptId
-  );
+  const [filterDeptId, setFilterDeptId] = useState("");
+  const [search, setSearch] = useState("");
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState(null);
 
   useEffect(() => {
     onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
   useEffect(() => {
     if (!depts.length) return;
-    const id = deptId || String(depts[0].Id);
-    setDeptId(id);
+    const id = deptId || String(depts[0].Id ?? depts[0].id);
+    if (!deptId) setDeptId(id);
     onboardingApi.getPrograms(instId, id).then((p) => setPrograms(p || [])).catch(() => setPrograms([]));
   }, [depts, instId]);
+
+  const loadStudents = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      let all = []
+      if (filterDeptId) {
+        const [deptSt, unass] = await Promise.all([
+          onboardingApi.getDepartmentStudents(String(filterDeptId), String(instId)).catch(()=>[]),
+          onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(instId) }).catch(()=>[])
+        ])
+        all = [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+        if (all.length===0) {
+          const fallback = await onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>[])
+          const arr = Array.isArray(fallback)? fallback : []
+          const filtered = arr.filter(s=> String(s.DepartmentId ?? s.departmentId)===String(filterDeptId))
+          if (filtered.length) all = filtered
+        }
+      } else if (depts.length) {
+        const results = await Promise.all(depts.map(async d=>{
+          const did = String(d.Id ?? d.id)
+          const [deptSt, unass] = await Promise.all([
+            onboardingApi.getDepartmentStudents(did, String(instId)).catch(()=>[]),
+            onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(instId) }).catch(()=>[])
+          ])
+          return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+        }))
+        all = results.flat()
+        if (all.length===0) {
+          const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(instId) }).catch(()=> onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>[]))
+          all = Array.isArray(instSt)? instSt : []
+        }
+      } else {
+        const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(instId) }).catch(()=> onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>[]))
+        all = Array.isArray(instSt)? instSt : []
+      }
+      const map = new Map()
+      for (const s of all) {
+        const key = String(s.MatricNo ?? s.matricNo ?? s.Id ?? s.id ?? s.Email ?? s.email ?? JSON.stringify(s))
+        if (!map.has(key)) map.set(key, s)
+        else {
+          const existing = map.get(key)
+          const merged = { ...existing }
+          for (const [k,v] of Object.entries(s)) {
+            const cur = merged[k]
+            const isEmpty = (x)=> x===undefined || x===null || x==="" || x==="—" || (typeof x==="string" && !x.trim())
+            if (!isEmpty(v) && isEmpty(cur)) merged[k]=v
+            else if (!(k in merged) || isEmpty(cur)) merged[k]=v
+          }
+          for (const [k,v] of Object.entries(merged)) {
+            if (!v) continue
+            const lower = k.charAt(0).toLowerCase()+k.slice(1)
+            const upper = k.charAt(0).toUpperCase()+k.slice(1)
+            if (!(lower in merged) || !merged[lower]) merged[lower]=v
+            if (!(upper in merged) || !merged[upper]) merged[upper]=v
+          }
+          map.set(key, merged)
+        }
+      }
+      let filtered = Array.from(map.values())
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        filtered = filtered.filter(s=>{
+          const hay = [s.MatricNo, s.matricNo, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.Level, s.level, s.DepartmentName, s.departmentName].join(" ").toLowerCase()
+          return hay.includes(q)
+        })
+      }
+      setItems(filtered)
+    } catch (e) { setError(e.message || "Could not load students") } finally { setLoading(false) }
+  }, [instId, filterDeptId, depts, search])
+
+  useEffect(()=>{ loadStudents() }, [loadStudents])
+  const reload = loadStudents
 
   const [programId, setProgramId] = useState("");
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const handleDeptChangeForCreate = (val) => {
+    setDeptId(val)
+    if (val) onboardingApi.getPrograms(instId, val).then(p=>setPrograms(p||[])).catch(()=>setPrograms([]))
+    else setPrograms([])
+  }
+
   const submit = async (e) => {
     e.preventDefault();
-    setMsg("");
+    setMsg(""); setError("");
     const required = ["matricNo", "firstName", "lastName", "email", "level"];
     if (required.some((k) => !form[k].trim()) || !deptId || !programId) {
       setMsg("Matric No, name, email, level, department and program are required.");
@@ -1031,48 +1113,149 @@ function StudentsTab({ instId }) {
     }
   };
 
+  const handleView = (s)=>{ setViewing(s); setError(""); setMsg("") }
+  const handleEdit = (s)=>{
+    setEditing(s); setError(""); setMsg("")
+    setEditForm({
+      matricNo: s.MatricNo ?? s.matricNo ?? "",
+      firstName: s.FirstName ?? s.firstName ?? "",
+      lastName: s.LastName ?? s.lastName ?? "",
+      email: s.Email ?? s.email ?? "",
+      phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
+      level: s.Level ?? s.level ?? "",
+      departmentId: s.DepartmentId ? String(s.DepartmentId) : (s.departmentId ? String(s.departmentId) : deptId),
+      programId: s.ProgramId ? String(s.ProgramId) : (s.programId ? String(s.programId) : ""),
+      areaOfInterest: s.AreaOfInterest ?? s.areaOfInterest ?? "",
+    })
+    const did = s.DepartmentId ?? s.departmentId ? String(s.DepartmentId ?? s.departmentId) : deptId
+    if (did) handleDeptChangeForCreate(did)
+  }
+  const handleEditChange = (k)=>(e)=> setEditForm(f=>({...f, [k]: e.target.value}))
+  const handleUpdate = async (e)=>{
+    e.preventDefault()
+    if (!editing || !editForm) return
+    setError(""); setMsg("")
+    const matric = editing.MatricNo ?? editing.matricNo
+    if (!matric) { setError("Matric No missing"); return }
+    if (!editForm.matricNo.trim() || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) { setError("Matric, First/Last Name and Email required."); return }
+    setBusy(true)
+    try {
+      const payload = {
+        MatricNo: editForm.matricNo.trim(),
+        FirstName: editForm.firstName.trim(),
+        LastName: editForm.lastName.trim(),
+        Email: editForm.email.trim(),
+        PhoneNo: editForm.phoneNo.trim(),
+        ProgramId: editForm.programId ? Number(editForm.programId) : 0,
+        StudentCategory: editing.StudentCategory ?? editing.studentCategory ?? 2,
+        AreaOfInterest: editForm.areaOfInterest.trim(),
+        DepartmentId: Number(editForm.departmentId),
+        InstitutionId: Number(instId),
+        Level: editForm.level.trim(),
+      }
+      await onboardingApi.updateStudent(String(matric), payload)
+      setMsg(`Student ${editForm.matricNo} updated.`)
+      setEditing(null); setEditForm(null)
+      reload()
+    } catch (err) { setError(err.message || "Could not update student") } finally { setBusy(false) }
+  }
+  const handleDelete = (s)=> setError("Delete not available — no DELETE endpoint per doc.")
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <Card className="p-5 xl:col-span-2">
-        <h3 className="font-headline-sm font-semibold text-primary mb-3">Unassigned Students</h3>
-        <Msg kind="err" text={error} />
-        {items.length === 0 ? (
-          <p className="font-body-sm text-on-surface-variant">No unassigned students.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2">Matric No</th>
-                <th className="py-2">Area of Interest</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {items.map((s) => (
-                <tr key={s.Id}>
-                  <td className="py-2 font-medium text-on-surface">{s.MatricNo}</td>
-                  <td className="py-2 text-on-surface-variant">{s.AreaOfInterest || "—"}</td>
-                </tr>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <h3 className="font-headline-sm font-semibold text-primary">Students — {items.length}</h3>
+          <button onClick={reload} className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface font-label-md text-sm hover:bg-surface-variant flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">refresh</span> Refresh</button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3 mb-3">
+          <label className="block flex-1">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department filter</span>
+            <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
+              <option value="">All Departments</option>
+              {depts.map(d=>(
+                <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
+          <label className="block flex-1">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Search</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Matric / name / email / level" className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" />
+          </label>
+        </div>
+        <Msg kind="err" text={error} />
+        {msg && !error && <Msg kind="ok" text={msg} />}
+        {loading ? (
+          <p className="font-body-sm text-on-surface-variant">Loading students…</p>
+        ) : items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No students {filterDeptId || search ? "for filters" : "for this institution"} — aggregated via get_department_student + unassigned-students.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {items.map(s=>(
+                <div key={s.Id ?? s.id ?? s.MatricNo} className="rounded-xl border border-surface-container bg-surface-container-lowest p-3 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-label-md text-on-surface text-sm">{(s.FirstName ?? s.firstName ?? "") + " " + (s.LastName ?? s.lastName ?? "")}</p>
+                      <p className="font-body-sm text-on-surface-variant text-[12px]">{s.Email ?? s.email}</p>
+                      <p className="font-body-sm text-outline text-[11px] mt-1">Level {s.Level ?? s.level ?? "—"} · {s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? ""}</p>
+                    </div>
+                    <span className="shrink-0 px-2 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{s.MatricNo ?? s.matricNo}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={()=>handleView(s)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">visibility</span> View</button>
+                    <button onClick={()=>handleEdit(s)} className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border border-outline-variant bg-surface font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">edit</span> Edit</button>
+                    <button onClick={()=>handleDelete(s)} className="w-8 h-8 rounded-lg border border-error/30 text-error flex items-center justify-center"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-on-surface-variant border-b border-outline-variant">
+                  <th className="py-2">Matric No</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2">Dept</th>
+                  <th className="py-2">Level</th>
+                  <th className="py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container">
+                {items.map((s) => (
+                  <tr key={s.Id ?? s.id ?? s.MatricNo}>
+                    <td className="py-2 font-medium text-on-surface">{s.MatricNo ?? s.matricNo}</td>
+                    <td className="py-2 text-on-surface-variant">{(s.FirstName ?? s.firstName ?? "") + " " + (s.LastName ?? s.lastName ?? "")}</td>
+                    <td className="py-2 text-on-surface-variant">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? "—"}</td>
+                    <td className="py-2 text-on-surface-variant">{s.Level ?? s.level ?? "—"}</td>
+                    <td className="py-2 flex gap-1">
+                      <button onClick={()=>handleView(s)} className="px-2 py-1 rounded bg-primary text-on-primary text-[11px]">View</button>
+                      <button onClick={()=>handleEdit(s)} className="px-2 py-1 rounded border border-outline-variant bg-surface text-[11px]">Edit</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
         )}
       </Card>
       <Card className="p-5">
         <h3 className="font-headline-sm font-semibold text-primary mb-3">Register Student</h3>
         <form onSubmit={submit} className="space-y-3">
           <Field label="Department">
-            <SelectInput value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+            <SelectInput value={deptId} onChange={(e) => handleDeptChangeForCreate(e.target.value)}>
               <option value="">Select department</option>
               {depts.map((d) => (
-                <option key={d.Id} value={String(d.Id)}>{d.Name}</option>
+                <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
               ))}
             </SelectInput>
           </Field>
-          <Field label="Program">
-            <SelectInput value={programId} onChange={setProgramId}>
-              <option value="">Select program</option>
-              {programs.map((p) => (
-                <option key={p.Id} value={String(p.Id)}>{p.Name}</option>
+          <Field label="Programme">
+            <SelectInput value={programId} onChange={e=>setProgramId(e.target.value)}>
+              <option value="">Select programme</option>
+              {programs.map(p=>(
+                <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
               ))}
             </SelectInput>
           </Field>
@@ -1094,15 +1277,125 @@ function StudentsTab({ instId }) {
             <Field label="Level"><TextInput value={form.level} onChange={set("level")} placeholder="400" /></Field>
           </div>
           <Field label="Area of Interest"><TextInput value={form.areaOfInterest} onChange={set("areaOfInterest")} /></Field>
-          <Msg kind="err" text={msg} />
+          <Msg kind="err" text={msg && msg.includes("required") ? msg : ""} />
+          {msg && !msg.includes("required") && <Msg kind={msg.includes("registered")?"ok":"err"} text={msg} />}
           <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
             {busy ? "Saving…" : "Register Student"}
           </button>
         </form>
       </Card>
+
+      {/* View Student Modal — stylized */}
+      {viewing && (
+        <Card className="p-0 overflow-hidden xl:col-span-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
+            <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-elevated border border-outline-variant overflow-hidden max-h-[90vh] overflow-y-auto">
+              <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                      {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-headline-sm font-bold text-on-surface">{(viewing.FirstName ?? viewing.firstName ?? "") + " " + (viewing.LastName ?? viewing.lastName ?? "")}</h3>
+                      <p className="font-body-sm text-on-surface-variant text-[12px]">{viewing.Email ?? viewing.email}</p>
+                    </div>
+                  </div>
+                  <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{viewing.MatricNo ?? viewing.matricNo}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">Level {viewing.Level ?? viewing.level ?? "—"}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-[11px]">{viewing.AreaOfInterest ?? viewing.areaOfInterest ?? "—"}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">mail</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Email</span></div>
+                    <p className="font-body-sm text-on-surface mt-1 truncate">{viewing.Email ?? viewing.email ?? "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">call</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Phone</span></div>
+                    <p className="font-body-sm text-on-surface mt-1">{viewing.PhoneNo ?? viewing.phoneNo ?? "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">account_tree</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span></div>
+                    <p className="font-body-sm text-on-surface mt-1">{viewing.DepartmentName ?? viewing.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(viewing.DepartmentId??viewing.departmentId))?.Name ?? "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">menu_book</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Program</span></div>
+                    <p className="font-body-sm text-on-surface mt-1">{viewing.ProgramName ?? viewing.programName ?? (viewing.ProgramId ? `Prog ${viewing.ProgramId}` : "—")}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Level</span></div>
+                    <p className="font-body-sm text-on-surface mt-1">{viewing.Level ?? viewing.level ?? "—"}</p>
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
+                    <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">apartment</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Institution</span></div>
+                    <p className="font-body-sm text-on-surface mt-1 truncate">{viewing.InstitutionName ?? viewing.institutionName ?? ""}</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                  <button onClick={()=>{ const s=viewing; setViewing(null); handleEdit(s); }} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">edit</span> Edit</button>
+                  <button onClick={()=>setViewing(null)} className="flex-1 border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+      {/* Edit Student Modal */}
+      {editing && editForm && (
+        <Card className="p-0 overflow-hidden xl:col-span-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>{setEditing(null); setEditForm(null)}}></div>
+            <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-headline-sm font-bold text-primary">Edit Student — {editing.MatricNo ?? editing.matricNo}</h3>
+                <button onClick={()=>{setEditing(null); setEditForm(null)}} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+              </div>
+              <form onSubmit={handleUpdate} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Matric No"><TextInput value={editForm.matricNo} onChange={handleEditChange("matricNo")} /></Field>
+                  <Field label="Level"><TextInput value={editForm.level} onChange={handleEditChange("level")} /></Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="First Name"><TextInput value={editForm.firstName} onChange={handleEditChange("firstName")} /></Field>
+                  <Field label="Last Name"><TextInput value={editForm.lastName} onChange={handleEditChange("lastName")} /></Field>
+                </div>
+                <Field label="Email"><TextInput type="email" value={editForm.email} onChange={handleEditChange("email")} /></Field>
+                <Field label="Phone"><TextInput value={editForm.phoneNo} onChange={handleEditChange("phoneNo")} /></Field>
+                <Field label="Area of Interest"><TextInput value={editForm.areaOfInterest} onChange={handleEditChange("areaOfInterest")} /></Field>
+                <Field label="Department">
+                  <SelectInput value={editForm.departmentId} onChange={handleEditChange("departmentId")}>
+                    {depts.map(d=>(
+                      <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Field label="Program">
+                  <SelectInput value={editForm.programId} onChange={handleEditChange("programId")}>
+                    <option value="">None</option>
+                    {programs.map(p=>(
+                      <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Msg kind="err" text={error} />
+                <div className="flex gap-3">
+                  <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-2 rounded font-label-md">{busy ? "Saving…" : "Update Student"}</button>
+                  <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
+
 
 function InstitutionTab() {
   const [form, setForm] = useState({
