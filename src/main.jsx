@@ -1515,6 +1515,13 @@ function CollegePage({ go }) {
   }
   useEffect(()=>{ load() }, [])
 
+  function displayName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    const core = s.replace(/^(college|school|faculty)\s+of\s+/i, "").replace(/^(college|school|faculty)\s+/i, "").trim() || s;
+    return `${collegeTerm} of ${core}`;
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     setMsg(""); setErr("")
@@ -1574,7 +1581,7 @@ function CollegePage({ go }) {
                   <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">account_balance</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{c.Code ?? c.code ?? "—"}</span>
                 </div>
-                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{c.CollegeName ?? c.collegeName ?? c.Name ?? c.name ?? "—"}</h4>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</h4>
                 <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {c.Id ?? c.id} · {collegeTerm}</p>
                 <div className="flex gap-2 mt-4">
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
@@ -1603,7 +1610,7 @@ function CollegePage({ go }) {
               </label>
               <label className="block">
                 <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} Name</span>
-                <input value={name} onChange={e=>setName(e.target.value)} placeholder={`${collegeTerm} of Science`} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder={`${collegeTerm} of Medical Sciences`} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
               </label>
               {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
               <div className="flex gap-3 pt-2">
@@ -1777,50 +1784,85 @@ function ProgrammeCreate({ go }) {
   })()
   const [colleges, setColleges] = useState([])
   const [departments, setDepartments] = useState([])
+  const [programmes, setProgrammes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filterCollegeId, setFilterCollegeId] = useState("")
+  const [filterDeptId, setFilterDeptId] = useState("")
   const [collegeId, setCollegeId] = useState("")
   const [deptId, setDeptId] = useState("")
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
   const [err, setErr] = useState("")
   const [busy, setBusy] = useState(false)
+  const [showModal, setShowModal] = useState(false)
   const tok = decodeToken()
   const instId = tok?.ownerId || tok?.OwnerId || ""
-  useEffect(() => {
-    const loadColleges = async () => {
-      try {
-        const { onboardingApi } = await import("./onboarding")
-        let id = instId
-        if (!id) {
-          const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-          if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-        }
-        if (id) {
-          const cols = await onboardingApi.getColleges(String(id)).catch(()=>[])
-          setColleges(Array.isArray(cols) ? cols : [])
-          if (Array.isArray(cols) && cols.length) setCollegeId(String(cols[0].Id ?? cols[0].id))
-        }
-      } catch {}
+
+  const resolveInstId = async () => {
+    let id = instId
+    if (!id) {
+      const { onboardingApi } = await import("./onboarding")
+      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+      if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
     }
-    loadColleges()
-  }, [instId])
-  useEffect(() => {
-    const loadDepts = async () => {
-      try {
-        const { onboardingApi } = await import("./onboarding")
-        let id = instId
-        if (!id) {
-          const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-          if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-        }
-        if (id) {
-          const depts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
-          setDepartments(Array.isArray(depts) ? depts : [])
-          if (Array.isArray(depts) && depts.length) setDeptId(String(depts[0].Id ?? depts[0].id))
-        }
-      } catch {}
-    }
-    loadDepts()
-  }, [instId])
+    return id ? String(id) : ""
+  }
+
+  const loadMeta = async () => {
+    try {
+      const id = await resolveInstId()
+      if (!id) return
+      const { onboardingApi } = await import("./onboarding")
+      const [cols, depts] = await Promise.all([
+        onboardingApi.getColleges(String(id)).catch(()=>[]),
+        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+      ])
+      const colArr = Array.isArray(cols) ? cols : []
+      const deptArr = Array.isArray(depts) ? depts : []
+      setColleges(colArr)
+      setDepartments(deptArr)
+      if (colArr.length && !collegeId) setCollegeId(String(colArr[0].Id ?? colArr[0].id))
+      if (colArr.length && !filterCollegeId) setFilterCollegeId(String(colArr[0].Id ?? colArr[0].id))
+      if (deptArr.length && !deptId) setDeptId(String(deptArr[0].Id ?? deptArr[0].id))
+    } catch {}
+  }
+
+  const loadProgrammes = async () => {
+    setLoading(true); setErr("")
+    try {
+      const id = await resolveInstId()
+      if (!id) { setProgrammes([]); return }
+      const { onboardingApi } = await import("./onboarding")
+      // Filtered by department if selected, otherwise aggregate across all departments
+      if (filterDeptId) {
+        const data = await onboardingApi.getPrograms(String(id), String(filterDeptId)).catch(()=>[])
+        setProgrammes(Array.isArray(data) ? data : [])
+      } else if (departments.length) {
+        const results = await Promise.all(departments.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
+        setProgrammes(results.flat().filter(Boolean))
+      } else {
+        // No departments yet — try loading after meta
+        const depts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+        if (Array.isArray(depts) && depts.length) {
+          const all = await Promise.all(depts.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
+          setProgrammes(all.flat().filter(Boolean))
+        } else setProgrammes([])
+      }
+    } catch (e) {
+      setErr(e.message || "Could not load programmes")
+    } finally { setLoading(false) }
+  }
+
+  useEffect(()=>{ loadMeta() }, [instId])
+  useEffect(()=>{ if (departments.length || filterDeptId) loadProgrammes() }, [departments, filterDeptId])
+
+  function displayCollegeName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    const core = s.replace(/^(college|school|faculty)\s+of\s+/i, "").replace(/^(college|school|faculty)\s+/i, "").trim() || s;
+    return `${collegeTerm} of ${core}`;
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     setMsg(""); setErr("")
@@ -1829,56 +1871,137 @@ function ProgrammeCreate({ go }) {
     if (!name.trim()) { setErr("Programme Name is required."); return }
     setBusy(true)
     try {
+      const id = await resolveInstId()
+      if (!id) throw new Error("No institution found")
       const { onboardingApi } = await import("./onboarding")
-      let id = instId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
       await onboardingApi.createProgram(deptId, { name: name.trim(), institutionId: String(id), departmentId: deptId })
       setMsg(`Programme "${name.trim()}" created.`)
       setName("")
+      setShowModal(false)
+      loadProgrammes()
     } catch (e2) {
       setErr(e2.message || "Could not create programme")
     } finally {
       setBusy(false)
     }
   }
-  const cancel = () => { setName(""); setErr(""); setMsg(""); go('admin') }
+
+  const totalProgrammes = programmes.length
+
   return (
-    <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 max-w-2xl">
-      <h3 className="font-headline-sm font-bold text-primary mb-1">Create Programme</h3>
-      <p className="font-body-sm text-on-surface-variant mb-4">Cascading flow — select {collegeTerm.toLowerCase()} then department, then programme name</p>
-      <form onSubmit={submit} className="space-y-4">
-        <label className="block">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
-          <select value={collegeId} onChange={e=>setCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-            <option value="">Select {collegeTerm}</option>
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">menu_book</span> Programmes</h2>
+          <p className="font-body-sm text-on-surface-variant">Available programmes — {totalProgrammes} {totalProgrammes===1?"programme":"programmes"} {filterDeptId ? "in selected department" : "across all departments"} · {collegeTerm.toLowerCase()} & department filtered</p>
+        </div>
+        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+          <span className="material-symbols-outlined text-[18px]">add</span> Add Programme
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="glass-card rounded-xl border border-surface-container p-4 flex flex-col md:flex-row gap-3 md:items-end">
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} (filter)</span>
+          <select value={filterCollegeId} onChange={e=>setFilterCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">All {collegeTerm}s</option>
             {colleges.map(c=>(
-              <option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{c.Name ?? c.name}</option>
+              <option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{displayCollegeName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</option>
             ))}
           </select>
         </label>
-        <label className="block">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
-          <select value={deptId} onChange={e=>setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-            <option value="">Select Department</option>
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department (filter)</span>
+          <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">All Departments</option>
             {departments.map(d=>(
               <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
             ))}
           </select>
         </label>
-        <label className="block">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme Name</span>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. B.Sc. Computer Science" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
-        </label>
-        {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
-        {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
-        <div className="flex gap-3">
-          <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
-          <button type="button" onClick={cancel} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+        <button onClick={loadProgrammes} className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">refresh</span> Refresh
+        </button>
+      </div>
+
+      {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+
+      {/* Exquisite Grid — listing */}
+      {loading ? (
+        <p className="font-body-sm text-on-surface-variant">Loading programmes…</p>
+      ) : programmes.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2">menu_book</span>
+          <p className="font-headline-sm text-on-surface">No programmes yet</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">No programmes {filterDeptId ? "for this department" : "for this institution"} — click Add Programme to create e.g. B.Sc. Computer Science.</p>
         </div>
-      </form>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {programmes.map(p=>(
+            <div key={p.Id ?? p.id ?? p.Name} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
+              <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">school</span></div>
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">ID: {p.Id ?? p.id ?? "—"}</span>
+                </div>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-2">{p.Name ?? p.name ?? "—"}</h4>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1 line-clamp-1">{p.DepartmentName ?? p.departmentName ?? (()=>{ const d=departments.find(x=> String(x.Id ?? x.id)===String(p.DepartmentId ?? p.departmentId)); return d? (d.Name ?? d.name) : `Dept ${p.DepartmentId ?? p.departmentId ?? "—"}`})()}</p>
+                <p className="font-body-sm text-outline text-[11px] mt-1 truncate">{p.InstitutionName ?? p.institutionName ?? ""}</p>
+                <div className="flex gap-2 mt-4">
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal — Create */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowModal(false)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Add Programme</h3>
+              <button onClick={()=>setShowModal(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
+                <select value={collegeId} onChange={e=>setCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                  <option value="">Select {collegeTerm}</option>
+                  {colleges.map(c=>(
+                    <option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{displayCollegeName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                <select value={deptId} onChange={e=>setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                  <option value="">Select Department</option>
+                  {departments.map(d=>(
+                    <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme Name</span>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. B.Sc. Computer Science" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{busy ? "Creating…" : "Create"}</button>
+                <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1902,56 +2025,107 @@ function StaffManagementPage({ go }) {
   const [faculties, setFaculties] = useState([])
   const [departments, setDepartments] = useState([])
   const [programs, setPrograms] = useState([])
+  const [filterDeptId, setFilterDeptId] = useState("")
+  const [filterCategory, setFilterCategory] = useState("")
+  const [search, setSearch] = useState("")
   const [form, setForm] = useState({ staffId:"", title:"", firstName:"", lastName:"", email:"", phoneNo:"", highestQualification:"", staffCategory:1, specialization:"", facultyId:"", departmentId:"", programId:"" })
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
-  const jwtInstCode = tok?.institutionCode || tok?.InstitutionCode || ""
-  const load = async () => {
+
+  const resolveInstId = async () => {
+    let id = jwtInstId
+    if (!id) {
+      const { onboardingApi } = await import("./onboarding")
+      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+      if (Array.isArray(list) && list.length) id = String(list[0].Id ?? list[0].id)
+    }
+    return id ? String(id) : ""
+  }
+
+  const loadMeta = async () => {
+    try {
+      const id = await resolveInstId()
+      if (!id) return
+      const { onboardingApi } = await import("./onboarding")
+      const [cols, depts] = await Promise.all([
+        onboardingApi.getColleges(String(id)).catch(()=>[]),
+        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+      ])
+      const colArr = Array.isArray(cols) ? cols : []
+      const deptArr = Array.isArray(depts) ? depts : []
+      setFaculties(colArr)
+      setDepartments(deptArr)
+      if (colArr.length && !form.facultyId) setForm(f=>({...f, facultyId: String(colArr[0].Id ?? colArr[0].id)}))
+      if (deptArr.length && !form.departmentId) {
+        const firstDept = String(deptArr[0].Id ?? deptArr[0].id)
+        setForm(f=>({...f, departmentId: firstDept}))
+        try { const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[]); setPrograms(Array.isArray(progs) ? progs : []) } catch {}
+      }
+    } catch {}
+  }
+
+  const loadStaff = async () => {
     setLoading(true); setErr("")
     try {
+      const id = await resolveInstId()
+      if (!id) { setStaff([]); return }
       const { onboardingApi } = await import("./onboarding")
-      let id = jwtInstId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
-      if (id) {
-        const [cols, depts, st] = await Promise.all([
-          onboardingApi.getColleges(String(id)).catch(()=>[]),
-          onboardingApi.getDepartments(String(id)).catch(()=>[]),
-          onboardingApi.getAcademicStaff({ institutionId: String(id) }).catch(()=>[])
+      let all = []
+      if (filterDeptId) {
+        const [list, acad] = await Promise.all([
+          onboardingApi.getStaffList(String(filterDeptId), String(id)).catch(()=>[]),
+          onboardingApi.getAcademicStaff({ departmentId: String(filterDeptId), institutionId: String(id) }).catch(()=>[])
         ])
-        setFaculties(Array.isArray(cols) ? cols : [])
-        setDepartments(Array.isArray(depts) ? depts : [])
-        setStaff(Array.isArray(st) ? st : [])
-        if (Array.isArray(cols) && cols.length && !form.facultyId) setForm(f=>({...f, facultyId: String(cols[0].Id ?? cols[0].id)}))
-        if (Array.isArray(depts) && depts.length && !form.departmentId) {
-          const firstDept = String(depts[0].Id ?? depts[0].id)
-          setForm(f=>({...f, departmentId: firstDept}))
-          // load programs for first dept
-          try {
-            const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[])
-            setPrograms(Array.isArray(progs) ? progs : [])
-          } catch {}
-        }
+        all = [...(Array.isArray(list)?list:[]), ...(Array.isArray(acad)?acad:[])]
+      } else if (departments.length) {
+        const results = await Promise.all(departments.map(async d=>{
+          const did = String(d.Id ?? d.id)
+          const [list, acad] = await Promise.all([
+            onboardingApi.getStaffList(did, String(id)).catch(()=>[]),
+            onboardingApi.getAcademicStaff({ departmentId: did, institutionId: String(id) }).catch(()=>[])
+          ])
+          return [...(Array.isArray(list)?list:[]), ...(Array.isArray(acad)?acad:[])]
+        }))
+        all = results.flat()
+      } else {
+        const acad = await onboardingApi.getAcademicStaff({ institutionId: String(id) }).catch(()=>[])
+        const listAllDepts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+        if (Array.isArray(listAllDepts) && listAllDepts.length) {
+          const lists = await Promise.all(listAllDepts.map(d=> onboardingApi.getStaffList(String(d.Id ?? d.id), String(id)).catch(()=>[])))
+          all = [...(Array.isArray(acad)?acad:[]), ...lists.flat()]
+        } else all = Array.isArray(acad)? acad : []
       }
-    } catch (e) { setErr(e.message || "Could not load") } finally { setLoading(false) }
+      const map = new Map()
+      for (const s of all) {
+        const key = String(s.staffId ?? s.StaffId ?? s.Id ?? s.id ?? s.Email ?? s.email ?? JSON.stringify(s))
+        if (!map.has(key)) map.set(key, s)
+      }
+      let filtered = Array.from(map.values())
+      if (filterCategory) filtered = filtered.filter(s=> String(s.StaffCategory ?? s.staffCategory ?? "") === String(filterCategory))
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        filtered = filtered.filter(s=>{
+          const hay = [s.staffId, s.StaffId, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.Specialization, s.specialization, s.DepartmentName, s.departmentName].join(" ").toLowerCase()
+          return hay.includes(q)
+        })
+      }
+      setStaff(filtered)
+    } catch (e) { setErr(e.message || "Could not load staff"); setStaff([]) } finally { setLoading(false) }
   }
-  useEffect(()=>{ load() }, [])
+
+  useEffect(()=>{ loadMeta() }, [])
+  useEffect(()=>{ if (departments.length || filterDeptId) loadStaff() }, [departments, filterDeptId])
+  useEffect(()=>{ if (departments.length) loadStaff() }, [filterCategory, search])
+
   const onFacultyChange = async (val) => {
     setForm(f=>({...f, facultyId: val}))
-    // For now departments are per institution, not per faculty, so no filter. Could filter if needed.
   }
   const onDeptChange = async (val) => {
     setForm(f=>({...f, departmentId: val, programId:"" }))
     try {
-      const { onboardingApi } = await import("./onboarding")
-      let id = jwtInstId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
+      const id = await resolveInstId()
       if (id && val) {
+        const { onboardingApi } = await import("./onboarding")
         const progs = await onboardingApi.getPrograms(String(id), val).catch(()=>[])
         setPrograms(Array.isArray(progs) ? progs : [])
       } else setPrograms([])
@@ -1971,7 +2145,6 @@ function StaffManagementPage({ go }) {
         const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
         if (Array.isArray(list) && list.length) instId = String(list[0].Id ?? list[0].id)
       }
-      // ProgramId, departmentId, institutionId taken from jwt/selection as requested
       const payload = {
         StaffId: form.staffId.trim(),
         Title: form.title.trim(),
@@ -1990,22 +2163,57 @@ function StaffManagementPage({ go }) {
       setMsg("Staff created.")
       setForm(f=>({...f, staffId:"", title:"", firstName:"", lastName:"", email:"", phoneNo:"", highestQualification:"", specialization:"", programId:"" }))
       setShowModal(false)
-      load()
+      loadStaff()
     } catch (e2) {
       setErr(e2.message || "Could not create staff")
     }
+  }
+  function displayCollegeName(raw){
+    if(!raw) return "—";
+    const s=String(raw).trim();
+    const core=s.replace(/^(college|school|faculty)\s+of\s+/i,"").replace(/^(college|school|faculty)\s+/i,"").trim()||s;
+    return `${collegeTerm} of ${core}`;
   }
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">badge</span> Staff Management</h2>
-          <p className="font-body-sm text-on-surface-variant">Manage academic and non-academic staff — exquisite grid with actions</p>
+          <p className="font-body-sm text-on-surface-variant">Manage staff — {staff.length} {staff.length===1?"member":"members"} {filterDeptId ? "in selected department" : "across all departments"} · retrieved via stafflist + academic-staff</p>
         </div>
         <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add New Staff
         </button>
       </div>
+
+      <div className="glass-card rounded-xl border border-surface-container p-4 flex flex-col lg:flex-row gap-3 lg:items-end">
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+          <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">All Departments</option>
+            {departments.map(d=>(
+              <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Category</span>
+          <select value={filterCategory} onChange={e=>setFilterCategory(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            <option value="">All Categories</option>
+            <option value="1">Academic</option>
+            <option value="2">Technologist</option>
+            <option value="3">Admin</option>
+          </select>
+        </label>
+        <label className="block flex-1">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Search</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Staff ID / name / email" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+        </label>
+        <button onClick={loadStaff} className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">refresh</span> Refresh
+        </button>
+      </div>
+
       {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
       {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
       {loading ? (
@@ -2013,21 +2221,27 @@ function StaffManagementPage({ go }) {
       ) : staff.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
           <span className="material-symbols-outlined text-4xl text-outline mb-2">group</span>
-          <p className="font-headline-sm text-on-surface">No staff yet</p>
-          <p className="font-body-sm text-on-surface-variant mt-1">Click Add New Staff to create your first staff.</p>
+          <p className="font-headline-sm text-on-surface">No staff found</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">{filterDeptId || filterCategory || search ? "No staff match filters" : "Click Add New Staff to create your first staff."} — retrieved from both stafflist and academic-staff endpoints.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {staff.map(s=>(
-            <div key={s.Id ?? s.id ?? s.staffId} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
+            <div key={s.Id ?? s.id ?? s.staffId ?? s.StaffId} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
               <div className="h-1.5 w-full bg-gradient-to-r from-primary to-tertiary"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-secondary">badge</span></div>
-                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? "—"}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? s.staffID ?? "—"}</span>
                 </div>
-                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{(s.Title ?? s.title ?? "") + " " + (s.FirstName ?? s.firstName ?? "") + " " + (s.LastName ?? s.lastName ?? "")}</h4>
-                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{s.Email ?? s.email ?? "—"} · {s.Specialization ?? s.specialization ?? "—"}</p>
+                <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ") || "—"}</h4>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1 truncate">{s.Email ?? s.email ?? "—"}</p>
+                <p className="font-body-sm text-on-surface-variant text-[12px] truncate">{s.PhoneNo ?? s.phoneNo ?? ""} {s.PhoneNo && s.Specialization ? "·" : ""} {s.Specialization ?? s.specialization ?? ""}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary-container text-[11px] font-label-md">{s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? "—"}</span>
+                  <span className="px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] border border-outline-variant">{Number(s.StaffCategory ?? s.staffCategory)===1?"Academic":Number(s.StaffCategory ?? s.staffCategory)===2?"Technologist":Number(s.StaffCategory ?? s.staffCategory)===3?"Admin":"—"}</span>
+                </div>
+                <p className="font-body-sm text-outline text-[11px] mt-2 truncate">{s.DepartmentName ?? s.departmentName ?? (()=>{ const d=departments.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId)); return d? (d.Name??d.name): `Dept ${s.DepartmentId??"—"}`})()} {s.ProgramId ? `· Prog ${s.ProgramId}` : ""}</p>
                 <div className="flex gap-2 mt-4">
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
@@ -2053,7 +2267,7 @@ function StaffManagementPage({ go }) {
                   <select value={form.facultyId} onChange={e=>onFacultyChange(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
                     <option value="">Select {collegeTerm}</option>
                     {faculties.map(f=>(
-                      <option key={f.Id ?? f.id} value={String(f.Id ?? f.id)}>{f.Name ?? f.name}</option>
+                      <option key={f.Id ?? f.id} value={String(f.Id ?? f.id)}>{displayCollegeName(f.CollegeName ?? f.collegeName ?? f.Name ?? f.name)}</option>
                     ))}
                   </select>
                 </label>
@@ -2122,6 +2336,7 @@ function StaffManagementPage({ go }) {
     </div>
   )
 }
+
 
 function StudentManagementPage({ go }) {
   const [students, setStudents] = useState([])

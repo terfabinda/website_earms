@@ -351,21 +351,37 @@ function DepartmentsTab({ instId }) {
 function ProgramsTab({ instId }) {
   const [depts, setDepts] = useState([]);
   const [deptId, setDeptId] = useState("");
-  const { items, error, reload } = useList(
-    () => (deptId ? onboardingApi.getPrograms(instId, deptId) : Promise.resolve([])),
-    instId + "|" + deptId
-  );
+  const [filterDeptId, setFilterDeptId] = useState("");
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
 
-  useEffect(() => {
-    setDeptId(depts.length ? String(depts[0].Id) : "");
-  }, [depts]);
+  const loadPrograms = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      if (filterDeptId) {
+        const data = await onboardingApi.getPrograms(instId, filterDeptId);
+        setItems(Array.isArray(data) ? data : []);
+      } else if (depts.length) {
+        const results = await Promise.all(depts.map(d => onboardingApi.getPrograms(instId, String(d.Id ?? d.id)).catch(()=>[])));
+        setItems(results.flat().filter(Boolean));
+      } else {
+        setItems([]);
+      }
+    } catch (e) { setError(e.message || "Could not load programmes"); }
+    finally { setLoading(false); }
+  }, [instId, filterDeptId, depts]);
+
+  useEffect(() => { loadPrograms(); }, [loadPrograms]);
+
+  const reload = loadPrograms;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -394,29 +410,57 @@ function ProgramsTab({ instId }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <Card className="p-5 xl:col-span-2">
-        <h3 className="font-headline-sm font-semibold text-primary mb-3">Programs</h3>
-        <Msg kind="err" text={error} />
-        {!deptId ? (
-          <p className="font-body-sm text-on-surface-variant">Select a department to view programs.</p>
-        ) : items.length === 0 ? (
-          <p className="font-body-sm text-on-surface-variant">No programs for this department.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2">Id</th>
-                <th className="py-2">Name</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {items.map((p) => (
-                <tr key={p.Id}>
-                  <td className="py-2 font-medium text-on-surface">{p.Id}</td>
-                  <td className="py-2 text-on-surface-variant">{p.Name}</td>
-                </tr>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <h3 className="font-headline-sm font-semibold text-primary">Available Programmes — {items.length}</h3>
+          <div className="flex items-center gap-2">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Filter</span>
+            <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="">All Departments</option>
+              {depts.map(d=>(
+                <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </div>
+        </div>
+        <Msg kind="err" text={error} />
+        {loading ? (
+          <p className="font-body-sm text-on-surface-variant">Loading programmes…</p>
+        ) : items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No programmes {filterDeptId ? "for this department" : "for this institution"} — create one on the right.</p>
+        ) : (
+          <div className="space-y-3">
+            {/* Exquisite card grid for quick glance */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {items.map(p=>(
+                <div key={p.Id ?? p.id} className="rounded-xl border border-surface-container bg-surface-container-lowest p-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-label-md text-on-surface text-sm">{p.Name ?? p.name}</p>
+                    <p className="font-body-sm text-on-surface-variant text-[12px]">{p.DepartmentName ?? p.departmentName ?? depts.find(x=> String(x.Id ?? x.id)===String(p.DepartmentId ?? p.departmentId))?.Name ?? `Dept ${p.DepartmentId ?? "—"}`}</p>
+                  </div>
+                  <span className="shrink-0 px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">ID {p.Id ?? p.id}</span>
+                </div>
+              ))}
+            </div>
+            {/* Detailed table */}
+            <table className="w-full text-left text-sm mt-3">
+              <thead>
+                <tr className="text-on-surface-variant border-b border-outline-variant">
+                  <th className="py-2">Id</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2">Department</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container">
+                {items.map((p) => (
+                  <tr key={p.Id ?? p.id}>
+                    <td className="py-2 font-medium text-on-surface">{p.Id ?? p.id}</td>
+                    <td className="py-2 text-on-surface-variant">{p.Name ?? p.name}</td>
+                    <td className="py-2 text-on-surface-variant">{p.DepartmentName ?? p.departmentName ?? depts.find(x=> String(x.Id ?? x.id)===String(p.DepartmentId ?? p.departmentId))?.Name ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
       <Card className="p-5">
@@ -447,7 +491,9 @@ function ProgramsTab({ instId }) {
 
 function StaffTab({ instId }) {
   const [depts, setDepts] = useState([]);
-  const [deptId, setDeptId] = useState("");
+  const [filterDeptId, setFilterDeptId] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [search, setSearch] = useState("");
   const [programs, setPrograms] = useState([]);
   const [form, setForm] = useState({
     staffId: "",
@@ -461,28 +507,80 @@ function StaffTab({ instId }) {
     specialization: "",
     programId: "",
   });
-  const { items, error, reload } = useList(
-    () => onboardingApi.getAcademicStaff({ institutionId: instId, departmentId: deptId || undefined }),
-    instId + "|" + deptId
-  );
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deptId, setDeptId] = useState("");
 
   useEffect(() => {
     onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
   useEffect(() => {
     if (!depts.length) return;
-    const id = deptId || String(depts[0].Id);
-    setDeptId(id);
-    onboardingApi.getPrograms(instId, id).then((p) => setPrograms(p || [])).catch(() => setPrograms([]));
+    const id = deptId || String(depts[0].Id ?? depts[0].id);
+    if (!deptId) setDeptId(id);
+    if (id) onboardingApi.getPrograms(instId, id).then((p) => setPrograms(p || [])).catch(() => setPrograms([]));
   }, [depts, instId]);
+
+  const loadStaff = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      let all = []
+      if (filterDeptId) {
+        const [list, acad] = await Promise.all([
+          onboardingApi.getStaffList(String(filterDeptId), String(instId)).catch(()=>[]),
+          onboardingApi.getAcademicStaff({ institutionId: String(instId), departmentId: String(filterDeptId) }).catch(()=>[])
+        ])
+        all = [...(Array.isArray(list)?list:[]), ...(Array.isArray(acad)?acad:[])]
+      } else if (depts.length) {
+        const results = await Promise.all(depts.map(async d=>{
+          const did = String(d.Id ?? d.id)
+          const [list, acad] = await Promise.all([
+            onboardingApi.getStaffList(did, String(instId)).catch(()=>[]),
+            onboardingApi.getAcademicStaff({ departmentId: did, institutionId: String(instId) }).catch(()=>[])
+          ])
+          return [...(Array.isArray(list)?list:[]), ...(Array.isArray(acad)?acad:[])]
+        }))
+        all = results.flat()
+      } else {
+        const acad = await onboardingApi.getAcademicStaff({ institutionId: String(instId) }).catch(()=>[])
+        all = Array.isArray(acad)? acad : []
+      }
+      const map = new Map()
+      for (const s of all) {
+        const key = String(s.staffId ?? s.StaffId ?? s.Id ?? s.id ?? s.Email ?? s.email ?? JSON.stringify(s))
+        if (!map.has(key)) map.set(key, s)
+      }
+      let filtered = Array.from(map.values())
+      if (filterCategory) filtered = filtered.filter(s=> String(s.StaffCategory ?? s.staffCategory) === String(filterCategory))
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        filtered = filtered.filter(s=>{
+          const hay = [s.staffId, s.StaffId, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.Specialization, s.specialization].join(" ").toLowerCase()
+          return hay.includes(q)
+        })
+      }
+      setItems(filtered)
+    } catch (e) { setError(e.message || "Could not load staff") } finally { setLoading(false) }
+  }, [instId, filterDeptId, depts, filterCategory, search])
+
+  useEffect(()=>{ loadStaff() }, [loadStaff])
+
+  const reload = loadStaff
+
+  const onDeptChangeForCreate = async (val) => {
+    setDeptId(val)
+    if (val) onboardingApi.getPrograms(instId, val).then((p) => setPrograms(p || [])).catch(() => setPrograms([]))
+    else setPrograms([])
+  }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
-    setMsg("");
+    setMsg(""); setError("");
     const required = ["staffId", "firstName", "lastName", "email"];
     if (required.some((k) => !form[k].trim()) || !deptId) {
       setMsg("Staff ID, first name, last name, email and a department are required.");
@@ -518,43 +616,93 @@ function StaffTab({ instId }) {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <Card className="p-5 xl:col-span-2">
-        <h3 className="font-headline-sm font-semibold text-primary mb-3">Academic Staff</h3>
-        <Msg kind="err" text={error} />
-        {items.length === 0 ? (
-          <p className="font-body-sm text-on-surface-variant">No staff found.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2">Staff ID</th>
-                <th className="py-2">Name</th>
-                <th className="py-2">Specialization</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container">
-              {items.map((s) => (
-                <tr key={s.Id}>
-                  <td className="py-2 font-medium text-on-surface">{s.staffId}</td>
-                  <td className="py-2 text-on-surface-variant">
-                    {s.Title} {s.FirstName} {s.LastName}
-                  </td>
-                  <td className="py-2 text-on-surface-variant">{s.Specialization || "—"}</td>
-                </tr>
+    <div className="space-y-6">
+      <Card className="p-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+          <h3 className="font-headline-sm font-semibold text-primary">Academic Staff — {items.length} {items.length===1?"member":"members"}</h3>
+          <button onClick={reload} className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface font-label-md text-sm hover:bg-surface-variant flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">refresh</span> Refresh</button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3 mb-3">
+          <label className="block flex-1">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department filter</span>
+            <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="">All Departments</option>
+              {depts.map(d=>(
+                <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
+          <label className="block">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Category</span>
+            <select value={filterCategory} onChange={e=>setFilterCategory(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="">All</option>
+              <option value="1">Academic</option>
+              <option value="2">Technologist</option>
+              <option value="3">Admin</option>
+            </select>
+          </label>
+          <label className="block flex-1">
+            <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Search</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Staff ID / name / email" className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+          </label>
+        </div>
+        <Msg kind="err" text={error} />
+        {msg && !error && <Msg kind="ok" text={msg} />}
+        {loading ? (
+          <p className="font-body-sm text-on-surface-variant">Loading staff…</p>
+        ) : items.length === 0 ? (
+          <p className="font-body-sm text-on-surface-variant">No staff found {filterDeptId || filterCategory || search ? "for filters" : "for this institution"} — retrieved from stafflist + academic-staff.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {items.map(s=>(
+                <div key={s.Id ?? s.id ?? s.staffId ?? s.StaffId} className="rounded-xl border border-surface-container bg-surface-container-lowest p-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-label-md text-on-surface text-sm">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ")}</p>
+                    <p className="font-body-sm text-on-surface-variant text-[12px]">{s.Email ?? s.email} {s.Specialization ? `· ${s.Specialization}` : s.specialization ? `· ${s.specialization}` : ""}</p>
+                    <p className="font-body-sm text-outline text-[11px] mt-1">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? ""} {s.HighestQualification ?? s.highestQualification ? `· ${s.HighestQualification ?? s.highestQualification}` : ""}</p>
+                  </div>
+                  <span className="shrink-0 px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? "—"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-on-surface-variant border-b border-outline-variant">
+                  <th className="py-2">Staff ID</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2">Email</th>
+                  <th className="py-2">Dept</th>
+                  <th className="py-2">Specialization</th>
+                  <th className="py-2">Category</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container">
+                {items.map((s) => (
+                  <tr key={s.Id ?? s.id ?? s.staffId ?? s.StaffId}>
+                    <td className="py-2 font-medium text-on-surface">{s.staffId ?? s.StaffId ?? "—"}</td>
+                    <td className="py-2 text-on-surface-variant">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ")}</td>
+                    <td className="py-2 text-on-surface-variant">{s.Email ?? s.email ?? "—"}</td>
+                    <td className="py-2 text-on-surface-variant">{s.DepartmentName ?? s.departmentName ?? depts.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId))?.Name ?? "—"}</td>
+                    <td className="py-2 text-on-surface-variant">{s.Specialization ?? s.specialization ?? "—"}</td>
+                    <td className="py-2 text-on-surface-variant">{Number(s.StaffCategory ?? s.staffCategory)===1?"Academic":Number(s.StaffCategory ?? s.staffCategory)===2?"Technologist":Number(s.StaffCategory ?? s.staffCategory)===3?"Admin":"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
         )}
       </Card>
       <Card className="p-5">
         <h3 className="font-headline-sm font-semibold text-primary mb-3">New Staff</h3>
         <form onSubmit={submit} className="space-y-3">
           <Field label="Department">
-            <SelectInput value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+            <SelectInput value={deptId} onChange={(e) => onDeptChangeForCreate(e.target.value)}>
               <option value="">Select department</option>
               {depts.map((d) => (
-                <option key={d.Id} value={String(d.Id)}>{d.Name}</option>
+                <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
               ))}
             </SelectInput>
           </Field>
@@ -583,11 +731,12 @@ function StaffTab({ instId }) {
             <SelectInput value={form.programId} onChange={set("programId")}>
               <option value="">None</option>
               {programs.map((p) => (
-                <option key={p.Id} value={String(p.Id)}>{p.Name}</option>
+                <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
               ))}
             </SelectInput>
           </Field>
-          <Msg kind="err" text={msg} />
+          <Msg kind="err" text={msg && msg.includes("required") ? msg : ""} />
+          {msg && !msg.includes("required") && <Msg kind={msg.includes("created")?"ok":"err"} text={msg} />}
           <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
             {busy ? "Saving…" : "Create Staff"}
           </button>
@@ -596,6 +745,7 @@ function StaffTab({ instId }) {
     </div>
   );
 }
+
 
 function StudentsTab({ instId }) {
   const [depts, setDepts] = useState([]);
@@ -848,6 +998,13 @@ function CollegesTab({ instId }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
+  function displayName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    const core = s.replace(/^(college|school|faculty)\s+of\s+/i, "").replace(/^(college|school|faculty)\s+/i, "").trim() || s;
+    return `${collegeTerm} of ${core}`;
+  }
+
   const submit = async (e) => {
     e.preventDefault();
     setMsg("");
@@ -894,7 +1051,7 @@ function CollegesTab({ instId }) {
               {items.map((c) => (
                 <tr key={c.Id ?? c.id}>
                   <td className="py-2 font-medium text-on-surface">{c.Id ?? c.id}</td>
-                  <td className="py-2 text-on-surface-variant">{c.CollegeName ?? c.collegeName ?? c.Name ?? c.name ?? "—"}</td>
+                  <td className="py-2 text-on-surface-variant">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</td>
                   <td className="py-2 text-on-surface-variant">{c.Code ?? c.code ?? "—"}</td>
                 </tr>
               ))}
@@ -905,7 +1062,7 @@ function CollegesTab({ instId }) {
       <Card className="p-5">
         <h3 className="font-headline-sm font-semibold text-primary mb-3">New {collegeTerm}</h3>
         <form onSubmit={submit} className="space-y-3">
-          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`${collegeTerm} of Science`} /></Field>
+          <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={`${collegeTerm} of Medical Sciences`} /></Field>
           <Field label="Code"><TextInput value={code} onChange={(e) => setCode(e.target.value)} placeholder="COS" /></Field>
           <Msg kind="err" text={msg} />
           <button className="w-full bg-primary text-on-primary py-2 rounded font-label-md" disabled={busy}>
@@ -1114,7 +1271,7 @@ function LookupTab({ instId }) {
           const s = await onboardingApi.getStaff(query.trim(), instId);
           setResult(s);
         } else if (deptId) {
-          const list = await onboardingApi.getStaffList(deptId);
+          const list = await onboardingApi.getStaffList(deptId, instId);
           setRecords(list || []);
         }
       }

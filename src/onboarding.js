@@ -165,8 +165,8 @@ export const onboardingApi = {
       "unassigned-students" + qs({ programId, departmentId, institutionId })
     );
   },
-  async getStaffList(departmentId) {
-    return obFetch("departments/" + encodeURIComponent(departmentId) + "/stafflist");
+  async getStaffList(departmentId, institutionId) {
+    return obFetch("departments/" + encodeURIComponent(departmentId) + "/stafflist" + qs({ institutionId }));
   },
   async getStaff(staffId, institutionId) {
     return obFetch("staff/" + encodeURIComponent(staffId) + "/" + encodeURIComponent(institutionId));
