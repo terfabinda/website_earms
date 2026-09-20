@@ -2819,7 +2819,7 @@ function StudentManagementPage({ go }) {
       {/* Institution Admin — Edit Student Profile flow (quick search) */}
       <div className="glass-card rounded-xl border border-surface-container p-4">
         <h4 className="font-label-md text-primary text-[12px] uppercase tracking-wide">Edit Student Profile</h4>
-        <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">Institution admin flow — enter Matric No to load and edit profile (uses <span className="font-label-md">GET /get_student/{matricNo}</span> + <span className="font-label-md">PUT /update_student/{matricNo}</span>)</p>
+        <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">Institution admin flow — enter Matric No to load and edit profile (uses <span className="font-label-md">GET /get_student/{"{matricNo}"}</span> + <span className="font-label-md">PUT /update_student/{"{matricNo}"}</span>)</p>
         <div className="flex flex-col sm:flex-row gap-2 mt-3">
           <input value={editSearch} onChange={e=>setEditSearch(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleQuickEditSearch()} placeholder="e.g. UGK/CMS/24/44210" className="flex-1 px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
           <button onClick={handleQuickEditSearch} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim flex items-center gap-1.5"><span className="material-symbols-outlined text-[18px]">edit</span> Load for Edit</button>
