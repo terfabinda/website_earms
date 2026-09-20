@@ -2553,6 +2553,7 @@ function StudentManagementPage({ go }) {
   const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", phoneNo:"", departmentId:"", programId:"", level:"", status:"Active", facultyId:"" })
   const [filterDeptId, setFilterDeptId] = useState("")
   const [search, setSearch] = useState("")
+  const [editSearch, setEditSearch] = useState("")
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
   const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
@@ -2777,6 +2778,33 @@ function StudentManagementPage({ go }) {
     } catch (e2) { setErr(e2.message || "Could not update student") }
   }
   const handleDelete = (s)=> setErr("Delete not available — no DELETE endpoint per doc.")
+  const handleQuickEditSearch = async () => {
+    const q = editSearch.trim()
+    if (!q) { setErr("Enter Matric No to edit"); return }
+    setErr(""); setMsg("")
+    const foundInList = students.find(s=> String(s.MatricNo ?? s.matricNo).toLowerCase() === q.toLowerCase())
+    if (foundInList) { handleEdit(foundInList); setEditSearch(""); return }
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      let s = null
+      try { s = await onboardingApi.getStudent(q) } catch {}
+      if (!s) try { s = await onboardingApi.getStudentIam(q) } catch {}
+      if (s && (s.DepartmentId || s.departmentId) && !(s.FirstName ?? s.firstName)) {
+        const depId = s.DepartmentId ?? s.departmentId
+        const inst = s.InstitutionId ?? s.institutionId ?? jwtInstId
+        if (depId && inst) {
+          try {
+            const list = await onboardingApi.getDepartmentStudents(String(depId), String(inst))
+            const arr = Array.isArray(list)? list : []
+            const f = arr.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === q.toLowerCase())
+            if (f) s = f
+          } catch {}
+        }
+      }
+      if (s && (s.MatricNo ?? s.matricNo)) { handleEdit(s); setEditSearch("") }
+      else setErr(`No student found for ${q} (tried get_student/${q} and get_student_iam)`)
+    } catch (e) { setErr(e.message || "Could not find student") }
+  }
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -2787,6 +2815,17 @@ function StudentManagementPage({ go }) {
         <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add Student
         </button>
+      </div>
+      {/* Institution Admin — Edit Student Profile flow (quick search) */}
+      <div className="glass-card rounded-xl border border-surface-container p-4">
+        <h4 className="font-label-md text-primary text-[12px] uppercase tracking-wide">Edit Student Profile</h4>
+        <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">Institution admin flow — enter Matric No to load and edit profile (uses <span className="font-label-md">GET /get_student/{matricNo}</span> + <span className="font-label-md">PUT /update_student/{matricNo}</span>)</p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-3">
+          <input value={editSearch} onChange={e=>setEditSearch(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleQuickEditSearch()} placeholder="e.g. UGK/CMS/24/44210" className="flex-1 px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+          <button onClick={handleQuickEditSearch} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim flex items-center gap-1.5"><span className="material-symbols-outlined text-[18px]">edit</span> Load for Edit</button>
+          <button onClick={()=>{setEditSearch(""); setErr(""); setMsg("")}} className="px-4 py-2.5 border border-outline-variant bg-surface rounded-lg font-label-md hover:bg-surface-variant">Clear</button>
+        </div>
+        <p className="font-body-sm text-[11px] text-outline mt-2">Also available via card <span className="font-label-md">View → Edit</span> on each student. Handles slashes via <span className="font-label-md">get_student_iam?matricNo=</span> fallback.</p>
       </div>
       <div className="glass-card rounded-xl border border-surface-container p-4 flex flex-col lg:flex-row gap-3 lg:items-end">
         <label className="block flex-1">
