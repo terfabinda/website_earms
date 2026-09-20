@@ -2550,7 +2550,7 @@ function StudentManagementPage({ go }) {
   const [faculties, setFaculties] = useState([])
   const [departments, setDepartments] = useState([])
   const [programs, setPrograms] = useState([])
-  const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", departmentId:"", programId:"", level:"", status:"Active", facultyId:"" })
+  const [form, setForm] = useState({ matricNo:"", firstName:"", lastName:"", email:"", phoneNo:"", departmentId:"", programId:"", level:"", status:"Active", facultyId:"" })
   const [filterDeptId, setFilterDeptId] = useState("")
   const [search, setSearch] = useState("")
   const tok = decodeToken()
@@ -2707,7 +2707,7 @@ function StudentManagementPage({ go }) {
         FirstName: form.firstName.trim(),
         LastName: form.lastName.trim(),
         Email: form.email.trim(),
-        PhoneNo: "",
+        PhoneNo: form.phoneNo.trim(),
         ProgramId: form.programId ? Number(form.programId) : 0,
         StudentCategory: 2,
         AreaOfInterest: "",
@@ -2716,7 +2716,7 @@ function StudentManagementPage({ go }) {
         Level: form.level.trim(),
       })
       setMsg(`Student ${form.matricNo.trim()} created.`)
-      setForm(f=>({...f, matricNo:"", firstName:"", lastName:"", email:"", level:"", programId:"", status:"Active" }))
+      setForm(f=>({...f, matricNo:"", firstName:"", lastName:"", email:"", phoneNo:"", level:"", programId:"", status:"Active" }))
       setShowModal(false)
       loadStudents()
     } catch (e2) {
@@ -2900,6 +2900,7 @@ function StudentManagementPage({ go }) {
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Last Name</span><input value={form.lastName} onChange={set("lastName")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
               </div>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Email</span><input type="email" value={form.email} onChange={set("email")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Phone</span><input value={form.phoneNo} onChange={set("phoneNo")} placeholder="080..." className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution</span><input value={jwtInstName} readOnly className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container text-sm" /></label>
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Level</span><input value={form.level} onChange={set("level")} placeholder="e.g. 400" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
@@ -3560,6 +3561,49 @@ function StudentDashboard({ go }) {
               const deptName = s.DepartmentName ?? s.departmentName ?? ""
               const level = s.Level ?? s.level ?? ""
               setDeptProg({ deptId, progName, deptName, level })
+              // Fetch missing Programme/Department names if not in StudentDto (e.g. UGK student had Programme —)
+              const progId = s.ProgramId ?? s.programId
+              if ((!progName || progName==="—" || !progName.trim()) && progId) {
+                try {
+                  const prog = await (await import("./onboarding")).onboardingApi.getProgram(String(progId)).catch(()=>null)
+                  const pn = prog?.Name ?? prog?.name
+                  if (pn) {
+                    setDeptProg(prev=>({...prev, progName: pn}))
+                    setStudent(prev=> prev ? {...prev, ProgramName: pn, programName: pn} : prev)
+                  }
+                } catch {}
+              }
+              // Also try resolving ProgramName via department's programme list if ProgramId missing but we have deptId
+              if ((!progName || progName==="—" || !String(progName).trim()) && deptId && !progId) {
+                try {
+                  const { onboardingApi: obProg } = await import("./onboarding")
+                  const progs = await obProg.getPrograms(String(instId), String(deptId)).catch(()=>[])
+                  const arr = Array.isArray(progs)? progs : []
+                  if (arr.length && arr[0]?.Name) {
+                    const pn2 = arr[0].Name ?? arr[0].name
+                    setDeptProg(prev=>({...prev, progName: pn2}))
+                  }
+                } catch {}
+              }
+              if ((!deptName || deptName==="—" || !deptName.trim()) && deptId) {
+                try {
+                  const { onboardingApi: obDept } = await import("./onboarding")
+                  let dept = null
+                  try { dept = await obDept.getMiniDepartment(String(deptId)) } catch {}
+                  if (!dept || !(dept.Name ?? dept.name)) {
+                    try {
+                      const list = await obDept.getDepartments(String(instId)).catch(()=>[])
+                      const arr = Array.isArray(list)? list : []
+                      dept = arr.find(d=> String(d.Id??d.id)===String(deptId))
+                    } catch {}
+                  }
+                  const dn = dept?.Name ?? dept?.name
+                  if (dn) {
+                    setDeptProg(prev=>({...prev, deptName: dn}))
+                    setStudent(prev=> prev ? {...prev, DepartmentName: dn, departmentName: dn} : prev)
+                  }
+                } catch {}
+              }
               // Optionally fetch full department info
               if (deptId && instId) {
                 try {
