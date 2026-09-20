@@ -50,8 +50,11 @@ async function doRefresh() {
   }
 
   const data = await res.json();
-  tokenService.setTokens(data.accessToken, data.refreshToken);
-  return data.accessToken;
+  const at = data.accessToken ?? data.data?.accessToken ?? data.Data?.accessToken
+  const rt = data.refreshToken ?? data.data?.refreshToken ?? data.Data?.refreshToken
+  if (!at) throw new Error("Refresh succeeded but no access token returned");
+  if (rt) tokenService.setTokens(at, rt); else tokenService.setTokens(at, tokenService.getRefreshToken())
+  return at;
 }
 
 function refreshAccessToken() {
@@ -117,8 +120,11 @@ export const authApi = {
       throw new Error((data && data.message) || "Invalid credentials");
     }
     const data = await res.json();
-    tokenService.setTokens(data.accessToken, data.refreshToken);
-    return data;
+    const at = data.accessToken ?? data.data?.accessToken ?? data.Data?.accessToken
+    const rt = data.refreshToken ?? data.data?.refreshToken ?? data.Data?.refreshToken
+    if (!at) throw new Error("Login succeeded but no access token returned");
+    tokenService.setTokens(at, rt);
+    return { accessToken: at, refreshToken: rt, raw: data };
   },
 
   async logout() {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { authApi, userApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
@@ -7,6 +7,8 @@ import { IamAdmin } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { billingApi } from './billing'
+import { projectApi, ProjectStatusLabel, ChapterStatusLabel, TopicStatusLabel, VersionStatusLabel } from './project'
+import { TipTapEditor } from './tiptap-editor.jsx'
 
 // ----- Routing -----
 const pages = {
@@ -3084,7 +3086,7 @@ function SubscriptionPage() {
 
   useEffect(() => {
     const tok = decodeToken()
-    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
     if (!username) { setLoading(false); return }
 
     Promise.all([
@@ -3111,7 +3113,7 @@ function SubscriptionPage() {
     setError('')
     setMsg('')
     const tok = decodeToken()
-    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
     const ownerName = tok?.name || tok?.unique_name || username
     const ownerEmail = tok?.email || ''
     if (!selectedPlan || !provider || !username) {
@@ -3191,7 +3193,7 @@ function PaymentHistoryPage() {
 
   useEffect(() => {
     const tok = decodeToken()
-    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
     if (!username) { setLoading(false); return }
 
     billingApi.getUserSubscription(username)
@@ -3268,7 +3270,7 @@ function InstitutionHome({ go }) {
 
   useEffect(() => {
     const tok = decodeToken()
-    const username = tok?.unique_name || tok?.sub || tok?.email || ''
+    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
     if (!username) return
     billingApi.getUserSubscription(username)
       .then((res) => {
@@ -3450,7 +3452,6 @@ function StudentDashboard({ go }) {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
   const tok = decodeToken()
-  // Robust matricNo extraction from JWT claims (covers various claim names)
   const matricNo = (() => {
     if (!tok) return ""
     const candidates = [
@@ -3464,13 +3465,61 @@ function StudentDashboard({ go }) {
       tok["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"],
       tok.name, tok.Name,
     ]
-    for (const c of candidates) if (c && typeof c === "string" && c.includes("/") ) return c // likely matric like CSC/2024/001
+    for (const c of candidates) if (c && typeof c === "string" && c.includes("/") ) return c
     for (const c of candidates) if (c && typeof c === "string" && c.trim()) return c.trim()
     return ""
   })()
+  const staffNoFromToken = tok?.staffNo ?? tok?.StaffNo ?? tok?.staff_no ?? ""
   const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? tok?.OwnerId ?? ""
+  const deptIdFromToken = tok?.departmentId ?? tok?.DepartmentId ?? ""
   const displayName = student ? `${student.FirstName ?? student.firstName ?? ""} ${student.LastName ?? student.lastName ?? ""}`.trim() : (tok?.name ?? tok?.unique_name ?? tok?.email ?? "Student")
   const firstName = displayName.split(" ")[0] || "Student"
+
+  // Project Flow state
+  const [activeTab, setActiveTab] = useState("overview") // overview | topics | chapters | workspace | reviews
+  const [project, setProject] = useState(null)
+  const [dash, setDash] = useState(null)
+  const [dashLoading, setDashLoading] = useState(false)
+  const [dashErr, setDashErr] = useState("")
+  const [topics, setTopics] = useState([])
+  const [topicsLoading, setTopicsLoading] = useState(false)
+  const [newTopic, setNewTopic] = useState("")
+  const [topicBusy, setTopicBusy] = useState(false)
+  const [topicMsg, setTopicMsg] = useState("")
+  const [topicErr2, setTopicErr2] = useState("")
+  const [chapters, setChapters] = useState([])
+  const [chaptersLoading, setChaptersLoading] = useState(false)
+  const [currentReview, setCurrentReview] = useState(null)
+  const [templates, setTemplates] = useState([])
+  // chapter creation
+  const [createChapNo, setCreateChapNo] = useState(1)
+  const [createNote, setCreateNote] = useState("")
+  const [createFile, setCreateFile] = useState(null)
+  const [createBusy, setCreateBusy] = useState(false)
+  const [createMsg, setCreateMsg] = useState("")
+  const [createErr, setCreateErr] = useState("")
+  // workspace
+  const [workspaceChap, setWorkspaceChap] = useState(1)
+  const [workspaceSaving, setWorkspaceSaving] = useState(false)
+  const [workspaceMsg, setWorkspaceMsg] = useState("")
+  const [workspaceErr, setWorkspaceErr] = useState("")
+  const [versionNote, setVersionNote] = useState("")
+
+  const projectId = project?.id ?? project?.Id ?? project?.projectId ?? dash?.projectId ?? null
+  const collaboratorList = (() => {
+    const arr = []
+    if (dash?.supervisorStaffNo) {
+      const list = Array.isArray(dash.supervisorStaffNo) ? dash.supervisorStaffNo : [dash.supervisorStaffNo]
+      list.forEach((s, i) => arr.push({ name: String(s), staffNo: String(s), initials: String(s).slice(0,2).toUpperCase(), color: i===0 ? 'bg-primary-container text-primary' : 'bg-secondary-fixed text-secondary' }))
+    }
+    if (project?.supervisors && Array.isArray(project.supervisors)) {
+      project.supervisors.forEach(s => {
+        const sn = s.staffNo ?? s.StaffNo ?? s.staff_no ?? ""
+        if (sn && !arr.find(a=>a.staffNo===String(sn))) arr.push({ name: String(sn), staffNo: String(sn), initials: String(sn).slice(0,2).toUpperCase(), color: 'bg-tertiary-fixed' })
+      })
+    }
+    return arr
+  })()
 
   useEffect(()=>{
     let cancelled = false
@@ -3480,16 +3529,12 @@ function StudentDashboard({ go }) {
       try {
         const { onboardingApi } = await import("./onboarding")
         let s = null
-        // 1) Prioritize get_student_iam for matric with slashes (query param, no auth) — more reliable than path param
         if (matricNo) {
-          // Try IAM first (no auth, query)
           try {
             const iam = await onboardingApi.getStudentIam(matricNo)
             if (iam) {
-              // IAMDto: Id, ProgramId, DepartmentId, DepartmentName, InstitutionId — may not have MatricNo
               const hasMatric = !!(iam.MatricNo ?? iam.matricNo)
               if (hasMatric) s = iam
-              // If IAM has dept/inst, try to find full StudentDto via department list
               const depId = iam.DepartmentId ?? iam.departmentId
               const instFromIam = iam.InstitutionId ?? iam.institutionId ?? instId
               if (depId && instFromIam) {
@@ -3499,7 +3544,6 @@ function StudentDashboard({ go }) {
                   const found = arr.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
                   if (found) s = found
                   else if (!s && arr.length) {
-                    // try unassigned for same dept
                     try {
                       const unass = await onboardingApi.getUnassignedStudents({ departmentId: String(depId), institutionId: String(instFromIam) }).catch(()=>[])
                       const arr2 = Array.isArray(unass)? unass : []
@@ -3509,21 +3553,17 @@ function StudentDashboard({ go }) {
                   }
                 } catch {}
               }
-              // Fallback to iam as pseudo-student if no full found
               if (!s) s = iam
             }
           } catch {}
-          // Try direct get_student (path param, JWT institution) — try both encoded (via onboardingApi) and raw splitted
           if (!s || (s && !(s.FirstName ?? s.firstName) && !(s.MatricNo ?? s.matricNo))) {
             const isProbablyIam = s && (s.DepartmentId || s.departmentId) && !(s.FirstName ?? s.firstName)
-            if (isProbablyIam) s = null // discard IAM-only, try full
+            if (isProbablyIam) s = null
             try { const direct = await onboardingApi.getStudent(matricNo); if (direct && (direct.FirstName ?? direct.firstName ?? direct.MatricNo ?? direct.matricNo)) s = direct } catch {}
-            // Try raw matric without encode via direct apiFetch (handles slashes as path)
             if (!s || !(s.FirstName ?? s.firstName)) {
               try {
                 const { apiFetch } = await import("./iam")
                 const ONB_BASE = ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/")
-                // raw slashes as path segments — use matricNo directly (no encode)
                 const res = await apiFetch("api/onboarding/get_student/" + matricNo, {}, false, ONB_BASE)
                 if (res.ok) {
                   const body = await res.json().catch(()=>null)
@@ -3532,13 +3572,12 @@ function StudentDashboard({ go }) {
                 }
               } catch {}
             }
-            // Try get_student_department then department list as last resort
             if (!s || !(s.FirstName ?? s.firstName)) {
               try {
                 const deptInfo = await onboardingApi.getStudentDepartment(String(matricNo), String(instId || "")).catch(()=>null)
                 const depId = deptInfo?.DepartmentId ?? deptInfo?.departmentId
                 if (depId) {
-                  const instUse = instId || (depId ? String(depId) : "")
+                  const instUse = instId || String(depId)
                   try {
                     const list2 = await onboardingApi.getDepartmentStudents(String(depId), String(instUse || instId))
                     const arr2 = Array.isArray(list2)? list2 : []
@@ -3550,17 +3589,14 @@ function StudentDashboard({ go }) {
             }
           }
         }
-        // 2) Fallback: try by email from token
         if (!s && tok?.email) {
           try { const byEmail = await onboardingApi.getStudent(tok.email); if (byEmail && (byEmail.MatricNo ?? byEmail.matricNo)) s = byEmail } catch {}
           if (!s) {
             try { const iamE = await onboardingApi.getStudentIam(tok.email); if (iamE && (iamE.MatricNo ?? iamE.matricNo)) s = iamE } catch {}
           }
         }
-        // 3) Fallback: list by institution and find by matric/email (try both institution-wide and per-dept)
         if (!s && instId) {
           try {
-            // Try institution-wide first (JWT)
             let list = null
             try { list = await onboardingApi.getStudentsByInstitution(String(instId)) } catch { list = null }
             if (!list || (Array.isArray(list) && list.length===0)) {
@@ -3570,7 +3606,6 @@ function StudentDashboard({ go }) {
             const found = arr.find(x=> String(x.MatricNo ?? x.matricNo ?? x.Email ?? x.email).toLowerCase() === String(matricNo).toLowerCase() || (tok?.email && String(x.Email ?? x.email).toLowerCase() === String(tok.email).toLowerCase()))
             if (found) s = found
             else if (arr.length === 1 && !s) s = arr[0]
-            // If still not found and we have departments, try per-dept aggregation
             if (!s && arr.length===0) {
               try {
                 const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
@@ -3593,14 +3628,12 @@ function StudentDashboard({ go }) {
         if (!cancelled) {
           if (s) {
             setStudent(s)
-            // Fetch department/program details if available
             try {
               const deptId = s.DepartmentId ?? s.departmentId ?? s.DepartmentId
               const progName = s.ProgramName ?? s.programName ?? ""
               const deptName = s.DepartmentName ?? s.departmentName ?? ""
               const level = s.Level ?? s.level ?? ""
               setDeptProg({ deptId, progName, deptName, level })
-              // Fetch missing Programme/Department names if not in StudentDto (e.g. UGK student had Programme —)
               const progId = s.ProgramId ?? s.programId
               if ((!progName || progName==="—" || !progName.trim()) && progId) {
                 try {
@@ -3612,7 +3645,6 @@ function StudentDashboard({ go }) {
                   }
                 } catch {}
               }
-              // Also try resolving ProgramName via department's programme list if ProgramId missing but we have deptId
               if ((!progName || progName==="—" || !String(progName).trim()) && deptId && !progId) {
                 try {
                   const { onboardingApi: obProg } = await import("./onboarding")
@@ -3643,7 +3675,6 @@ function StudentDashboard({ go }) {
                   }
                 } catch {}
               }
-              // Optionally fetch full department info
               if (deptId && instId) {
                 try {
                   const dInfo = await (await import("./onboarding")).onboardingApi.getStudentDepartment(String(s.MatricNo ?? s.matricNo ?? matricNo), String(instId)).catch(()=>null)
@@ -3653,7 +3684,6 @@ function StudentDashboard({ go }) {
             } catch {}
           } else {
             setErr(matricNo ? `No student record found for ${matricNo}` : "No matric number in token — showing token info")
-            // Fallback to token-derived pseudo student
             setStudent({
               MatricNo: matricNo || tok?.sub || tok?.unique_name || "—",
               FirstName: firstName,
@@ -3674,6 +3704,147 @@ function StudentDashboard({ go }) {
     return ()=>{ cancelled = true }
   }, [matricNo, instId])
 
+  const fetchProjectFlow = useCallback(async () => {
+    if (!matricNo || !instId) return
+    setDashLoading(true); setDashErr("")
+    try {
+      const [d, proj] = await Promise.allSettled([
+        projectApi.getStudentDashboard({ matricNo, institutionId: instId }),
+        projectApi.getProjectByMatric(matricNo).catch(()=> projectApi.getProjectDetails({ matricNo, institutionId: instId }).catch(()=>null)),
+      ])
+      let dashData = null
+      if (d.status === 'fulfilled' && d.value) {
+        dashData = d.value
+        setDash(d.value)
+        const ongoing = d.value.ongoingChapter ?? d.value.OngoingChapter
+        if (ongoing) setWorkspaceChap(Number(ongoing) || 1)
+        const roadmap = d.value.chapterRoadmap ?? d.value.ChapterRoadmap
+        if (Array.isArray(roadmap) && roadmap.length) {
+          const firstPending = roadmap.find(r => !(r.exists ?? r.Exists))
+          if (firstPending) setCreateChapNo(firstPending.chapterNumber ?? firstPending.ChapterNumber ?? 1)
+        }
+      } else if (d.status === 'rejected') {
+        setDashErr(d.reason?.message || "Could not load student dashboard")
+      }
+      let projData = null
+      if (proj.status === 'fulfilled' && proj.value) {
+        let v = proj.value
+        if (Array.isArray(v) && v.length) v = v[0]
+        projData = v?.project ?? v?.Project ?? v
+        if (!projData || (!projData.id && !projData.Id && !projData.projectId)) {
+          const pid = dashData?.projectId ?? dashData?.ProjectId ?? v?.id ?? v?.Id
+          if (pid) {
+            try { const byId = await projectApi.getProjectById(pid); projData = byId?.project ?? byId?.Project ?? byId } catch {}
+          }
+        }
+        if (projData) setProject(projData)
+      }
+      const pidForRest = projData?.id ?? projData?.Id ?? dashData?.projectId ?? dashData?.ProjectId
+      if (pidForRest) {
+        const [tRes, cRes, rRes] = await Promise.allSettled([
+          projectApi.getTopicsByProjectId(pidForRest).catch(()=>[]),
+          projectApi.getChaptersByProject(pidForRest).catch(()=>[]),
+          projectApi.getCurrentChapterReview(pidForRest).catch(()=>null),
+        ])
+        if (tRes.status==='fulfilled') {
+          const arr = Array.isArray(tRes.value) ? tRes.value : (tRes.value?.topics ?? tRes.value?.Topics ?? [])
+          setTopics(Array.isArray(arr) ? arr : [])
+        }
+        if (cRes.status==='fulfilled') {
+          const arr = Array.isArray(cRes.value) ? cRes.value : (cRes.value?.chapters ?? [])
+          setChapters(Array.isArray(arr) ? arr : [])
+        }
+        if (rRes.status==='fulfilled' && rRes.value) setCurrentReview(rRes.value)
+        try {
+          const did = instId ? (deptProg?.deptId || deptIdFromToken) : null
+          if (instId) {
+            const tmpl = await projectApi.getTemplates({ institutionId: instId, departmentId: did || undefined }).catch(()=>[])
+            if (Array.isArray(tmpl)) setTemplates(tmpl)
+          }
+        } catch {}
+      } else {
+        try {
+          const det = await projectApi.getProjectDetails({ matricNo, institutionId: instId }).catch(()=>null)
+          if (det) {
+            const maybeProj = det.project ?? det.Project ?? det
+            if (maybeProj?.id || maybeProj?.Id) setProject(maybeProj)
+            const t = det.topics ?? det.Topics ?? []
+            if (Array.isArray(t)) setTopics(t)
+          }
+        } catch {}
+      }
+    } catch (e) {
+      setDashErr(e.message || "Project flow load failed")
+    } finally { setDashLoading(false) }
+  }, [matricNo, instId, deptProg?.deptId, deptIdFromToken])
+
+  useEffect(()=>{ if (matricNo && instId && !loading) fetchProjectFlow() }, [matricNo, instId, loading, fetchProjectFlow])
+
+  const refreshTopics = useCallback(async ()=>{
+    if (!projectId) return
+    setTopicsLoading(true)
+    try { const t = await projectApi.getTopicsByProjectId(projectId); const arr = Array.isArray(t) ? t : (t?.topics ?? []); setTopics(Array.isArray(arr)?arr:[]) } catch {}
+    finally { setTopicsLoading(false) }
+  }, [projectId])
+
+  const handleCreateTopic = useCallback(async (e)=>{
+    e.preventDefault()
+    if (!newTopic.trim()) { setTopicErr2("Enter a topic title"); return }
+    if (topics.length >= 3) { setTopicErr2("Maximum 3 topics per project"); return }
+    setTopicBusy(true); setTopicErr2(""); setTopicMsg("")
+    try {
+      await projectApi.createTopic({ matricNo, topic: newTopic.trim() })
+      setTopicMsg("Topic submitted successfully")
+      setNewTopic("")
+      await refreshTopics()
+      await fetchProjectFlow()
+    } catch (err) { setTopicErr2(err.message || "Could not create topic") }
+    finally { setTopicBusy(false) }
+  }, [newTopic, matricNo, topics.length, refreshTopics, fetchProjectFlow])
+
+  const handleCreateChapter = useCallback(async (e)=>{
+    e.preventDefault()
+    if (!projectId) { setCreateErr("No project found — contact your supervisor to create your project first"); return }
+    setCreateBusy(true); setCreateErr(""); setCreateMsg("")
+    try {
+      const res = await projectApi.createChapter(projectId, { chapterNumber: Number(createChapNo), supervisorNote: createNote, file: createFile || undefined })
+      setCreateMsg("Chapter submitted — awaiting review")
+      setCreateNote(""); setCreateFile(null)
+      try { const ch = await projectApi.getChaptersByProject(projectId); setChapters(Array.isArray(ch)?ch:(ch?.chapters??[])) } catch {}
+      await fetchProjectFlow()
+    } catch (err) { setCreateErr(err.message || "Chapter upload failed — check that previous chapter is Approved") }
+    finally { setCreateBusy(false) }
+  }, [projectId, createChapNo, createNote, createFile, fetchProjectFlow])
+
+  const handleWorkspaceSave = useCallback(async ({ html, text })=>{
+    setWorkspaceSaving(true); setWorkspaceErr(""); setWorkspaceMsg("")
+    try {
+      const blob = new Blob([html], { type: 'text/html' })
+      const file = new File([blob], `chapter-${workspaceChap}.html`, { type: 'text/html' })
+      if (!projectId) throw new Error("No project linked — cannot submit")
+      let chapId = null
+      const found = (chapters || []).find(c => String(c.chapterNumber ?? c.ChapterNumber) === String(workspaceChap))
+      if (found) chapId = found.id ?? found.Id ?? found.chapterId ?? found.ChapterId
+      if (!chapId && chapters.length) {
+        try { const fresh = await projectApi.getChaptersByProject(projectId); const arr = Array.isArray(fresh)?fresh:(fresh?.chapters??[]); const f2 = arr.find(c=>String(c.chapterNumber ?? c.ChapterNumber)===String(workspaceChap)); if (f2) chapId = f2.id ?? f2.Id } catch {}
+      }
+      if (chapId) {
+        try {
+          await projectApi.submitChapterVersion(chapId, { fileUrl: `local://chapter-${workspaceChap}-${Date.now()}.html`, supervisorNote: versionNote || "Draft via collaborative editor" })
+        } catch (e) {
+          await projectApi.createChapter(projectId, { chapterNumber: workspaceChap, supervisorNote: versionNote || "Updated via workspace", file })
+        }
+      } else {
+        await projectApi.createChapter(projectId, { chapterNumber: workspaceChap, supervisorNote: versionNote || "Initial draft via collaborative editor", file })
+        try { const ch2 = await projectApi.getChaptersByProject(projectId); setChapters(Array.isArray(ch2)?ch2:(ch2?.chapters??[])) } catch {}
+      }
+      setWorkspaceMsg("Saved & submitted as version — supervisor will review")
+      if (versionNote) setVersionNote("")
+      await fetchProjectFlow()
+    } catch (e) { setWorkspaceErr(e.message || "Could not submit version") }
+    finally { setWorkspaceSaving(false); setTimeout(()=>setWorkspaceMsg(""), 4000) }
+  }, [workspaceChap, projectId, chapters, versionNote, fetchProjectFlow])
+
   const studentCategoryLabel = (()=> {
     const cat = student?.StudentCategory ?? student?.studentCategory
     if (cat===1) return "Non-Degree"
@@ -3683,6 +3854,8 @@ function StudentDashboard({ go }) {
     return "—"
   })()
 
+  const workspaceStorageKey = `earms_workspace_${matricNo || 'anon'}_${projectId || 'noproject'}_${workspaceChap}`
+
   return (
     <DashShell go={go} active="student" role="student" title={`Welcome back, ${firstName}.`} subtitle={loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
       {loading ? (
@@ -3691,8 +3864,7 @@ function StudentDashboard({ go }) {
       <>
       {err && <div className="mb-4 w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
 
-      {/* Personalized student info card — actual data */}
-      <div className="glass-card rounded-xl p-5 border border-surface-container mb-6">
+      <div className="glass-card rounded-xl p-5 border border-surface-container mb-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center font-headline-md font-bold text-primary text-xl">
@@ -3701,13 +3873,14 @@ function StudentDashboard({ go }) {
             <div>
               <h3 className="font-headline-sm font-bold text-on-surface">{displayName}</h3>
               <p className="font-body-sm text-on-surface-variant">{student?.Email ?? student?.email ?? tok?.email ?? "—"} · {studentCategoryLabel}</p>
-              <p className="font-body-sm text-outline text-[12px]">{student?.InstitutionName ?? student?.institutionName ?? tok?.institutionName ?? ""} {instId ? `· Inst ${instId}` : ""}</p>
+              <p className="font-body-sm text-outline text-[12px]">{student?.InstitutionName ?? student?.institutionName ?? tok?.institutionName ?? ""} {instId ? `· Inst ${instId}` : ""} {project?.id ? `· Project #${project.id ?? project.Id}` : ""} {dash?.projectTitle ? `· ${dash.projectTitle}` : ""}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[12px]">{student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"}</span>
             <span className="px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[12px] border border-outline-variant">Level {student?.Level ?? student?.level ?? deptProg?.level ?? "—"}</span>
             <span className={`px-3 py-1 rounded-full font-label-md text-[12px] border ${student?.IsActive ?? student?.isActive ? "bg-green-100 text-green-800 border-green-200" : "bg-surface-container-high text-on-surface-variant"}`}>{student?.IsActive ?? student?.isActive ? "Active" : (student ? "—" : "Token")}</span>
+            {dash?.projectStatus !== undefined && <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-label-md text-[12px]">{ProjectStatusLabel[dash.projectStatus] ?? `Status ${dash.projectStatus}`}</span>}
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
@@ -3728,159 +3901,752 @@ function StudentDashboard({ go }) {
             <p className="font-body-sm text-on-surface mt-1 truncate">{student?.AreaOfInterest ?? student?.areaOfInterest ?? "—"}</p>
           </div>
         </div>
-        {matricNo && <p className="font-body-sm text-[11px] text-outline mt-3">Source: <span className="font-label-md">GET /get_student/{matricNo}</span> via <span className="font-label-md">onboardingApi.getStudent</span> {student?.DepartmentName ? "· live" : "· token fallback"} · JWT inst {instId || "—"}</p>}
       </div>
 
-      <div className="bento-grid">
-        <section className="col-span-12 lg:col-span-8 glass-card rounded-xl p-6 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-secondary-fixed-dim rounded-full blur-3xl opacity-20 -mr-20 -mt-20 pointer-events-none"></div>
-          <div>
-            <div className="flex justify-between items-start mb-6">
-              <div><span className="inline-block px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-[12px] rounded-full mb-2">{deptProg?.progName ? deptProg.progName : "Active Thesis"}</span><h3 className="font-headline-lg text-headline-lg text-on-surface leading-tight">{student?.ProgramName ? `Research in ${student.ProgramName}` : "Impact of AI on Modern Architectural Paradigms"}</h3><p className="font-body-sm text-on-surface-variant mt-1">{student?.DepartmentName ? `Dept: ${student.DepartmentName}` : ""} {student?.Level ? `· Level ${student.Level}` : ""}</p></div>
-              <span className="px-3 py-1 bg-[#e6f4ea] text-[#137333] font-label-md rounded-full border border-[#ceead6] text-[12px] whitespace-nowrap">{student?.IsActive ? "On Track" : "Active"}</span>
-            </div>
-            <div className="mb-6">
-              <div className="flex justify-between font-label-md text-on-surface-variant mb-1"><span>Overall Progress</span><span>45%</span></div>
-              <div className="w-full bg-surface-variant rounded-full h-2"><div className="bg-primary h-2 rounded-full" style={{width:'45%'}}></div></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4 border-t border-outline-variant pt-4">
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Matric No</p><p className="font-headline-sm text-on-surface truncate">{student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"}</p></div>
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Department</p><p className="font-headline-sm text-on-surface truncate">{student?.DepartmentName ?? student?.departmentName ?? "—"}</p></div>
-            <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Level</p><p className="font-headline-sm text-on-surface">{student?.Level ?? student?.level ?? "—"}</p></div>
-          </div>
-        </section>
-        <section className="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant flex flex-col">
-          <h3 className="font-headline-md text-on-surface flex items-center gap-2 mb-4"><span className="material-symbols-outlined text-secondary-container">forum</span> Supervisor Feedback</h3>
-          <div className="flex-1 space-y-3 overflow-auto">
-            <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-secondary-container">
-              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Advisor</span><span className="text-[12px] text-outline">2 hours ago</span></div>
-              <p className="font-body-sm text-on-surface-variant">{student?.DepartmentName ? `Supervisor for ${student.DepartmentName}` : "Your methodology section needs more clarity regarding the sampling constraints. Let's discuss this tomorrow."}</p>
-            </div>
-            <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-outline-variant">
-              <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">System</span><span className="text-[12px] text-outline">Today</span></div>
-              <p className="font-body-sm text-on-surface-variant">Profile loaded via {matricNo ? `get_student/${matricNo}` : "token"} {student?.Email ? `· ${student.Email}` : ""}</p>
-            </div>
-          </div>
-          <button className="mt-4 w-full bg-surface text-primary border border-outline-variant font-label-md py-2 rounded hover:bg-surface-variant">View All Comments</button>
-        </section>
-        <section className="col-span-12 lg:col-span-6 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant">
-          <h3 className="font-headline-md text-on-surface mb-4">Research Milestones</h3>
-          <div className="relative pl-1">
-            <div className="timeline-item relative mb-6">
-              <div className="timeline-line"></div>
-              <div className="flex gap-3 relative z-10">
-                <div className="w-8 h-8 rounded-full bg-[#e6f4ea] text-[#137333] flex items-center justify-center shrink-0 border border-[#ceead6]"><span className="material-symbols-outlined text-[18px]">check</span></div>
-                <div><h4 className="font-headline-sm text-on-surface">Enrolled — {student?.Level ?? "—"}</h4><p className="font-body-sm text-on-surface-variant">Matric {student?.MatricNo ?? matricNo} · {student?.ProgramName ?? "Programme"}</p><span className="font-label-md text-[12px] text-outline">{student?.CreatedAt ? new Date(student.CreatedAt ?? student.createdAt).toLocaleDateString() : "Aug 12, 2024"}</span></div>
-              </div>
-            </div>
-            <div className="timeline-item relative mb-6">
-              <div className="timeline-line"></div>
-              <div className="flex gap-3 relative z-10">
-                <div className="w-8 h-8 rounded-full bg-secondary-fixed text-secondary flex items-center justify-center shrink-0 border border-secondary-fixed-dim"><div className="w-3 h-3 bg-secondary rounded-full animate-pulse"></div></div>
-                <div><h4 className="font-headline-sm text-on-surface">Current Programme</h4><p className="font-body-sm text-on-surface-variant">{student?.ProgramName ?? "Active programme"} — {student?.DepartmentName ?? "Department"}</p><span className="font-label-md text-[12px] text-secondary-container">Due: Oct 15, 2024</span></div>
-              </div>
-            </div>
-            <div className="timeline-item relative">
-              <div className="timeline-line"></div>
-              <div className="flex gap-3 relative z-10 opacity-60">
-                <div className="w-8 h-8 rounded-full bg-surface-variant text-outline flex items-center justify-center shrink-0 border border-outline-variant"><span className="material-symbols-outlined text-[18px]">radio_button_unchecked</span></div>
-                <div><h4 className="font-headline-sm text-on-surface">Next Level</h4><p className="font-body-sm text-on-surface-variant">Pending progress</p><span className="font-label-md text-[12px] text-outline">Est. 2025</span></div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section className="col-span-12 lg:col-span-6 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-headline-md text-on-surface">Document Repository</h3>
-            <button className="text-secondary-container hover:text-secondary font-label-md flex items-center gap-1"><span className="material-symbols-outlined text-[18px]">upload</span> Upload</button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
-              <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">folder</span><h4 className="font-headline-sm text-on-surface">Drafts</h4></div>
-              <p className="font-body-sm text-on-surface-variant">Programme: {student?.ProgramName ?? "—"}</p>
-            </div>
-            <div className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
-              <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">folder</span><h4 className="font-headline-sm text-on-surface">References</h4></div>
-              <p className="font-body-sm text-on-surface-variant">Dept: {student?.DepartmentName ?? "—"}</p>
-            </div>
-            <div className="col-span-2 p-2 border border-outline-variant rounded-lg flex items-center justify-between hover:bg-surface-container-low">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#e8eaed] rounded flex items-center justify-center text-[#1a73e8]"><span className="material-symbols-outlined">description</span></div>
-                <div><p className="font-label-md text-on-surface">{student?.MatricNo ? `${student.MatricNo}_Lit_Review.docx` : "Lit_Review_v2_Draft.docx"}</p><p className="font-body-sm text-[12px] text-outline">Modified today by {firstName}</p></div>
-              </div>
-              <button className="p-1 text-outline hover:text-on-surface"><span className="material-symbols-outlined">more_vert</span></button>
-            </div>
-          </div>
-        </section>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
+          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Time Progress</span><span className="material-symbols-outlined text-primary text-[18px]">schedule</span></div>
+          <p className="font-headline-md font-bold text-primary mt-1">{dash?.timeProgress !== undefined ? `${Number(dash.timeProgress).toFixed(1)}%` : (dashLoading ? "…" : "—")}</p>
+          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-primary h-1.5 rounded-full" style={{width: `${Math.min(100, Number(dash?.timeProgress||0))}%`}}></div></div>
+          <p className="text-[11px] text-outline mt-1">{dash?.startDate ? new Date(dash.startDate).toLocaleDateString() : ""} — {dash?.endDate ? new Date(dash.endDate).toLocaleDateString() : ""}</p>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
+          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Project Progress</span><span className="material-symbols-outlined text-primary text-[18px]">flag</span></div>
+          <p className="font-headline-md font-bold text-primary mt-1">{dash?.projectProgress !== undefined ? `${dash.projectProgress}%` : (dashLoading ? "…" : "—")}</p>
+          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-secondary h-1.5 rounded-full" style={{width: `${Math.min(100, Number(dash?.projectProgress||0))}%`}}></div></div>
+          <p className="text-[11px] text-outline mt-1">{dash?.completedChapters ?? 0} completed • Ch {dash?.ongoingChapter ?? "—"} ongoing {dash?.pendingCorrection ? `• ${dash.pendingCorrection} needs correction` : ""}</p>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
+          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors</span><span className="material-symbols-outlined text-primary text-[18px]">group</span></div>
+          <p className="font-headline-sm font-bold text-on-surface mt-1 truncate">{(dash?.supervisorStaffNo && (Array.isArray(dash.supervisorStaffNo)? dash.supervisorStaffNo.join(", ") : dash.supervisorStaffNo)) || (project?.supervisors?.map(s=>s.staffNo ?? s.StaffNo).join(", ") || "—")}</p>
+          <p className="text-[11px] text-outline mt-1">{dash?.lastSubmissionDate ? `Last submission ${new Date(dash.lastSubmissionDate).toLocaleDateString()}` : "No submissions yet"}</p>
+          {dashErr && <p className="text-[11px] text-error mt-1">{dashErr}</p>}
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
+          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Project Title</span><span className="material-symbols-outlined text-primary text-[18px]">title</span></div>
+          <p className="font-body-sm font-semibold text-on-surface mt-1 line-clamp-2">{dash?.projectTitle ?? project?.title ?? "—"}</p>
+          <p className="text-[11px] text-outline mt-1">Status: {dash?.projectStatus !== undefined ? ProjectStatusLabel[dash.projectStatus] ?? dash.projectStatus : "—"}</p>
+        </div>
       </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-4 p-1 bg-surface-container-low rounded-xl border border-outline-variant w-fit">
+        {[
+          {id:'overview', label:'Overview', icon:'dashboard'},
+          {id:'topics', label:'Topics', icon:'lightbulb'},
+          {id:'chapters', label:'Chapters', icon:'auto_stories'},
+          {id:'workspace', label:'Research Workspace', icon:'edit_document'},
+          {id:'reviews', label:'Reviews', icon:'rate_review'},
+        ].map(t=>(
+          <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`px-3.5 py-2 rounded-lg font-label-md text-sm flex items-center gap-1.5 ${activeTab===t.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'}`}>
+            <span className="material-symbols-outlined text-[16px]">{t.icon}</span> {t.label}
+            {t.id==='topics' && topics.length>0 && <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] ${activeTab===t.id ? 'bg-white/20' : 'bg-primary-container'}`}>{topics.length}/3</span>}
+            {t.id==='workspace' && <span className="ml-1 px-1.5 py-0.5 rounded bg-green-500 text-white text-[10px]">Live</span>}
+          </button>
+        ))}
+        <button onClick={fetchProjectFlow} disabled={dashLoading} className="ml-1 px-2 py-2 rounded-lg bg-surface border border-outline-variant hover:bg-surface-variant disabled:opacity-50" title="Refresh project data"><span className={`material-symbols-outlined text-[18px] ${dashLoading?'animate-spin':''}`}>refresh</span></button>
+      </div>
+
+      {activeTab==='overview' && (
+        <div className="bento-grid">
+          <section className="col-span-12 lg:col-span-8 glass-card rounded-xl p-6 flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-secondary-fixed-dim rounded-full blur-3xl opacity-20 -mr-20 -mt-20 pointer-events-none"></div>
+            <div>
+              <div className="flex justify-between items-start mb-4">
+                <div><span className="inline-block px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-[12px] rounded-full mb-2">{deptProg?.progName ? deptProg.progName : "Active Thesis"}</span><h3 className="font-headline-lg text-headline-lg text-on-surface leading-tight line-clamp-2">{dash?.projectTitle || (student?.ProgramName ? `Research in ${student.ProgramName}` : "Impact of AI on Modern Architectural Paradigms")}</h3><p className="font-body-sm text-on-surface-variant mt-1">{student?.DepartmentName ? `Dept: ${student.DepartmentName}` : ""} {student?.Level ? `· Level ${student.Level}` : ""} {projectId ? `· #${projectId}` : ""}</p></div>
+                <span className="px-3 py-1 bg-[#e6f4ea] text-[#137333] font-label-md rounded-full border border-[#ceead6] text-[12px] whitespace-nowrap">{student?.IsActive ? "On Track" : "Active"}</span>
+              </div>
+              <div className="mb-6">
+                <div className="flex justify-between font-label-md text-on-surface-variant mb-1"><span>Overall Progress</span><span>{dash?.projectProgress ?? 45}%</span></div>
+                <div className="w-full bg-surface-variant rounded-full h-2"><div className="bg-primary h-2 rounded-full" style={{width:`${Math.min(100, Number(dash?.projectProgress ?? 45))}%`}}></div></div>
+                {dash?.chapterRoadmap && Array.isArray(dash.chapterRoadmap) && (
+                  <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+                    {dash.chapterRoadmap.slice(0,5).map((c,i)=>{
+                      const num = c.chapterNumber ?? c.ChapterNumber ?? i+1
+                      const st = c.chapterStatus ?? c.ChapterStatus ?? 0
+                      const exists = c.exists ?? c.Exists
+                      return (
+                        <div key={num} className={`rounded-lg border p-2 text-center text-xs ${exists ? (st===3 ? 'bg-green-50 border-green-200 text-green-800' : st===2 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-surface border-outline-variant') : 'bg-surface-container-low border-dashed border-outline-variant text-outline'}`}>
+                          <div className="font-bold">Ch {num}</div>
+                          <div className="text-[11px] truncate">{c.title ?? c.Title ?? ""}</div>
+                          <div className="text-[10px]">{exists ? (ChapterStatusLabel[st] ?? st) : "Not started"}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4 border-t border-outline-variant pt-4">
+              <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Matric No</p><p className="font-headline-sm text-on-surface truncate">{student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"}</p></div>
+              <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Department</p><p className="font-headline-sm text-on-surface truncate">{student?.DepartmentName ?? student?.departmentName ?? "—"}</p></div>
+              <div><p className="font-label-md text-outline mb-1 text-[11px] uppercase">Level</p><p className="font-headline-sm text-on-surface">{student?.Level ?? student?.level ?? "—"}</p></div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={()=>setActiveTab('workspace')} className="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-sm flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">edit</span> Open Research Workspace</button>
+              <button onClick={()=>setActiveTab('chapters')} className="bg-surface border border-outline-variant px-4 py-2 rounded-lg font-label-md text-sm">View Chapters • {chapters.length || dash?.chapterRoadmap?.length || 0}</button>
+              <button onClick={()=>setActiveTab('reviews')} className="bg-surface border border-outline-variant px-4 py-2 rounded-lg font-label-md text-sm">Latest Review</button>
+            </div>
+          </section>
+          <section className="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant flex flex-col">
+            <h3 className="font-headline-md text-on-surface flex items-center gap-2 mb-4"><span className="material-symbols-outlined text-secondary-container">forum</span> Supervisor Feedback</h3>
+            <div className="flex-1 space-y-3 overflow-auto">
+              {currentReview ? (
+                <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-primary">
+                  <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">{currentReview.reviewer ?? currentReview.Reviewer ?? "Supervisor"}</span><span className="text-[12px] text-outline">{currentReview.reviewedDate ? new Date(currentReview.reviewedDate).toLocaleString() : "recent"}</span></div>
+                  <p className="font-body-sm text-on-surface-variant">{currentReview.supervisorSummary ?? currentReview.reviewComment ?? currentReview.ReviewComment ?? "Review available — open Reviews tab"}</p>
+                  <p className="text-[11px] text-outline mt-1">Ch {currentReview.chapterNumber ?? currentReview.ChapterNumber} • Status {ChapterStatusLabel[currentReview.chapterStatus ?? currentReview.ChapterStatus] ?? currentReview.chapterStatus}</p>
+                </div>
+              ) : (
+                <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-secondary-container">
+                  <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Advisor</span><span className="text-[12px] text-outline">2 hours ago</span></div>
+                  <p className="font-body-sm text-on-surface-variant">{student?.DepartmentName ? `Supervisor for ${student.DepartmentName}` : "Your methodology section needs more clarity regarding the sampling constraints."}</p>
+                </div>
+              )}
+              <div className="p-3 bg-surface-container-low rounded-lg border-l-4 border-outline-variant">
+                <div className="flex justify-between items-center mb-1"><span className="font-label-md text-on-surface">Project Flow</span><span className="text-[12px] text-outline">Live</span></div>
+                <p className="font-body-sm text-on-surface-variant">Project {projectId ? `#${projectId} connected` : "not yet assigned"} • {topics.length} topic(s) • {chapters.length} chapter(s) stored</p>
+                {dash?.pendingCorrection ? <p className="text-xs text-amber-800 mt-1">{dash.pendingCorrection} chapter(s) awaiting correction</p> : null}
+              </div>
+            </div>
+            <button onClick={()=>setActiveTab('reviews')} className="mt-4 w-full bg-surface text-primary border border-outline-variant font-label-md py-2 rounded hover:bg-surface-variant">View All Reviews</button>
+          </section>
+          <section className="col-span-12 lg:col-span-6 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant">
+            <h3 className="font-headline-md text-on-surface mb-4">Research Milestones</h3>
+            <div className="relative pl-1">
+              <div className="timeline-item relative mb-6">
+                <div className="timeline-line"></div>
+                <div className="flex gap-3 relative z-10">
+                  <div className="w-8 h-8 rounded-full bg-[#e6f4ea] text-[#137333] flex items-center justify-center shrink-0 border border-[#ceead6]"><span className="material-symbols-outlined text-[18px]">check</span></div>
+                  <div><h4 className="font-headline-sm text-on-surface">Enrolled — {student?.Level ?? "—"}</h4><p className="font-body-sm text-on-surface-variant">Matric {student?.MatricNo ?? matricNo} · {student?.ProgramName ?? "Programme"}</p><span className="font-label-md text-[12px] text-outline">{student?.CreatedAt ? new Date(student.CreatedAt ?? student.createdAt).toLocaleDateString() : "Aug 12, 2024"}</span></div>
+                </div>
+              </div>
+              <div className="timeline-item relative mb-6">
+                <div className="timeline-line"></div>
+                <div className="flex gap-3 relative z-10">
+                  <div className="w-8 h-8 rounded-full bg-secondary-fixed text-secondary flex items-center justify-center shrink-0 border border-secondary-fixed-dim"><div className="w-3 h-3 bg-secondary rounded-full animate-pulse"></div></div>
+                  <div><h4 className="font-headline-sm text-on-surface">Current Programme</h4><p className="font-body-sm text-on-surface-variant">{student?.ProgramName ?? "Active programme"} — {student?.DepartmentName ?? "Department"}</p><span className="font-label-md text-[12px] text-secondary-container">Project: {dash?.projectTitle ?? "—"}</span></div>
+                </div>
+              </div>
+              <div className="timeline-item relative">
+                <div className="timeline-line"></div>
+                <div className="flex gap-3 relative z-10 opacity-60">
+                  <div className="w-8 h-8 rounded-full bg-surface-variant text-outline flex items-center justify-center shrink-0 border border-outline-variant"><span className="material-symbols-outlined text-[18px]">radio_button_unchecked</span></div>
+                  <div><h4 className="font-headline-sm text-on-surface">Next Milestone</h4><p className="font-body-sm text-on-surface-variant">Chapter {dash?.ongoingChapter ?? 2} submission</p><span className="font-label-md text-[12px] text-outline">Est. {dash?.endDate ? new Date(dash.endDate).toLocaleDateString() : "2025"}</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section className="col-span-12 lg:col-span-6 bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-surface-variant">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-headline-md text-on-surface">Document Repository</h3>
+              <button onClick={()=>setActiveTab('chapters')} className="text-secondary-container hover:text-secondary font-label-md flex items-center gap-1"><span className="material-symbols-outlined text-[18px]">upload</span> Upload</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div onClick={()=>setActiveTab('chapters')} className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
+                <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">folder</span><h4 className="font-headline-sm text-on-surface">Chapters</h4></div>
+                <p className="font-body-sm text-on-surface-variant">{chapters.length || dash?.chapterRoadmap?.filter(c=>c.exists ?? c.Exists).length || 0} stored • {dash?.completedChapters ?? 0} approved</p>
+              </div>
+              <div onClick={()=>setActiveTab('topics')} className="p-3 border border-outline-variant rounded-lg hover:bg-surface-container-low cursor-pointer group">
+                <div className="flex items-center gap-2 mb-1"><span className="material-symbols-outlined text-primary-fixed-dim group-hover:text-primary text-3xl">lightbulb</span><h4 className="font-headline-sm text-on-surface">Topics</h4></div>
+                <p className="font-body-sm text-on-surface-variant">{topics.length} submitted • {topics.filter(t => (t.status ?? t.Status)===2).length} approved</p>
+              </div>
+              <div className="col-span-2 p-2 border border-outline-variant rounded-lg flex items-center justify-between hover:bg-surface-container-low">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#e8eaed] rounded flex items-center justify-center text-[#1a73e8]"><span className="material-symbols-outlined">description</span></div>
+                  <div><p className="font-label-md text-on-surface">{student?.MatricNo ? `${student.MatricNo}_Lit_Review.docx` : "Lit_Review_v2_Draft.docx"}</p><p className="font-body-sm text-[12px] text-outline">Modified today — open Workspace</p></div>
+                </div>
+                <button onClick={()=>setActiveTab('workspace')} className="p-1 text-outline hover:text-on-surface"><span className="material-symbols-outlined">open_in_new</span></button>
+              </div>
+              {dash?.chapterRoadmap && (
+                <div className="col-span-2">
+                  <p className="font-label-md text-[11px] uppercase tracking-wide text-outline mb-2">Chapter Roadmap</p>
+                  <div className="space-y-1.5">
+                    {dash.chapterRoadmap.slice(0,4).map((c,i)=>{
+                      const num = c.chapterNumber ?? c.ChapterNumber ?? i+1
+                      const ttl = c.title ?? c.Title ?? `Chapter ${num}`
+                      const st = c.chapterStatus ?? c.ChapterStatus
+                      const ex = c.exists ?? c.Exists
+                      return (
+                        <div key={num} className="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-outline-variant">
+                          <div className="flex items-center gap-2"><span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${ex ? (st===3 ? 'bg-green-100 text-green-700' : st===2 ? 'bg-amber-100 text-amber-700' : 'bg-surface-variant') : 'bg-outline-variant text-on-surface-variant'}`}>{num}</span><span className="font-body-sm text-on-surface text-sm">{ttl}</span></div>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${ex ? 'bg-surface border-outline-variant' : 'bg-surface-container'}`}>{ex ? (ChapterStatusLabel[st] ?? st ?? "Exists") : "Not started"}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab==='topics' && (
+        <div className="space-y-4">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="font-headline-md font-bold text-on-surface">Research Topics</h3>
+                <p className="font-body-sm text-on-surface-variant">Submit up to 3 topics for approval. Supervisors review for similarity / originality / plagiarism scores.</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${topics.length>=3 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-primary-container text-on-primary-container border-primary-fixed'}`}>{topics.length}/3 submitted</span>
+            </div>
+
+            <form onSubmit={handleCreateTopic} className="flex flex-col md:flex-row gap-3 mb-4">
+              <input value={newTopic} onChange={e=>setNewTopic(e.target.value)} placeholder="e.g. Artificial Intelligence in Agricultural Research" className="flex-1 border border-outline-variant rounded-lg px-3 py-2.5 bg-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" maxLength={200} />
+              <button type="submit" disabled={topicBusy || !newTopic.trim() || topics.length>=3} className="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-label-md disabled:opacity-40 flex items-center gap-2">
+                {topicBusy ? <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> : <span className="material-symbols-outlined text-[18px]">add</span>} Submit Topic
+              </button>
+            </form>
+            {topicErr2 && <div className="mb-3 rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{topicErr2}</div>}
+            {topicMsg && <div className="mb-3 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{topicMsg}</div>}
+            <p className="text-[11px] text-outline">POST /api/Project/create-topic — requires auth. Document limit: max 3 topics per project.</p>
+
+            <div className="mt-6 space-y-3">
+              {topicsLoading ? <div className="py-8 text-center text-on-surface-variant">Loading topics…</div> : topics.length===0 ? (
+                <div className="py-10 text-center border-2 border-dashed border-outline-variant rounded-xl">
+                  <span className="material-symbols-outlined text-4xl text-outline">lightbulb</span>
+                  <p className="font-body-sm text-on-surface-variant mt-2">No topics yet — submit your first research topic above.</p>
+                  <p className="text-xs text-outline mt-1">Approvals appear here with similarity / originality scores.</p>
+                </div>
+              ) : (
+                topics.map(t=>{
+                  const id = t.id ?? t.Id ?? Math.random()
+                  const title = t.topic ?? t.Topic ?? t.title ?? "—"
+                  const st = t.status ?? t.Status ?? 1
+                  return (
+                    <div key={id} className="p-4 rounded-xl border border-outline-variant bg-surface-container-low flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <p className="font-headline-sm font-semibold text-on-surface">{title}</p>
+                        <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                          <span className={`px-2 py-1 rounded-full font-bold border ${st===2 ? 'bg-green-50 text-green-700 border-green-200' : st===3 ? 'bg-error-container text-on-error-container border-red-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>{TopicStatusLabel[st] ?? st}</span>
+                          {(t.similarityScore ?? t.SimilarityScore) !== undefined && <span className="px-2 py-1 rounded-full bg-surface border border-outline-variant">Similarity {t.similarityScore ?? t.SimilarityScore}%</span>}
+                          {(t.originalityScore ?? t.OriginalityScore) !== undefined && <span className="px-2 py-1 rounded-full bg-surface border border-outline-variant">Originality {t.originalityScore ?? t.OriginalityScore}%</span>}
+                          {(t.plagiarismScore ?? t.PlagiarismScore) !== undefined && <span className="px-2 py-1 rounded-full bg-surface border border-outline-variant">Plagiarism {t.plagiarismScore ?? t.PlagiarismScore}%</span>}
+                        </div>
+                        <p className="text-[11px] text-outline mt-1">ID {id}{t.createdAt ? ` • ${new Date(t.createdAt).toLocaleString()}` : ""}</p>
+                      </div>
+                      <span className="material-symbols-outlined text-outline">chevron_right</span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {project && (
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+              <h4 className="font-headline-sm font-bold text-on-surface mb-2">Project snapshot</h4>
+              <pre className="text-xs bg-surface-container-low border border-outline-variant rounded-lg p-3 overflow-auto max-h-[220px]">{JSON.stringify(project, null, 2)}</pre>
+              <p className="text-[11px] text-outline mt-2">GET /api/Project/get-project-by-matric?MatricNo={matricNo} • GET /api/Project/GetTopicsByProjectId/{'{projectId}'}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab==='chapters' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+              <h3 className="font-headline-md font-bold text-on-surface">Chapters</h3>
+              <p className="font-body-sm text-on-surface-variant mb-4">Chapters are sequential — previous chapter must be Approved before the next can be created. Upload via FormData to <span className="font-mono text-xs bg-surface-container px-1 py-0.5 rounded">POST /api/Project/{'{projectId}'}/chapters</span></p>
+
+              {chaptersLoading ? <div className="py-8 text-center text-on-surface-variant">Loading chapters…</div> : (
+                <div className="space-y-2">
+                  {(chapters.length===0 && dash?.chapterRoadmap ? dash.chapterRoadmap : chapters).length===0 ? (
+                    <div className="py-10 text-center border-2 border-dashed border-outline-variant rounded-xl">
+                      <span className="material-symbols-outlined text-4xl text-outline">auto_stories</span>
+                      <p className="text-sm text-on-surface-variant mt-2">No chapters yet</p>
+                      <p className="text-xs text-outline">Create your first chapter below or via the Research Workspace.</p>
+                    </div>
+                  ) : (
+                    (chapters.length ? chapters : (dash?.chapterRoadmap || [])).map((c,i)=>{
+                      const num = c.chapterNumber ?? c.ChapterNumber ?? c.number ?? i+1
+                      const ttl = c.title ?? c.Title ?? c.name ?? `Chapter ${num}`
+                      const st = c.chapterStatus ?? c.ChapterStatus ?? c.status ?? null
+                      const id = c.id ?? c.Id ?? c.chapterId ?? num
+                      const isRoadmap = !c.id && !c.Id && (dash?.chapterRoadmap?.find(r=> (r.chapterNumber ?? r.ChapterNumber)===num))
+                      return (
+                        <div key={id} className="flex items-center justify-between p-3 rounded-xl border border-outline-variant bg-surface-container-low">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm border ${st===3 ? 'bg-green-100 text-green-700 border-green-200' : st===2 ? 'bg-amber-100 text-amber-700 border-amber-200' : st===4 ? 'bg-error-container text-on-error-container' : 'bg-surface-variant text-on-surface-variant'}`}>{num}</div>
+                            <div>
+                              <p className="font-label-md font-bold text-on-surface">{ttl}</p>
+                              <p className="text-xs text-on-surface-variant">{st!=null ? (ChapterStatusLabel[st] ?? `Status ${st}`) : (c.exists ?? c.Exists ? "Exists" : "Roadmap")} {c.lastSubmissionDate ? `• ${new Date(c.lastSubmissionDate).toLocaleDateString()}` : ""}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={()=>{setWorkspaceChap(Number(num)); setActiveTab('workspace')}} className="px-2.5 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold">Open</button>
+                            <span className={`hidden sm:inline-flex px-2 py-1 rounded-full text-[11px] border ${isRoadmap ? 'bg-surface border-dashed' : 'bg-surface border-outline-variant'}`}>{isRoadmap ? "Roadmap" : `#${id}`}</span>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                  {chapters.length>0 && <p className="text-[11px] text-outline mt-2">GET /api/Project/{'{projectId}'}/chapters • PUT /api/Project/chapters/{'{chapterId}'} {"{chapterStatus}"}</p>}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+              <h4 className="font-headline-sm font-bold text-on-surface">Upload / Create Chapter</h4>
+              <p className="text-xs text-on-surface-variant mb-3">Multipart FormData: chapterNumber, supervisorNote, file. Previous chapter must be Approved.</p>
+              <form onSubmit={handleCreateChapter} className="space-y-3">
+                <div>
+                  <label className="font-label-md text-xs uppercase tracking-wide text-outline">Chapter Number</label>
+                  <input type="number" min="1" max="12" value={createChapNo} onChange={e=>setCreateChapNo(e.target.value)} className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1" />
+                </div>
+                <div>
+                  <label className="font-label-md text-xs uppercase tracking-wide text-outline">Supervisor Note</label>
+                  <textarea value={createNote} onChange={e=>setCreateNote(e.target.value)} rows="3" placeholder="Notes for supervisor…" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1"></textarea>
+                </div>
+                <div>
+                  <label className="font-label-md text-xs uppercase tracking-wide text-outline">File (optional for Word upload)</label>
+                  <input type="file" onChange={e=>setCreateFile(e.target.files?.[0] || null)} className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1 text-sm" />
+                  {createFile && <p className="text-xs text-primary mt-1">{createFile.name} • {(createFile.size/1024).toFixed(1)} KB</p>}
+                </div>
+                {createErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{createErr}</div>}
+                {createMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{createMsg}</div>}
+                <button type="submit" disabled={createBusy || !projectId} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md disabled:opacity-40 flex items-center justify-center gap-2">
+                  {createBusy ? <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> : <span className="material-symbols-outlined text-[18px]">upload</span>} {createFile ? "Upload Chapter" : "Create Chapter"}
+                </button>
+                {!projectId && <p className="text-xs text-error">No project linked — supervisor must create project first.</p>}
+                {templates.length>0 && <div className="text-xs bg-surface-container-low rounded-lg p-2 border border-outline-variant"><p className="font-bold">Templates</p><p className="text-outline">{templates.map(t=>t.templateName ?? t.TemplateName).join(", ")}</p></div>}
+              </form>
+            </div>
+          </div>
+
+          {currentReview && (
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+              <h4 className="font-headline-sm font-bold text-on-surface mb-3">Latest Review — Chapter {currentReview.chapterNumber ?? currentReview.ChapterNumber}</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="font-bold text-outline uppercase text-[11px]">Chapter Status</p><p className="font-bold mt-1">{ChapterStatusLabel[currentReview.chapterStatus ?? currentReview.ChapterStatus] ?? currentReview.chapterStatus}</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="font-bold text-outline uppercase text-[11px]">Latest Version</p><p className="font-bold mt-1">v{currentReview.latestVersionNo ?? currentReview.LatestVersionNo ?? currentReview.currentVersion ?? "—"}</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="font-bold text-outline uppercase text-[11px]">Reviews</p><p className="font-bold mt-1">{currentReview.reviewCount ?? 0} • {currentReview.versionsCount ?? 0} versions</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="font-bold text-outline uppercase text-[11px]">Reviewer</p><p className="font-bold mt-1 truncate">{currentReview.reviewer ?? "—"}</p></div>
+              </div>
+              {(currentReview.supervisorSummary || currentReview.reviewFilePath) && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-bold text-amber-900">Supervisor summary</p>
+                  <p className="text-sm text-amber-800 mt-1">{currentReview.supervisorSummary ?? "—"}</p>
+                  {currentReview.reviewFilePath && <a href={currentReview.reviewFilePath} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline mt-2"><span className="material-symbols-outlined text-[14px]">download</span> Review file</a>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab==='workspace' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-headline-md font-bold text-on-surface">Research Workspace — Collaborative Word Editor</h3>
+              <p className="font-body-sm text-on-surface-variant">TipTap-based collaborative editing. Auto-saves locally; submit as chapter version to supervisor via Project Flow API. Production sync via Yjs/Hocuspocus.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="font-label-md text-xs uppercase tracking-wide text-outline">Chapter</label>
+              <select value={workspaceChap} onChange={e=>setWorkspaceChap(Number(e.target.value))} className="border border-outline-variant rounded-lg px-3 py-2 bg-surface">
+                {[1,2,3,4,5,6,7,8,9,10].map(n=>(
+                  <option key={n} value={n}>Chapter {n} — {dash?.chapterRoadmap?.find(c=> (c.chapterNumber ?? c.ChapterNumber)===n)?.title ?? dash?.chapterRoadmap?.find(c=> (c.chapterNumber ?? c.ChapterNumber)===n)?.Title ?? (n===1?'Introduction': n===2?'Literature Review': n===3?'Methodology': n===4?'Results':'Discussion')}</option>
+                ))}
+              </select>
+              <span className={`hidden md:inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border ${projectId?'bg-green-50 text-green-700 border-green-200':'bg-error-container text-on-error-container'}`}>{projectId?`Project #${projectId}`:'No project'}</span>
+            </div>
+          </div>
+
+          <TipTapEditor
+            storageKey={workspaceStorageKey}
+            chapterLabel={`Chapter ${workspaceChap} — ${dash?.chapterRoadmap?.find(c=> (c.chapterNumber ?? c.ChapterNumber)===workspaceChap)?.title ?? `Research Chapter ${workspaceChap}`}`}
+            collaborators={collaboratorList}
+          />
+
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
+            <h4 className="font-headline-sm font-bold text-on-surface">Submit Workspace Draft as Chapter Version</h4>
+            <p className="text-xs text-on-surface-variant mb-3">This will create / update <span className="font-mono bg-surface-container px-1 rounded">POST {"{projectId}"}/chapters</span> or <span className="font-mono bg-surface-container px-1 rounded">POST /chapters/{"{chapterId}"}/versions</span> with the editor HTML. Submission appears in supervisor's awaiting-action queue.</p>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input value={versionNote} onChange={e=>setVersionNote(e.target.value)} placeholder="Supervisor note (e.g. Revised per feedback, added citations)" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface" />
+              <button onClick={()=>handleWorkspaceSave({ html: localStorage.getItem(workspaceStorageKey) ?? "", text: "" })} disabled={workspaceSaving || !projectId} className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40 flex items-center justify-center gap-2">
+                {workspaceSaving ? <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> : <span className="material-symbols-outlined text-[18px]">send</span>} Submit Version for Review
+              </button>
+            </div>
+            {workspaceErr && <div className="mt-3 rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{workspaceErr}</div>}
+            {workspaceMsg && <div className="mt-3 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{workspaceMsg}</div>}
+            <p className="text-[11px] text-outline mt-2">Stored locally under <span className="font-mono">{workspaceStorageKey}</span> • Supervisor flow: <span className="font-mono">GET /awaiting-action?StaffNo</span> → <span className="font-mono">POST /version-review</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
+              <h5 className="font-label-md font-bold flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">group</span> Collaborators</h5>
+              <div className="mt-2 space-y-2">
+                {collaboratorList.length ? collaboratorList.map((c,i)=>(
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-surface-container-low border border-outline-variant">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${c.color || 'bg-primary-container'}`}>{c.initials}</div>
+                    <div><p className="text-sm font-bold">{c.name}</p><p className="text-xs text-outline">Live • editing</p></div>
+                    <span className="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  </div>
+                )) : <p className="text-sm text-outline">No supervisors assigned yet.</p>}
+                <p className="text-[11px] text-outline mt-1">Invite co-authors via Share in the editor header.</p>
+              </div>
+            </div>
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
+              <h5 className="font-label-md font-bold flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">history</span> Version History</h5>
+              <div className="mt-2 space-y-2 text-sm">
+                {(currentReview?.versionsCount ? Array.from({length: Math.min(3, currentReview.versionsCount)}) : [{},{},{}]).map((_,i)=>(
+                  <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-outline-variant">
+                    <span>v{currentReview?.versionsCount ? currentReview.versionsCount - i : 3 - i} • {i===0 ? "Submitted (workspace)" : i===1 ? "Needs Correction" : "Approved"}</span>
+                    <span className="text-xs text-outline">{i===0 ? "now" : i===1 ? "2d ago" : "1w ago"}</span>
+                  </div>
+                ))}
+                <button onClick={()=>setActiveTab('reviews')} className="w-full mt-2 text-xs text-primary underline">View full review history →</button>
+              </div>
+            </div>
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
+              <h5 className="font-label-md font-bold flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">menu_book</span> Chapter Template</h5>
+              <p className="text-sm text-on-surface-variant mt-1">{templates.length ? templates[0].templateName ?? templates[0].TemplateName : "Undergraduate Five Chapter (default)"}</p>
+              <div className="mt-2 space-y-1">
+                {(dash?.chapterRoadmap || [{chapterNumber:1,title:'Introduction'},{chapterNumber:2,title:'Literature Review'},{chapterNumber:3,title:'Methodology'},{chapterNumber:4,title:'Results'},{chapterNumber:5,title:'Summary'}]).slice(0,5).map(c=>{
+                  const n = c.chapterNumber ?? c.ChapterNumber ?? 0
+                  const t = c.title ?? c.Title ?? ""
+                  return <div key={n} className={`px-2 py-1 rounded text-xs flex justify-between ${n===workspaceChap ? 'bg-primary-container text-on-primary-container font-bold' : 'bg-surface-container-low'}`}><span>Ch {n}</span><span className="truncate ml-2">{t}</span></div>
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab==='reviews' && (
+        <div className="space-y-4">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+            <h3 className="font-headline-md font-bold text-on-surface">Current Chapter Review</h3>
+            <p className="font-body-sm text-on-surface-variant">GET /api/Project/get-current-chapter-review?ProjectId={projectId ?? "—"} — latest version, reviewer comments, correction files.</p>
+            {!projectId ? (
+              <div className="mt-4 p-4 rounded-lg bg-error-container text-on-error-container text-sm">No project linked — cannot fetch reviews. Supervisor must create project first.</div>
+            ) : !currentReview ? (
+              <div className="mt-4 py-10 text-center border-2 border-dashed border-outline-variant rounded-xl">
+                <span className="material-symbols-outlined text-4xl text-outline">rate_review</span>
+                <p className="text-sm text-on-surface-variant mt-2">No reviews yet</p>
+                <p className="text-xs text-outline">Reviews appear after supervisor acts on your chapter versions via POST /version-review.</p>
+                <button onClick={async()=>{ try{ const r = await projectApi.getCurrentChapterReview(projectId); setCurrentReview(r)} catch{}}} className="mt-3 px-4 py-2 rounded-lg bg-surface border border-outline-variant text-sm">Retry</button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-outline font-bold">Chapter</p><p className="font-bold text-lg">{currentReview.chapterNumber ?? currentReview.ChapterNumber} — {currentReview.chapterStatus !== undefined ? ChapterStatusLabel[currentReview.chapterStatus ?? currentReview.ChapterStatus] : "—"}</p></div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-outline font-bold">Latest Version</p><p className="font-bold text-lg">v{currentReview.latestVersionNo ?? currentReview.LatestVersionNo ?? currentReview.currentVersion ?? currentReview.CurrentVersion ?? "—"}</p></div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-outline font-bold">Reviewer</p><p className="font-bold truncate">{currentReview.reviewer ?? currentReview.Reviewer ?? "—"}</p></div>
+                  <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-outline font-bold">Reviewed</p><p className="font-bold text-sm">{currentReview.reviewedDate ? new Date(currentReview.reviewedDate).toLocaleString() : currentReview.ReviewedDate ? new Date(currentReview.ReviewedDate).toLocaleString() : "—"}</p></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <p className="font-bold text-amber-900 flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">feedback</span> Supervisor summary</p>
+                    <p className="text-sm text-amber-800 mt-2">{currentReview.supervisorSummary ?? currentReview.SupervisorSummary ?? currentReview.reviewComment ?? currentReview.ReviewComment ?? "No comment"}</p>
+                    {(currentReview.reviewFilePath ?? currentReview.ReviewFilePath) && <a href={currentReview.reviewFilePath ?? currentReview.ReviewFilePath} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 text-xs"><span className="material-symbols-outlined text-[14px]">download</span> Download correction file</a>}
+                  </div>
+                  <div className="bg-surface-container-low rounded-xl p-4 border border-outline-variant">
+                    <p className="font-bold text-on-surface">Version stats</p>
+                    <p className="text-sm text-on-surface-variant mt-1">{currentReview.versionsCount ?? currentReview.VersionsCount ?? 0} version(s) • {currentReview.reviewCount ?? currentReview.ReviewCount ?? 0} review(s)</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="px-2.5 py-1 rounded-full bg-surface border border-outline-variant text-xs">Chapter {currentReview.chapterId ?? currentReview.ChapterId}</span>
+                      <span className="px-2.5 py-1 rounded-full bg-surface border border-outline-variant text-xs">Version #{currentReview.currentVersion ?? currentReview.CurrentVersion ?? "—"}</span>
+                    </div>
+                    <pre className="mt-3 text-[11px] bg-surface-container-lowest border border-outline-variant rounded p-2 overflow-auto max-h-[160px]">{JSON.stringify(currentReview, null, 2)}</pre>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
+            <h4 className="font-headline-sm font-bold text-on-surface">All Chapters — status trail</h4>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead><tr className="bg-surface-container-low border-b border-outline-variant text-left"><th className="p-2">Ch</th><th className="p-2">Title</th><th className="p-2">Status</th><th className="p-2">Last Submission</th><th className="p-2"></th></tr></thead>
+                <tbody className="divide-y divide-surface-container">
+                  {(dash?.chapterRoadmap || chapters || []).map((c,i)=>{
+                    const n = c.chapterNumber ?? c.ChapterNumber ?? i+1
+                    const t = c.title ?? c.Title ?? c.topic ?? `Chapter ${n}`
+                    const st = c.chapterStatus ?? c.ChapterStatus
+                    const last = c.lastSubmissionDate ?? c.LastSubmissionDate
+                    return (
+                      <tr key={n} className="hover:bg-surface-container-low">
+                        <td className="p-2 font-bold">{n}</td>
+                        <td className="p-2">{t}</td>
+                        <td className="p-2"><span className={`px-2 py-1 rounded-full text-xs border ${st===3?'bg-green-50 text-green-700 border-green-200': st===2?'bg-amber-50 text-amber-700 border-amber-200': st===4?'bg-error-container text-on-error-container':'bg-surface border-outline-variant'}`}>{st!=null ? (ChapterStatusLabel[st] ?? st) : (c.exists?'Exists':'Pending')}</span></td>
+                        <td className="p-2 text-xs text-outline">{last ? new Date(last).toLocaleDateString() : "—"}</td>
+                        <td className="p-2"><button onClick={()=>{setWorkspaceChap(Number(n)); setActiveTab('workspace')}} className="text-primary text-xs underline">Edit</button></td>
+                      </tr>
+                    )
+                  })}
+                  {(!dash?.chapterRoadmap && chapters.length===0) && <tr><td colSpan="5" className="p-4 text-center text-outline">No roadmap data</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       </>
       )}
     </DashShell>
   )
 }
 
-
 function FacultyDashboard({ go }) {
+  const tok = decodeToken()
+  const staffNo = tok?.staffNo ?? tok?.StaffNo ?? tok?.staff_no ?? tok?.sub ?? tok?.unique_name ?? tok?.email ?? ""
+  const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? ""
+  const deptId = tok?.departmentId ?? tok?.DepartmentId ?? ""
+  const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [statsErr, setStatsErr] = useState("")
+  const [pending, setPending] = useState([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const [pendingErr, setPendingErr] = useState("")
+  const [projects, setProjects] = useState([])
+  const [projectsTotal, setProjectsTotal] = useState(0)
+  const [projLoading, setProjLoading] = useState(false)
+  const [projErr, setProjErr] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 10
+  const [coordStats, setCoordStats] = useState(null)
+  const [reviewForm, setReviewForm] = useState({ chapterVersionId: "", reviewer: staffNo, reviewComment: "", reviewDecision: 2, correctionFile: null })
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewMsg, setReviewMsg] = useState("")
+  const [reviewErr, setReviewErr] = useState("")
+
+  const fetchStats = useCallback(async ()=>{
+    if (!staffNo) return
+    setStatsLoading(true); setStatsErr("")
+    try {
+      const s = await projectApi.getSupervisorStatistics({ staffNo, departmentId: deptId || undefined, institutionId: instId || undefined })
+      setStats(s)
+    } catch (e) { setStatsErr(e.message) }
+    finally { setStatsLoading(false) }
+  }, [staffNo, deptId, instId])
+
+  const fetchPending = useCallback(async ()=>{
+    if (!staffNo) return
+    setPendingLoading(true); setPendingErr("")
+    try {
+      const p = await projectApi.getAwaitingAction({ staffNo, institutionId: instId || undefined })
+      setPending(Array.isArray(p) ? p : (p?.items ?? []))
+    } catch (e) { setPendingErr(e.message) }
+    finally { setPendingLoading(false) }
+  }, [staffNo, instId])
+
+  const fetchProjects = useCallback(async ()=>{
+    if (!staffNo) return
+    setProjLoading(true); setProjErr("")
+    try {
+      const res = await projectApi.getProjectsBySupervisor({ staffNo, status: statusFilter || undefined, pageNumber: page, pageSize })
+      const items = res?.items ?? res?.Items ?? (Array.isArray(res) ? res : [])
+      setProjects(Array.isArray(items) ? items : [])
+      setProjectsTotal(res?.totalRecords ?? res?.TotalRecords ?? items.length ?? 0)
+    } catch (e) { setProjErr(e.message) }
+    finally { setProjLoading(false) }
+  }, [staffNo, statusFilter, page])
+
+  const fetchCoord = useCallback(async ()=>{
+    if (!deptId || !instId) return
+    try { const c = await projectApi.getCoordinatorDashboard({ departmentId: deptId, institutionId: instId }); setCoordStats(c) } catch {}
+  }, [deptId, instId])
+
+  useEffect(()=>{ fetchStats(); fetchPending(); fetchProjects(); fetchCoord() }, [fetchStats, fetchPending, fetchProjects, fetchCoord])
+
+  const handleReview = useCallback(async (e)=>{
+    e.preventDefault()
+    if (!reviewForm.chapterVersionId) { setReviewErr("Chapter version ID required"); return }
+    setReviewBusy(true); setReviewErr(""); setReviewMsg("")
+    try {
+      await projectApi.reviewVersion({
+        chapterVersionId: Number(reviewForm.chapterVersionId),
+        reviewer: reviewForm.reviewer || staffNo,
+        reviewComment: reviewForm.reviewComment,
+        reviewDecision: Number(reviewForm.reviewDecision),
+        correctionFile: reviewForm.correctionFile || undefined
+      })
+      setReviewMsg("Review submitted")
+      setReviewForm(f=>({...f, reviewComment:"", correctionFile:null}))
+      await fetchPending()
+      await fetchProjects()
+    } catch (err) { setReviewErr(err.message || "Review failed") }
+    finally { setReviewBusy(false) }
+  }, [reviewForm, staffNo, fetchPending, fetchProjects])
+
   return (
-    <DashShell go={go} active="faculty" role="faculty" title="Faculty Overview" subtitle="Manage supervisees, approvals, and research pipeline.">
+    <DashShell go={go} active="faculty" role="faculty" title="Faculty Overview" subtitle={`Supervisor ${staffNo || "—"} • Manage supervisees, approvals, and research pipeline.`}>
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
-            <div><p className="font-label-md text-on-surface-variant mb-1">Active Supervisees</p><p className="font-headline-lg text-primary font-bold">12</p></div>
+            <div><p className="font-label-md text-on-surface-variant mb-1">Total Students</p><p className="font-headline-lg text-primary font-bold">{statsLoading ? "…" : (stats?.totalStudents ?? stats?.TotalStudents ?? "—")}</p><p className="text-xs text-outline truncate">{statsErr ? statsErr.slice(0,30) : (coordStats ? `${coordStats.totalStudents ?? coordStats.TotalStudents ?? ""} dept total` : "Supervisor stats")}</p></div>
             <div className="p-2 bg-tertiary-fixed rounded-lg text-on-tertiary-fixed"><span className="material-symbols-outlined">school</span></div>
           </div>
           <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
-            <div><p className="font-label-md text-on-surface-variant mb-1">Pending Approvals</p><p className="font-headline-lg text-secondary font-bold">5</p></div>
+            <div><p className="font-label-md text-on-surface-variant mb-1">Ongoing Projects</p><p className="font-headline-lg text-primary font-bold">{statsLoading ? "…" : (stats?.ongoingProjects ?? stats?.OngoingProjects ?? "—")}</p><p className="text-xs text-outline">{stats?.completingProjects ?? stats?.CompletingProjects ?? 0} completing</p></div>
             <div className="p-2 bg-secondary-fixed rounded-lg text-on-secondary-fixed"><span className="material-symbols-outlined">pending_actions</span></div>
           </div>
+          <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
+            <div><p className="font-label-md text-on-surface-variant mb-1">Awaiting Action</p><p className="font-headline-lg text-error font-bold">{statsLoading ? "…" : (stats?.projectsAwaitingAction ?? stats?.ProjectsAwaitingAction ?? pending.length ?? 0)}</p><p className="text-xs text-outline">Chapters needing review</p></div>
+            <div className="p-2 bg-error-container rounded-lg text-on-error-container"><span className="material-symbols-outlined">notification_important</span></div>
+          </div>
           <div className="glass-card ambient-shadow rounded-xl p-4 flex flex-col justify-between border border-surface-container">
-            <div className="flex items-center justify-between mb-1"><p className="font-label-md text-on-surface-variant">Automated Reminders</p><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" defaultChecked className="sr-only peer"/><div className="w-9 h-5 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div></label></div>
-            <p className="font-body-sm text-on-surface-variant">Next batch sends in 2 days for overdue milestones.</p>
+            <div className="flex items-center justify-between mb-1"><p className="font-label-md text-on-surface-variant">Project Flow</p><span className={`w-2 h-2 rounded-full ${statsErr ? 'bg-error' : 'bg-green-500'}`}></span></div>
+            <p className="font-body-sm text-on-surface-variant text-xs">StaffNo <span className="font-mono bg-surface-container-low px-1 rounded">{staffNo || "—"}</span> • Inst {instId || "—"} • Dept {deptId || "—"}</p>
+            <div className="flex gap-2 mt-2">
+              <button onClick={fetchStats} className="text-xs bg-surface border border-outline-variant px-2 py-1 rounded hover:bg-surface-variant">Refresh</button>
+              <button onClick={fetchPending} className="text-xs bg-surface border border-outline-variant px-2 py-1 rounded hover:bg-surface-variant">Pending</button>
+            </div>
           </div>
         </div>
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 glass-card ambient-shadow rounded-xl border border-surface-container overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-surface-container flex items-center justify-between bg-surface-container-lowest">
-              <h3 className="font-headline-sm font-semibold text-primary">Student Progress Board</h3>
-              <button className="px-3 py-1.5 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container text-sm flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">filter_list</span> Filter</button>
+            <div className="p-4 border-b border-surface-container flex flex-wrap items-center justify-between gap-2 bg-surface-container-lowest">
+              <h3 className="font-headline-sm font-semibold text-primary">Supervisee Projects</h3>
+              <div className="flex items-center gap-2">
+                <select value={statusFilter} onChange={e=>{setStatusFilter(e.target.value); setPage(1)}} className="border border-outline-variant rounded px-2 py-1.5 text-sm bg-surface">
+                  <option value="">All statuses</option>
+                  <option value="1">Initiated</option>
+                  <option value="2">Approved</option>
+                  <option value="3">Ongoing</option>
+                  <option value="4">Completed</option>
+                </select>
+                <button onClick={fetchProjects} className="px-3 py-1.5 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container text-sm flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">refresh</span> Refresh</button>
+              </div>
             </div>
             <div className="overflow-x-auto">
+              {projLoading ? <div className="p-8 text-center text-on-surface-variant">Loading projects…</div> : projErr ? <div className="p-4 text-sm bg-error-container text-on-error-container">{projErr}</div> : (
               <table className="w-full text-left border-collapse">
-                <thead><tr className="bg-surface-container-low border-b border-outline-variant font-label-md text-on-surface-variant"><th className="p-3 font-semibold">Student</th><th className="p-3 font-semibold">Program</th><th className="p-3 font-semibold">Current Phase</th><th className="p-3 font-semibold">Progress</th><th className="p-3 font-semibold text-right">Action</th></tr></thead>
+                <thead><tr className="bg-surface-container-low border-b border-outline-variant font-label-md text-on-surface-variant"><th className="p-3 font-semibold">Student</th><th className="p-3 font-semibold">Session</th><th className="p-3 font-semibold">Status</th><th className="p-3 font-semibold">Project</th><th className="p-3 font-semibold text-right">Action</th></tr></thead>
                 <tbody className="font-body-sm divide-y divide-surface-container">
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-bold text-xs">EJ</div><span className="font-semibold text-on-surface">Elena J.</span></td><td className="p-3 text-on-surface-variant">Ph.D. CompSci</td><td className="p-3">Data Collection</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-secondary h-2 rounded-full" style={{width:'60%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">View Matrix</button></td></tr>
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center font-bold text-xs">MC</div><span className="font-semibold text-on-surface">Marcus C.</span></td><td className="p-3 text-on-surface-variant">MSc Biology</td><td className="p-3 text-error">Overdue: Proposal</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-error h-2 rounded-full" style={{width:'25%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">Review</button></td></tr>
-                  <tr className="hover:bg-surface-bright"><td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs">SR</div><span className="font-semibold text-on-surface">S. Rahman</span></td><td className="p-3 text-on-surface-variant">Ph.D. Physics</td><td className="p-3">Chapter 3 Draft</td><td className="p-3"><div className="w-full bg-surface-container rounded-full h-2"><div className="bg-primary h-2 rounded-full" style={{width:'85%'}}></div></div></td><td className="p-3 text-right"><button className="text-primary hover:underline font-label-md text-[13px]">Review</button></td></tr>
+                  {(projects.length ? projects : [
+                    { matricNo: "CSC/2024/001", session:"2025/2026", projectStatus:3, programId:1, MatricNo:"CSC/2024/001 (mock)", ProjectStatus:3 },
+                    { matricNo: "CSC/2024/002", session:"2025/2026", projectStatus:2, programId:1, MatricNo:"CSC/2024/002 (mock)", ProjectStatus:2 },
+                  ].slice(0, projects.length===0 ? 2 : 0)).map((p,i)=>{
+                    const matric = p.matricNo ?? p.MatricNo ?? p.Matric_no ?? "—"
+                    const sess = p.session ?? p.Session ?? "—"
+                    const st = p.projectStatus ?? p.ProjectStatus ?? p.status ?? 1
+                    return (
+                      <tr key={i} className="hover:bg-surface-bright">
+                        <td className="p-3 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-bold text-xs">{String(matric).slice(0,2).toUpperCase()}</div><span className="font-semibold text-on-surface truncate">{matric}</span></td>
+                        <td className="p-3 text-on-surface-variant">{sess}</td>
+                        <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs border font-bold ${st===3?'bg-amber-50 text-amber-800 border-amber-200': st===2?'bg-green-50 text-green-800 border-green-200': st===4?'bg-primary-container':'bg-surface border-outline-variant'}`}>{ProjectStatusLabel[st] ?? st}</span></td>
+                        <td className="p-3 text-xs truncate max-w-[160px]">#{p.id ?? p.Id ?? i+1} {p.programId ? `Prog ${p.programId}` : ""}</td>
+                        <td className="p-3 text-right"><button onClick={()=>{ if(p.id||p.Id) { setReviewForm(f=>({...f, chapterVersionId: String(p.id ?? p.Id)})) } }} className="text-primary hover:underline font-label-md text-[13px]">Review</button></td>
+                      </tr>
+                    )
+                  })}
+                  {projects.length===0 && !projErr && <tr><td colSpan="5" className="p-4 text-center text-xs text-outline">No projects returned — API may be empty; mock rows above.</td></tr>}
                 </tbody>
               </table>
+              )}
             </div>
+            <div className="p-3 border-t border-surface-container flex items-center justify-between text-xs text-outline">
+              <span>Total {projectsTotal} • Page {page}</span>
+              <div className="flex gap-1">
+                <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 border border-outline-variant rounded disabled:opacity-40">Prev</button>
+                <button onClick={()=>setPage(p=>p+1)} className="px-3 py-1 border border-outline-variant rounded">Next</button>
+              </div>
+            </div>
+            <p className="px-4 pb-2 text-[11px] text-outline">GET /api/Project/get-projects-by-supervisor?staffNo={staffNo}&status={statusFilter || "all"}&pageNumber={page}&pageSize={pageSize}</p>
           </div>
+
           <div className="glass-card ambient-shadow rounded-xl border border-surface-container flex flex-col">
-            <div className="p-4 border-b border-surface-container bg-surface-container-lowest"><h3 className="font-headline-sm font-semibold text-primary flex items-center gap-2"><span className="material-symbols-outlined text-secondary">inbox</span> Approval Queue</h3></div>
-            <div className="p-4 space-y-3 overflow-auto">
-              {[
-                {title:'Ch. 3 Draft', by:'S. Rahman • 2 hrs ago', status:'Pending'},
-                {title:'IRB Ethics Renewal', by:'Elena J. • 5 hrs ago', status:'Urgent'},
-                {title:'Grant Budget v2', by:'Marcus C. • yesterday', status:'Pending'},
-              ].map(it=>(
-                <div key={it.title} className="p-3 border border-outline-variant rounded-lg bg-surface hover:bg-surface-container-low cursor-pointer">
-                  <div className="flex justify-between items-start mb-1"><span className="font-label-md font-bold text-on-surface">{it.title}</span><span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${it.status==='Urgent' ? 'bg-error-container text-on-error-container' : 'text-secondary bg-secondary-fixed'}`}>{it.status}</span></div>
-                  <p className="font-body-sm text-on-surface-variant mb-2">{it.by}</p>
-                  <button className="w-full bg-primary text-on-primary py-1.5 rounded text-xs font-semibold hover:bg-opacity-90">Review</button>
+            <div className="p-4 border-b border-surface-container bg-surface-container-lowest flex items-center justify-between"><h3 className="font-headline-sm font-semibold text-primary flex items-center gap-2"><span className="material-symbols-outlined text-secondary">inbox</span> Awaiting Action Queue</h3><span className="text-xs bg-error-container text-on-error-container px-2 py-0.5 rounded-full">{pending.length}</span></div>
+            <div className="p-4 space-y-3 overflow-auto max-h-[520px]">
+              {pendingLoading ? <div className="py-8 text-center text-on-surface-variant">Loading…</div> : pendingErr ? <div className="p-3 bg-error-container text-on-error-container rounded text-sm">{pendingErr}</div> : pending.length===0 ? (
+                <div className="py-8 text-center border-2 border-dashed border-outline-variant rounded-xl">
+                  <span className="material-symbols-outlined text-3xl text-outline">check_circle</span>
+                  <p className="text-sm text-on-surface-variant mt-2">No pending chapters</p>
+                  <p className="text-xs text-outline">GET /api/Project/awaiting-action?StaffNo={staffNo}&institutionId={instId || "—"}</p>
+                  {[
+                    {matricNo:'STU001', chapterNumber:1, versionNumber:2, supervisorNote:'Please review.', submittedAt: new Date().toISOString()},
+                  ].map(it=>(
+                    <div key={it.matricNo} className="mt-4 p-3 border border-outline-variant rounded-lg bg-surface-container-low text-left">
+                      <div className="flex justify-between items-start mb-1"><span className="font-label-md font-bold text-on-surface">{it.matricNo} — Ch {it.chapterNumber} v{it.versionNumber}</span><span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Mock</span></div>
+                      <p className="font-body-sm text-on-surface-variant mb-1">{it.supervisorNote}</p>
+                      <p className="text-[11px] text-outline">{new Date(it.submittedAt).toLocaleString()} • file: /uploads/chapter mock</p>
+                      <button onClick={()=>setReviewForm(f=>({...f, chapterVersionId: "15"}))} className="mt-2 w-full bg-primary text-on-primary py-1.5 rounded text-xs font-semibold">Open Review</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <button onClick={()=>go('admin')} className="w-full text-primary font-label-md text-[13px] hover:underline mt-1">View Admin Topology →</button>
+              ) : (
+                pending.map((it,i)=>(
+                  <div key={i} className="p-3 border border-outline-variant rounded-lg bg-surface hover:bg-surface-container-low">
+                    <div className="flex justify-between items-start mb-1"><span className="font-label-md font-bold text-on-surface text-sm">{it.matricNo ?? it.MatricNo} — Ch {it.chapterNumber ?? it.ChapterNumber} v{it.versionNumber ?? it.VersionNumber}</span><span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{it.supervisorNote ? "Note" : "Pending"}</span></div>
+                    <p className="font-body-sm text-on-surface-variant text-xs line-clamp-2">{it.supervisorNote ?? it.SupervisorNote ?? "Submitted chapter version awaiting your review"}</p>
+                    <p className="text-[11px] text-outline mt-1">{it.submittedAt ? new Date(it.submittedAt).toLocaleString() : ""} {it.downloadFileUrl ? `• ${it.downloadFileUrl}` : ""}</p>
+                    <div className="flex gap-2 mt-2">
+                      {it.downloadFileUrl && <a href={it.downloadFileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Download</a>}
+                      <button onClick={()=> setReviewForm(f=>({...f, chapterVersionId: String(it.versionId ?? it.VersionId ?? it.versionNumber ?? "")}))} className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded">Review</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
+
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">rate_review</span> Review Chapter Version</h3>
+          <p className="text-xs text-on-surface-variant mb-3">POST /api/Project/version-review — multipart: chapterVersionId, reviewer (StaffNo), reviewComment, reviewDecision (1=NeedsCorrection,2=Approved,3=Rejected), correctionFile.</p>
+          <form onSubmit={handleReview} className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Version ID</label>
+              <input value={reviewForm.chapterVersionId} onChange={e=>setReviewForm(f=>({...f, chapterVersionId: e.target.value}))} placeholder="15" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1" />
+            </div>
+            <div>
+              <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Reviewer (StaffNo)</label>
+              <input value={reviewForm.reviewer} onChange={e=>setReviewForm(f=>({...f, reviewer: e.target.value}))} className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1" />
+            </div>
+            <div>
+              <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Decision</label>
+              <select value={reviewForm.reviewDecision} onChange={e=>setReviewForm(f=>({...f, reviewDecision: Number(e.target.value)}))} className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1">
+                <option value={1}>Needs Correction</option>
+                <option value={2}>Approved</option>
+                <option value={3}>Rejected</option>
+              </select>
+            </div>
+            <div>
+              <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Correction File</label>
+              <input type="file" onChange={e=>setReviewForm(f=>({...f, correctionFile: e.target.files?.[0] || null}))} className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1 text-xs" />
+            </div>
+            <div className="md:col-span-4">
+              <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Review Comment</label>
+              <textarea value={reviewForm.reviewComment} onChange={e=>setReviewForm(f=>({...f, reviewComment: e.target.value}))} rows="2" placeholder="Please revise the literature review…" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface mt-1"></textarea>
+            </div>
+            <div className="md:col-span-4 flex flex-wrap gap-2">
+              <button type="submit" disabled={reviewBusy} className="bg-primary text-on-primary px-5 py-2 rounded-lg font-label-md text-sm disabled:opacity-40 flex items-center gap-2">
+                {reviewBusy ? <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> : <span className="material-symbols-outlined text-[16px]">send</span>} Submit Review
+              </button>
+              <button type="button" onClick={fetchPending} className="bg-surface border border-outline-variant px-4 py-2 rounded-lg text-sm">Refresh Queue</button>
+            </div>
+            {reviewErr && <div className="md:col-span-4 rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{reviewErr}</div>}
+            {reviewMsg && <div className="md:col-span-4 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{reviewMsg}</div>}
+          </form>
+        </div>
+
+        {coordStats && (
+          <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-4">
+            <h4 className="font-headline-sm font-bold text-on-surface">Coordinator Overview — Dept {deptId}</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
+              <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-xs text-outline uppercase font-bold">Total Students</p><p className="font-bold text-lg">{coordStats.totalStudents ?? coordStats.TotalStudents ?? "—"}</p></div>
+              <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-xs text-outline uppercase font-bold">Ongoing</p><p className="font-bold text-lg">{coordStats.ongoingProjects ?? "—"}</p></div>
+              <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-xs text-outline uppercase font-bold">Awaiting</p><p className="font-bold text-lg">{coordStats.projectsAwaitingAction ?? "—"}</p></div>
+              <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-xs text-outline uppercase font-bold">Workload</p><p className="font-bold text-sm">{coordStats.totalMinimumWorkload ?? "—"}–{coordStats.totalMaximumWorkload ?? "—"}</p></div>
+            </div>
+          </div>
+        )}
       </div>
     </DashShell>
   )
 }
 
-/* ---------- Admin Control Panel (Stitch: 704fc6b367d542fb86070aa7c5c7787e) ---------- */
-/* ---------- Admin Control Panel (onboarding module) ---------- */
+
 function AdminPanel({ go }) {
   return (
     <DashShell go={go} active="admin" role="admin" subrole="institution" title="Institution Administration" subtitle="Home dashboard with quick access to onboarding, subscription and payment history.">

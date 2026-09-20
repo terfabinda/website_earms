@@ -23,6 +23,12 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/billing/, ''),
       },
+      '/api/project': {
+        target: 'https://project.earmshub.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/project/, ''),
+      },
     },
   },
 })
