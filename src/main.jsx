@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
-import { IamAdmin } from './iam-admin.jsx'
+import { RolesPanel, RoleAssign } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { billingApi } from './billing'
@@ -903,6 +903,12 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {key:'pubs', label:'Publications', icon:'article'},
     {key:'team', label:'Team Settings', icon:'group'},
   ]
+  // Billing items live on the Student Dashboard (moved out of Institution Admin)
+  const studentBillingNavItems = [
+    {key:'subscription', label:'Subscription', icon:'card_membership'},
+    {key:'payment-history', label:'Payment History', icon:'receipt_long'},
+  ]
+  const hashSection = (useHashQuery().get('section') || '').toLowerCase()
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
@@ -924,8 +930,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Onboarding', icon: 'assignment', subitems: ['Institution','PG', collegeTerm,'Department','Programme','Staff','Student']},
-    {label: 'Subscription', icon: 'card_membership'},
-    {label: 'Payment History', icon: 'receipt_long'},
     {label: 'Analytics', icon: 'insights'},
     {label: 'Settings', icon: 'settings'},
   ]
@@ -970,7 +974,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : it.label === 'Subscription' ? ()=>go('admin?section=subscription') : it.label === 'Payment History' ? ()=>go('admin?section=payment-history') : it.label === 'Analytics' ? ()=>go('admin?section=analytics') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('admin') : it.label === 'Settings' ? ()=>go('admin?section=settings') : it.label === 'Analytics' ? ()=>go('admin?section=analytics') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1029,9 +1033,12 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           ) : (
             // student
             <>
-              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined">dashboard</span> Dashboard</button></li>
+              <li><button onClick={()=>go('student')} type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
               {navItems.slice(1).map(it=>(
                 <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+              ))}
+              {studentBillingNavItems.map(it=>(
+                <li key={it.key}><button onClick={()=>go(`student?section=${it.key}`)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${hashSection===it.key ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-variant'}`}><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
           )}
@@ -1108,8 +1115,8 @@ function SystemHome({ go }) {
   const section = (q.get('section') || '').toLowerCase()
   const item = q.get('item') || ''
   const [dashStats, setDashStats] = useState([
-    {label: 'Total Plans', value: '—', sub: 'Loading…', icon: 'sell', color: 'bg-primary-container text-primary'},
-    {label: 'Active Plans', value: '—', sub: 'Loading…', icon: 'card_membership', color: 'bg-secondary-container text-secondary'},
+    {label: 'Total Plans', value: '—', sub: 'Loading…', icon: 'sell', color: 'bg-primary-container text-white'},
+    {label: 'Active Plans', value: '—', sub: 'Loading…', icon: 'card_membership', color: 'bg-secondary-container text-on-secondary-container'},
     {label: 'Active Subscriptions', value: '—', sub: 'Loading…', icon: 'verified', color: 'bg-green-100 text-green-800'},
     {label: 'Billing Cycles', value: '3', sub: 'Monthly · Quarterly · Annual', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
   ])
@@ -1121,8 +1128,8 @@ function SystemHome({ go }) {
         const total = plans.length
         const active = plans.filter((p) => p.planStatus === 1).length
         setDashStats([
-          {label: 'Total Plans', value: String(total), sub: total + ' plans in the catalogue', icon: 'sell', color: 'bg-primary-container text-primary'},
-          {label: 'Active Plans', value: String(active), sub: active + ' active plans', icon: 'card_membership', color: 'bg-secondary-container text-secondary'},
+          {label: 'Total Plans', value: String(total), sub: total + ' plans in the catalogue', icon: 'sell', color: 'bg-primary-container text-white'},
+          {label: 'Active Plans', value: String(active), sub: active + ' active plans', icon: 'card_membership', color: 'bg-secondary-container text-on-secondary-container'},
           {label: 'Active Subscriptions', value: '—', sub: 'View subscription page for details', icon: 'verified', color: 'bg-green-100 text-green-800'},
           {label: 'Billing Cycles', value: '3', sub: 'Monthly · Quarterly · Annual', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
         ])
@@ -1155,7 +1162,7 @@ function SystemHome({ go }) {
         </button>
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">settings</span></div>
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">settings</span></div>
             <div>
               <h2 className="font-headline-md font-bold text-primary capitalize">{section} {item ? `— ${item}` : ''}</h2>
               <p className="font-body-sm text-on-surface-variant">Manage {section} {item ? `· ${item}` : 'overview and actions'}</p>
@@ -1168,16 +1175,10 @@ function SystemHome({ go }) {
                 <p className="font-body-sm text-on-surface-variant mb-3">Update your system admin password. You will be logged out after a successful change.</p>
                 <button onClick={()=>go('forgot')} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Go to Reset Password</button>
               </div>
-              <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
+              <div className="lg:col-span-2 bg-surface-container-low rounded-xl p-5 border border-outline-variant">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">manage_accounts</span> System Preferences</h3>
-                <p className="font-body-sm text-on-surface-variant mb-3">IAM configuration, owner and mail management.</p>
-                <div className="space-y-2">
-                  <button onClick={()=>{const el=document.getElementById('iam-panel'); if(el) el.scrollIntoView({behavior:'smooth'});}} className="w-full border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">View IAM Panel Below</button>
-                  <p className="font-body-sm text-[12px] text-outline text-center">More settings (notifications, audit logs) will appear here.</p>
-                </div>
-              </div>
-              <div id="iam-panel" className="lg:col-span-2">
-                <IamAdmin go={go} />
+                <p className="font-body-sm text-on-surface-variant mb-3">Platform preferences, notifications and audit logs.</p>
+                <p className="font-body-sm text-[12px] text-outline text-center">More settings (notifications, audit logs) will appear here.</p>
               </div>
             </div>
           ) : (
@@ -1195,9 +1196,9 @@ function SystemHome({ go }) {
 
   // Home dashboard - stat cards + icon grid mapping to sidebar
   const stats = [
-    {label: 'Total Subscriptions', value: '1,348', sub: 'Active: 1,042', icon: 'card_membership', color: 'bg-primary-container text-primary'},
-    {label: 'Active Plans', value: '5', sub: 'Across 3 billing cycles', icon: 'sell', color: 'bg-secondary-container text-secondary'},
-    {label: 'Institutions', value: '1,248', sub: 'Onboarded in 14 regions', icon: 'business', color: 'bg-tertiary-container text-tertiary'},
+    {label: 'Total Subscriptions', value: '1,348', sub: 'Active: 1,042', icon: 'card_membership', color: 'bg-primary-container text-white'},
+    {label: 'Active Plans', value: '5', sub: 'Across 3 billing cycles', icon: 'sell', color: 'bg-secondary-container text-on-secondary-container'},
+    {label: 'Institutions', value: '1,248', sub: 'Onboarded in 14 regions', icon: 'business', color: 'bg-tertiary-container text-white'},
     {label: 'Regions', value: '14', sub: 'Africa coverage', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
@@ -1634,7 +1635,7 @@ function CollegePage({ go }) {
               <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">account_balance</span></div>
+                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">account_balance</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{c.Code ?? c.code ?? "—"}</span>
                 </div>
                 <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</h4>
@@ -1779,7 +1780,7 @@ function DepartmentPage({ go }) {
               <div className="h-1.5 w-full bg-gradient-to-r from-secondary to-primary"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-secondary">account_tree</span></div>
+                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-secondary-container">account_tree</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{d.Code ?? d.code ?? "—"}</span>
                 </div>
                 <span className="font-label-md text-primary text-[11px] uppercase tracking-widest mt-3 block">Department of</span>
@@ -2007,7 +2008,7 @@ function ProgrammeCreate({ go }) {
               <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">school</span></div>
+                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">school</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">ID: {p.Id ?? p.id ?? "—"}</span>
                 </div>
                 <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-2">{p.Name ?? p.name ?? "—"}</h4>
@@ -2373,7 +2374,7 @@ function StaffManagementPage({ go }) {
               <div className="h-1.5 w-full bg-gradient-to-r from-primary to-tertiary"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-secondary">badge</span></div>
+                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-secondary-container">badge</span></div>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{s.staffId ?? s.StaffId ?? s.staffID ?? "—"}</span>
                 </div>
                 <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{[s.Title ?? s.title, s.FirstName ?? s.firstName, s.LastName ?? s.lastName].filter(Boolean).join(" ") || "—"}</h4>
@@ -2484,7 +2485,7 @@ function StaffManagementPage({ go }) {
             <div className="p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-white">
                     {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
                   </div>
                   <div>
@@ -3026,7 +3027,7 @@ function StudentManagementPage({ go }) {
             <div className="p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-white">
                     {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
                   </div>
                   <div>
@@ -3226,7 +3227,23 @@ function SubscriptionPage() {
         <form onSubmit={submit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {plans.length === 0 && <p className="text-on-surface-variant col-span-2">No plans available for this currency.</p>}
-            {plans.map(plan => <label key={plan.id} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${selectedPlan === plan.name ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-low'}`}><input type="radio" name="plan" value={plan.name} checked={selectedPlan === plan.name} onChange={() => { setSelectedPlan(plan.name); setSelectedPlanPricingId(plan.pricingId); setBillingCycle(cycleMap[plan.billingCycle] || 'Annual') }} className="sr-only" /><div className="flex items-start justify-between gap-4"><div><h3 className="font-headline-sm font-bold text-on-surface">{plan.name}</h3><p className="font-body-sm text-on-surface-variant mt-1">{plan.detail}</p></div><span className="material-symbols-outlined text-primary">{selectedPlan === plan.name ? 'radio_button_checked' : 'radio_button_unchecked'}</span></div><p className="font-headline-sm font-bold text-primary mt-5">{plan.price}</p>{plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}</label>)}
+            {plans.map(plan => {
+              const sel = selectedPlan === plan.name
+              return (
+                <label key={plan.id} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${sel ? 'border-primary bg-primary' : 'border-outline-variant bg-surface-container-low'}`}>
+                  <input type="radio" name="plan" value={plan.name} checked={sel} onChange={() => { setSelectedPlan(plan.name); setSelectedPlanPricingId(plan.pricingId); setBillingCycle(cycleMap[plan.billingCycle] || 'Annual') }} className="sr-only" />
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className={`font-headline-sm font-bold ${sel ? 'text-white' : 'text-on-surface'}`}>{plan.name}</h3>
+                      <p className={`font-body-sm mt-1 ${sel ? 'text-white/85' : 'text-on-surface-variant'}`}>{plan.detail}</p>
+                    </div>
+                    <span className={`material-symbols-outlined ${sel ? 'text-white' : 'text-primary'}`}>{sel ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+                  </div>
+                  <p className={`font-headline-sm font-bold mt-5 ${sel ? 'text-white' : 'text-primary'}`}>{plan.price}</p>
+                  {plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}
+                </label>
+              )
+            })}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing Cycle</span><select value={billingCycle} onChange={event => setBillingCycle(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
@@ -3335,9 +3352,16 @@ function InstitutionHome({ go }) {
       .catch(() => {})
   }, [])
 
+  // Subscription & Payment History now live on the Student Dashboard
+  useEffect(() => {
+    if (section === 'subscription') go('student?section=subscription')
+    else if (section === 'payment-history' || section === 'payment history') go('student?section=payment-history')
+  }, [section])
+
   if (section) {
     const isSettings = section === 'settings'
     const isOnboarding = section === 'onboarding'
+    const isMovedBilling = section === 'subscription' || section === 'payment-history' || section === 'payment history'
     return (
       <div className="space-y-6 max-w-5xl">
         <button onClick={()=>go('admin')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
@@ -3345,14 +3369,14 @@ function InstitutionHome({ go }) {
         </button>
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-primary">{section==='onboarding'?'assignment':section==='subscription'?'card_membership':section==='payment history'?'receipt_long':section==='analytics'?'insights':'settings'}</span></div>
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">{section==='onboarding'?'assignment':section==='subscription'?'card_membership':section==='payment history'?'receipt_long':section==='analytics'?'insights':'settings'}</span></div>
             <div>
               <h2 className="font-headline-md font-bold text-primary capitalize">{section} {item ? `— ${item}` : ''}</h2>
               <p className="font-body-sm text-on-surface-variant">Manage {sectionKey} {item ? `· ${item}` : 'overview'}</p>
             </div>
           </div>
-          {section === 'subscription' ? (
-            <SubscriptionPage />
+          {isMovedBilling ? (
+            <p className="font-body-sm text-on-surface-variant">Subscription and payment history now live on your Student Dashboard — redirecting…</p>
           ) : isSettings ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant">
@@ -3384,14 +3408,17 @@ function InstitutionHome({ go }) {
                 }} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim">Save Preference</button>
                 <p className="font-body-sm text-[11px] text-outline mt-2 text-center">Current: <span className="font-label-md text-on-surface">{collegeChoice}</span> — Onboarding submenu will show “{collegeChoice}” instead of “College”.</p>
               </div>
+              <div className="lg:col-span-2">
+                <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">manage_accounts</span> Roles</h3>
+                <p className="font-body-sm text-on-surface-variant mb-3">Create the application roles and assign them to users.</p>
+                <RolesPanel />
+              </div>
               <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant lg:col-span-2">
                 <h3 className="font-label-md font-bold text-on-surface mb-3 flex items-center gap-2"><span className="material-symbols-outlined">tune</span> Institution Settings</h3>
                 <p className="font-body-sm text-on-surface-variant mb-3">Preferences, notifications and audit logs will appear here.</p>
                 <p className="font-body-sm text-[12px] text-outline text-center">More settings coming soon.</p>
               </div>
             </div>
-          ) : section === 'payment history' || section === 'payment-history' ? (
-            <PaymentHistoryPage />
           ) : isOnboarding ? (
             item && ['institution','subscriber'].includes(item.toLowerCase()) ? (
               <InstitutionProfile go={go} />
@@ -3427,15 +3454,13 @@ function InstitutionHome({ go }) {
   }
 
   const stats = [
-    {label: 'Total Students', value: '—', sub: 'Across all programmes', icon: 'school', color: 'bg-primary-container text-primary'},
-    {label: 'Academic Staff', value: '—', sub: 'Supervisors & lecturers', icon: 'badge', color: 'bg-secondary-container text-secondary'},
-    {label: 'Departments', value: '—', sub: 'Under colleges', icon: 'account_tree', color: 'bg-tertiary-container text-tertiary'},
-    {label: 'Active Subscription', value: instSubStatus, sub: 'Check status in Subscription', icon: 'card_membership', color: instSubStatus !== 'Inactive' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface'},
+    {label: 'Total Students', value: '—', sub: 'Across all programmes', icon: 'school', color: 'bg-primary-container text-white'},
+    {label: 'Academic Staff', value: '—', sub: 'Supervisors & lecturers', icon: 'badge', color: 'bg-secondary-container text-on-secondary-container'},
+    {label: 'Departments', value: '—', sub: 'Under colleges', icon: 'account_tree', color: 'bg-tertiary-container text-white'},
+    {label: 'Active Subscription', value: instSubStatus, sub: 'View it on the Student Dashboard', icon: 'card_membership', color: instSubStatus !== 'Inactive' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
     {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Institution, academic structure and people', subs: ['Institution','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
-    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Manage the current subscription plan', subs: [], color: 'bg-secondary-fixed'},
-    {key: 'payment-history', label: 'Payment History', icon: 'receipt_long', desc: 'Subscription and payment records', subs: [], color: 'bg-tertiary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
   ]
@@ -3500,7 +3525,31 @@ function InstitutionHome({ go }) {
 }
 
 /* ---------- Student Dashboard (Stitch: 6cac2f74a4d34ab79e8c434ea4373e91) ---------- */
+// First non-empty value (API rows often come back as "" instead of null).
+const showVal = (...vals) => {
+  for (const v of vals) {
+    if (v === undefined || v === null) continue
+    const s = String(v).trim()
+    if (s && s !== "—") return s
+  }
+  return "—"
+}
+// Merge a secondary record into the primary one, only filling empty/placeholder fields.
+// GET /get_student/{matricNo} (StudentDto) carries PhoneNo + ProgramName, which the
+// dashboard's first source (IAM / department rows) often lacks.
+function fillStudentMissing(base, extra) {
+  const out = { ...(base || {}) }
+  if (!extra || typeof extra !== "object") return out
+  const empty = (v) => v === undefined || v === null || String(v).trim() === "" || String(v).trim() === "—"
+  for (const [k, v] of Object.entries(extra)) {
+    if (empty(out[k]) && !empty(v)) out[k] = v
+  }
+  return out
+}
 function StudentDashboard({ go }) {
+  const qsHash = useHashQuery()
+  const section = (qsHash.get('section') || '').toLowerCase()
+  const billingSection = section === 'subscription' || section === 'payment-history' || section === 'payment history'
   const [student, setStudent] = useState(null)
   const [deptProg, setDeptProg] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -3564,7 +3613,7 @@ function StudentDashboard({ go }) {
     const arr = []
     if (dash?.supervisorStaffNo) {
       const list = Array.isArray(dash.supervisorStaffNo) ? dash.supervisorStaffNo : [dash.supervisorStaffNo]
-      list.forEach((s, i) => arr.push({ name: String(s), staffNo: String(s), initials: String(s).slice(0,2).toUpperCase(), color: i===0 ? 'bg-primary-container text-primary' : 'bg-secondary-fixed text-secondary' }))
+      list.forEach((s, i) => arr.push({ name: String(s), staffNo: String(s), initials: String(s).slice(0,2).toUpperCase(), color: i===0 ? 'bg-primary-container text-white' : 'bg-secondary-fixed text-on-secondary-fixed' }))
     }
     if (project?.supervisors && Array.isArray(project.supervisors)) {
       project.supervisors.forEach(s => {
@@ -3676,6 +3725,30 @@ function StudentDashboard({ go }) {
                 const fDept = allDept.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === String(matricNo).toLowerCase())
                 if (fDept) s = fDept
               } catch {}
+            }
+          } catch {}
+        }
+        // Fill gaps from GET /get_student/{matricNo} — the record picked above is often an
+        // IAM or department row that omits PhoneNo / ProgramName / AreaOfInterest.
+        if (matricNo && (!s || !(s.PhoneNo ?? s.phoneNo) || !(s.ProgramName ?? s.programName) || !(s.AreaOfInterest ?? s.areaOfInterest))) {
+          try {
+            const full = await onboardingApi.getStudent(matricNo)
+            if (full && (full.MatricNo ?? full.matricNo ?? full.FirstName ?? full.firstName)) s = fillStudentMissing(s, full)
+          } catch {}
+        }
+        // AreaOfInterest is only exposed on the student list DTOs, not on every read path
+        if (matricNo && s && !(s.AreaOfInterest ?? s.areaOfInterest) && instId) {
+          try {
+            const depId = s.DepartmentId ?? s.departmentId
+            const [unass, byInst] = await Promise.all([
+              onboardingApi.getUnassignedStudents(depId ? { departmentId: String(depId), institutionId: String(instId) } : { institutionId: String(instId) }).catch(()=>[]),
+              onboardingApi.getStudentsByInstitution(String(instId)).catch(()=>[]),
+            ])
+            for (const arr of [unass, byInst]) {
+              const list = Array.isArray(arr) ? arr : []
+              const hit = list.find(x => String(x?.MatricNo ?? x?.matricNo ?? "").toLowerCase() === String(matricNo).toLowerCase())
+              const aoi = hit && (hit.AreaOfInterest ?? hit.areaOfInterest)
+              if (aoi && String(aoi).trim()) { s = { ...s, AreaOfInterest: aoi }; break }
             }
           } catch {}
         }
@@ -3911,8 +3984,24 @@ function StudentDashboard({ go }) {
   const workspaceStorageKey = `earms_workspace_${matricNo || 'anon'}_${projectId || 'noproject'}_${workspaceChap}`
 
   return (
-    <DashShell go={go} active="student" role="student" title={`Welcome back, ${firstName}.`} subtitle={loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
-      {loading ? (
+    <DashShell go={go} active="student" role="student" title={billingSection ? (section === 'subscription' ? 'Subscription' : 'Payment History') : `Welcome back, ${firstName}.`} subtitle={billingSection ? (section === 'subscription' ? 'View plans and manage your subscription.' : 'Subscription and payment records for your account.') : loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
+      {billingSection ? (
+        <div className="space-y-6 max-w-5xl">
+          <button onClick={()=>go('student')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Dashboard
+          </button>
+          <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">{section==='subscription'?'card_membership':'receipt_long'}</span></div>
+              <div>
+                <h2 className="font-headline-md font-bold text-primary">{section==='subscription' ? 'Subscription' : 'Payment History'}</h2>
+                <p className="font-body-sm text-on-surface-variant">{section==='subscription' ? 'Choose and manage your plan.' : 'Your subscription and payment records.'}</p>
+              </div>
+            </div>
+            {section==='subscription' ? <SubscriptionPage /> : <PaymentHistoryPage />}
+          </div>
+        </div>
+      ) : loading ? (
         <div className="py-12 text-center"><span className="material-symbols-outlined text-3xl animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading your dashboard…</p></div>
       ) : (
       <>
@@ -3921,7 +4010,7 @@ function StudentDashboard({ go }) {
       <div className="glass-card rounded-xl p-5 border border-surface-container mb-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center font-headline-md font-bold text-primary text-xl">
+            <div className="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center font-headline-md font-bold text-white text-xl">
               {(student?.FirstName ?? student?.firstName ?? firstName).charAt(0)}{(student?.LastName ?? student?.lastName ?? "").charAt(0)}
             </div>
             <div>
@@ -3944,15 +4033,15 @@ function StudentDashboard({ go }) {
           </div>
           <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
             <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">menu_book</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span></div>
-            <p className="font-body-sm text-on-surface mt-1 truncate">{student?.ProgramName ?? student?.programName ?? deptProg?.progName ?? "—"}</p>
+            <p className="font-body-sm text-on-surface mt-1 truncate">{showVal(student?.ProgramName, student?.programName, student?.program, student?.programme, deptProg?.progName)}</p>
           </div>
           <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
             <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">call</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Phone</span></div>
-            <p className="font-body-sm text-on-surface mt-1">{student?.PhoneNo ?? student?.phoneNo ?? "—"}</p>
+            <p className="font-body-sm text-on-surface mt-1">{showVal(student?.PhoneNo, student?.phoneNo, student?.PhoneNumber, student?.phoneNumber, student?.phone)}</p>
           </div>
           <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
             <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Area of Interest</span></div>
-            <p className="font-body-sm text-on-surface mt-1 truncate">{student?.AreaOfInterest ?? student?.areaOfInterest ?? "—"}</p>
+            <p className="font-body-sm text-on-surface mt-1 truncate">{showVal(student?.AreaOfInterest, student?.areaOfInterest)}</p>
           </div>
         </div>
       </div>
@@ -4077,7 +4166,7 @@ function StudentDashboard({ go }) {
               <div className="timeline-item relative mb-6">
                 <div className="timeline-line"></div>
                 <div className="flex gap-3 relative z-10">
-                  <div className="w-8 h-8 rounded-full bg-secondary-fixed text-secondary flex items-center justify-center shrink-0 border border-secondary-fixed-dim"><div className="w-3 h-3 bg-secondary rounded-full animate-pulse"></div></div>
+                  <div className="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center shrink-0 border border-secondary-fixed-dim"><div className="w-3 h-3 bg-secondary rounded-full animate-pulse"></div></div>
                   <div><h4 className="font-headline-sm text-on-surface">Current Programme</h4><p className="font-body-sm text-on-surface-variant">{student?.ProgramName ?? "Active programme"} — {student?.DepartmentName ?? "Department"}</p><span className="font-label-md text-[12px] text-secondary-container">Project: {dash?.projectTitle ?? "—"}</span></div>
                 </div>
               </div>
@@ -4266,8 +4355,11 @@ function StudentDashboard({ go }) {
                 </button>
                 {!projectId && <p className="text-xs text-error">No project linked — supervisor must create project first.</p>}
                 {templates.length>0 && <div className="text-xs bg-surface-container-low rounded-lg p-2 border border-outline-variant"><p className="font-bold">Templates</p><p className="text-outline">{templates.map(t=>t.templateName ?? t.TemplateName).join(", ")}</p></div>}
-              </form>
+            </form>
+            <div className="mt-4">
+              <RoleAssign userName={String(editForm.email || editing.Email || editing.email || editing.UserName || editing.userName || editing.StaffId || editing.staffId || "").trim()} />
             </div>
+          </div>
           </div>
 
           {currentReview && (
@@ -4716,7 +4808,7 @@ function AdminPanel({ go }) {
     return () => { cancelled = true }
   }, [])
   return (
-    <DashShell go={go} active="admin" role="admin" subrole="institution" title={title} subtitle="Home dashboard with quick access to onboarding, subscription and payment history.">
+    <DashShell go={go} active="admin" role="admin" subrole="institution" title={title} subtitle="Home dashboard with quick access to onboarding, analytics and settings.">
       <InstitutionHome go={go} />
     </DashShell>
   )

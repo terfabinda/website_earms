@@ -263,11 +263,26 @@ export const ownerApi = {
 };
 
 // ---- Role Management (IAM Section 9) ----
+// Roles that must never be offered in the UI pickers.
+const EXCLUDED_ROLES = ["superadmin", "student"];
+export function isAssignableRole(name) {
+  const n = String(name ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (!n) return false;
+  return !EXCLUDED_ROLES.includes(n);
+}
+export function filterAssignableRoles(roles) {
+  return (Array.isArray(roles) ? roles : []).filter((r) => isAssignableRole(r?.name ?? r?.Name));
+}
 export const roleApi = {
   async getRoles() {
     const res = await apiFetch("api/usermgt/get-app-roles", { method: "GET" });
     if (!res.ok) throw new Error("Could not load roles");
-    return res.json();
+    const body = await res.json();
+    if (Array.isArray(body)) return body;
+    if (Array.isArray(body?.data)) return body.data;
+    if (Array.isArray(body?.roles)) return body.roles;
+    if (Array.isArray(body?.Data)) return body.Data;
+    return [];
   },
   async assignRoles(userName, roles) {
     const res = await apiFetch("api/usermgt/assign-roles", {

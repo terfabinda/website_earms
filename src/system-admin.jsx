@@ -29,7 +29,7 @@ function PageHeader({ icon, title, desc, children }) {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">{icon}</span></div>
+        <div className="w-11 h-11 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">{icon}</span></div>
         <div>
           <h2 className="font-headline-md font-bold text-primary">{title}</h2>
           <p className="font-body-sm text-on-surface-variant">{desc}</p>
@@ -40,7 +40,7 @@ function PageHeader({ icon, title, desc, children }) {
   )
 }
 
-function StatCard({ label, value, sub, icon, color = 'bg-primary-container text-primary' }) {
+function StatCard({ label, value, sub, icon, color = 'bg-primary-container text-white' }) {
   return (
     <div className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
       <div>
@@ -56,7 +56,7 @@ function StatCard({ label, value, sub, icon, color = 'bg-primary-container text-
 function ToastBar({ toast }) {
   if (!toast) return null
   return (
-    <div className="flex items-center gap-2 bg-primary-container/70 text-primary px-4 py-2.5 rounded-lg border border-primary/20">
+    <div className="flex items-center gap-2 bg-primary-container text-white px-4 py-2.5 rounded-lg border border-primary/20">
       <span className="material-symbols-outlined text-[18px]">check_circle</span>
       <p className="font-label-md">{toast}</p>
     </div>
@@ -239,7 +239,7 @@ function SubscriptionDetail({ sub, onBack, onToggle, onRenew }) {
       <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">account_balance</span></div>
+            <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">account_balance</span></div>
             <div>
               <h3 className="font-headline-md font-bold text-on-surface">{sub.institution}</h3>
               <p className="font-body-sm text-on-surface-variant">{sub.plan} · {sub.id}</p>
@@ -267,7 +267,7 @@ function SubscriptionDetail({ sub, onBack, onToggle, onRenew }) {
         <div className="mt-6">
           <p className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">Plan Features</p>
           <div className="flex flex-wrap gap-2">
-            {sub.features.map((f) => <span key={f} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container/60 text-primary font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">check</span>{f}</span>)}
+            {sub.features.map((f) => <span key={f} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">check</span>{f}</span>)}
           </div>
         </div>
         <div className="mt-6">
@@ -318,7 +318,7 @@ function SubCard({ s, onOpen, onToggle }) {
       <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-primary">account_balance</span></div>
+          <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">account_balance</span></div>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label-md text-[11px] border border-outline-variant ${st.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}></span>{st.label}</span>
         </div>
         <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{s.institution}</h4>
@@ -488,9 +488,9 @@ export function SubscriptionManagementPage({ go }) {
       <ToastBar toast={toast} />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {filters.map((f) => (
-          <button key={f.k} type="button" onClick={() => setFilter(f.k)} className={`rounded-xl border p-3 text-left transition-colors ${filter === f.k ? 'border-primary bg-primary-container/50' : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}>
-            <p className="font-label-md text-on-surface-variant text-[10px] uppercase tracking-wide flex items-center gap-1">{f.label} <span className={`material-symbols-outlined text-[13px] ${f.icon === 'verified' ? 'text-green-600' : f.icon === 'pause_circle' ? 'text-amber-600' : f.icon === 'dangerous' ? 'text-red-500' : f.icon === 'schedule' ? 'text-blue-600' : 'text-outline'}`}>{f.icon}</span></p>
-            <p className="font-headline-md font-bold text-primary mt-0.5">{counts[f.k]}</p>
+          <button key={f.k} type="button" onClick={() => setFilter(f.k)} className={`rounded-xl border p-3 text-left transition-colors ${filter === f.k ? 'border-primary bg-primary' : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}>
+            <p className={`font-label-md text-[10px] uppercase tracking-wide flex items-center gap-1 ${filter === f.k ? 'text-white/85' : 'text-on-surface-variant'}`}>{f.label} <span className={`material-symbols-outlined text-[13px] ${f.icon === 'verified' ? (filter === f.k ? 'text-white' : 'text-green-600') : f.icon === 'pause_circle' ? (filter === f.k ? 'text-white' : 'text-amber-600') : f.icon === 'dangerous' ? (filter === f.k ? 'text-white' : 'text-red-500') : f.icon === 'schedule' ? (filter === f.k ? 'text-white' : 'text-blue-600') : (filter === f.k ? 'text-white' : 'text-outline')}`}>{f.icon}</span></p>
+            <p className={`font-headline-md font-bold mt-0.5 ${filter === f.k ? 'text-white' : 'text-primary'}`}>{counts[f.k]}</p>
           </button>
         ))}
       </div>
@@ -655,7 +655,7 @@ export function PricingManagementPage({ go }) {
       <ToastBar toast={toast} />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Active Plans" value={String(activeCount)} sub={`${plans.length} plans in the catalogue`} icon="sell" color="bg-secondary-container text-on-secondary-container" />
-        <StatCard label="Total Plans" value={String(plans.length)} sub="Institution and personal tiers" icon="inventory_2" color="bg-primary-container text-primary" />
+        <StatCard label="Total Plans" value={String(plans.length)} sub="Institution and personal tiers" icon="inventory_2" color="bg-primary-container text-white" />
         <StatCard label="Starting Price" value={fmtMoney(cheapest)} sub="Across all billing cycles" icon="payments" color="bg-green-100 text-green-800" />
         <StatCard label="Billing Cycles" value="3" sub="Monthly · Quarterly · Annual" icon="calendar_month" color="bg-amber-100 text-amber-800" />
       </div>
@@ -767,7 +767,7 @@ const regionSegments = [
   { label: 'Other regions', value: 438, color: '#cbd5e1' },
 ]
 const dashStats = [
-  { label: 'Total Institutions', value: '1,248', sub: '+4.2% this month', icon: 'business', color: 'bg-primary-container text-primary' },
+  { label: 'Total Institutions', value: '1,248', sub: '+4.2% this month', icon: 'business', color: 'bg-primary-container text-white' },
   { label: 'Active Subscriptions', value: '1,042', sub: '83% of all subscriptions', icon: 'card_membership', color: 'bg-green-100 text-green-800' },
   { label: 'Monthly Recurring Revenue', value: '₦312M', sub: '+8.1% vs last month', icon: 'trending_up', color: 'bg-amber-100 text-amber-800' },
   { label: 'Revenue (YTD)', value: '₦2.41B', sub: 'Across 1,248 institutions', icon: 'payments', color: 'bg-blue-100 text-blue-800' },
@@ -775,7 +775,7 @@ const dashStats = [
   { label: 'Average Rating', value: '4.6 / 5', sub: '2,304 reviews', icon: 'star', color: 'bg-amber-100 text-amber-800' },
 ]
 const revStats = [
-  { label: 'Monthly Recurring Revenue', value: '₦312M', sub: '+8.1% vs last month', icon: 'trending_up', color: 'bg-primary-container text-primary' },
+  { label: 'Monthly Recurring Revenue', value: '₦312M', sub: '+8.1% vs last month', icon: 'trending_up', color: 'bg-primary-container text-white' },
   { label: 'Annual Run Rate', value: '₦3.74B', sub: 'Normalised from MRR', icon: 'monetization_on', color: 'bg-green-100 text-green-800' },
   { label: 'Churn', value: '2.1%', sub: '12-month rolling', icon: 'minimize', color: 'bg-red-100 text-red-700' },
   { label: 'Avg Contract Value', value: '₦31.9M', sub: 'Per institution annually', icon: 'receipt_long', color: 'bg-amber-100 text-amber-800' },
@@ -800,7 +800,7 @@ const cycleBars = [
   { label: 'Annual', value: 1002, color: '#1e3a8a' },
 ]
 const statusStats = [
-  { label: 'Total Subscriptions', value: '1,248', sub: 'Across 14 regions', icon: 'card_membership', color: 'bg-primary-container text-primary' },
+  { label: 'Total Subscriptions', value: '1,248', sub: 'Across 14 regions', icon: 'card_membership', color: 'bg-primary-container text-white' },
   { label: 'Active', value: '1,042', sub: '83% of total', icon: 'verified', color: 'bg-green-100 text-green-800' },
   { label: 'Suspended', value: '76', sub: 'Awaiting admin review', icon: 'pause_circle', color: 'bg-amber-100 text-amber-800' },
   { label: 'Expired', value: '96', sub: 'Due for renewal', icon: 'dangerous', color: 'bg-red-100 text-red-700' },
@@ -816,7 +816,7 @@ const SUB_ACTIVITY = [
 const ratingStats = [
   { label: 'Overall Rating', value: '4.6 / 5', sub: 'From 2,304 reviews', icon: 'star', color: 'bg-amber-100 text-amber-800' },
   { label: 'Positive Reviews', value: '92%', sub: '4★ and above', icon: 'thumb_up', color: 'bg-green-100 text-green-800' },
-  { label: 'Total Reviews', value: '2,304', sub: '+141 this month', icon: 'reviews', color: 'bg-primary-container text-primary' },
+  { label: 'Total Reviews', value: '2,304', sub: '+141 this month', icon: 'reviews', color: 'bg-primary-container text-white' },
   { label: 'NPS', value: '+54', sub: 'Promoter score', icon: 'sentiment_satisfied', color: 'bg-violet-100 text-violet-800' },
 ]
 const ratingDist = [
@@ -1013,7 +1013,7 @@ function RatingsReports() {
                 </div>
                 <p className="font-body-sm text-on-surface text-[13px]">{r.text}</p>
                 <div className="flex items-center gap-2 mt-3">
-                  <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary font-label-md text-[12px] shrink-0">{(r.name.match(/[A-Z]/g) || ['?']).slice(0, 2).join('')}</div>
+                  <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-white font-label-md text-[12px] shrink-0">{(r.name.match(/[A-Z]/g) || ['?']).slice(0, 2).join('')}</div>
                   <div>
                     <p className="font-label-md font-bold text-on-surface text-[13px]">{r.name}</p>
                     <p className="font-body-sm text-on-surface-variant text-[12px]">{r.institution}</p>
@@ -1085,7 +1085,7 @@ export function RegionManagementPage({ go }) {
         </div>
       </PageHeader>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Regions" value={String(regions.length)} sub="Active markets across Africa" icon="public" color="bg-primary-container text-primary" />
+        <StatCard label="Regions" value={String(regions.length)} sub="Active markets across Africa" icon="public" color="bg-primary-container text-white" />
         <StatCard label="Institutions" value={fmtNum(totalInst)} sub="Registered across all regions" icon="business" color="bg-green-100 text-green-800" />
         <StatCard label="Coverage" value="14 / 14" sub="All target markets active" icon="check_circle" color="bg-amber-100 text-amber-800" />
         <StatCard label="Leading Region" value={leader ? leader.name : '—'} sub={`${fmtNum(leader.institutions)} institutions`} icon="local_fire_department" color="bg-violet-100 text-violet-800" />

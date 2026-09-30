@@ -846,7 +846,7 @@ function StaffTab({ instId }) {
             <div className="p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                  <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-white">
                     {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
                   </div>
                   <div>
@@ -1295,7 +1295,7 @@ function StudentsTab({ instId }) {
               <div className="p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-primary">
+                    <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center font-headline-sm font-bold text-white">
                       {(viewing.FirstName ?? viewing.firstName ?? "S").charAt(0)}{(viewing.LastName ?? viewing.lastName ?? "").charAt(0)}
                     </div>
                     <div>

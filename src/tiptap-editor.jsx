@@ -181,7 +181,7 @@ export function TipTapEditor({
               <div className="hidden md:flex items-center -space-x-2 mr-2">
                 <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKcVE1T4B00ZtQnTz8zw513QfUxlIBB0D3TCkT6CV9XGmvHfs9Yt6zpoPtsmstiMpuBkqeqRsOaYoagI9UxzJMGu-BfUT5H-CvZgJmuxSNUNLnhcpopDb8yPUOXyxjg74v9aftMYReycGHH-pNuYIwMF2KCiNUDO84eA4h2rkELDiScap5zzvIVZpjoKE4ktM2R63imrbAEoR541iaQ46iKyxd7BN1808kz9h9lbMpyEQnmiuAexWd" alt="you" className="w-7 h-7 rounded-full border-2 border-surface object-cover" />
                 {(collaborators.length ? collaborators : [{ name: 'Dr. Supervisor', initials: 'DS', color: 'bg-secondary-fixed' }, { name: 'Co-supervisor', initials: 'CS', color: 'bg-tertiary-fixed' }]).slice(0, 3).map((c, i) => (
-                  <div key={i} className={`w-7 h-7 rounded-full border-2 border-surface flex items-center justify-center text-[10px] font-bold ${c.color || 'bg-primary-container text-primary'}`} title={c.name || c.staffNo || 'Collaborator'}>
+                  <div key={i} className={`w-7 h-7 rounded-full border-2 border-surface flex items-center justify-center text-[10px] font-bold ${c.color || 'bg-primary-container text-white'}`} title={c.name || c.staffNo || 'Collaborator'}>
                     {c.initials || (c.name || c.staffNo || 'C').slice(0, 2).toUpperCase()}
                   </div>
                 ))}

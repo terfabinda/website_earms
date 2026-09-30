@@ -7,6 +7,7 @@ import {
   ownerApi,
   roleApi,
   mailApi,
+  filterAssignableRoles,
 } from "./iam";
 
 const FIELD = "w-full px-3 py-2 text-sm rounded-md border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none";
@@ -352,8 +353,9 @@ function OwnersTab() {
 }
 
 /* ---------------- Roles ---------------- */
-function RolesTab() {
+export function RolesTab() {
   const { data, err, reload } = useFetch(() => roleApi.getRoles(), []);
+  const roles = filterAssignableRoles(data);
   const [userName, setUserName] = useState("");
   const [selected, setSelected] = useState([]);
   const [msg, setMsg] = useState("");
@@ -390,7 +392,8 @@ function RolesTab() {
           <p className="font-body-sm text-on-surface-variant">Loading…</p>
         ) : (
           <ul className="divide-y divide-surface-container text-sm">
-            {(data || []).map((r) => (
+            {roles.length === 0 && <li className="py-2 text-on-surface-variant">No assignable roles.</li>}
+            {roles.map((r) => (
               <li key={r.id ?? r.Id} className="py-2 flex justify-between">
                 <span className="font-medium text-on-surface">{r.name ?? r.Name}</span>
                 <span className="text-on-surface-variant">{r.normalizedName ?? r.NormalizedName}</span>
@@ -406,7 +409,7 @@ function RolesTab() {
           <div>
             <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Roles</span>
             <div className="grid grid-cols-2 gap-2 mt-1">
-              {(data || []).map((r) => {
+              {roles.map((r) => {
                 const n = r.name ?? r.Name;
                 return (
                   <label key={n} className="flex items-center gap-2 text-sm">
@@ -513,38 +516,71 @@ function MailTab() {
   );
 }
 
-/* ---------------- Main Panel ---------------- */
-const TABS = ["entitlements", "users", "owners", "roles", "mail"];
-export function IamAdmin({ go }) {
-  const [tab, setTab] = useState("entitlements");
-  const tabs = [
-    { key: "entitlements", label: "Entitlements", icon: "verified_user" },
-    { key: "users", label: "Users & Owners", icon: "group" },
-    { key: "owners", label: "Owners", icon: "domain" },
-    { key: "roles", label: "Roles", icon: "manage_accounts" },
-    { key: "mail", label: "Mail", icon: "mail" },
-  ];
+/* ---------------- Moved out of System Settings ----------------
+   Entitlements, Users & Owners, Owners and Mail are no longer rendered by the
+   System Admin Settings page. Roles moved to the Institution Admin dashboard. */
+export function RolesPanel() {
+  return <RolesTab />;
+}
+
+/* ---------------- Assign Roles (embedded, e.g. Edit Staff modal) ---------------- */
+export function RoleAssign({ userName }) {
+  const { data, err } = useFetch(() => roleApi.getRoles(), []);
+  const roles = filterAssignableRoles(data);
+  const [selected, setSelected] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [e, setE] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const toggle = (name) =>
+    setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]));
+
+  const submit = async (ev) => {
+    ev.preventDefault();
+    setMsg(""); setE("");
+    if (!userName || !String(userName).trim()) { setE("This staff record has no user name."); return; }
+    if (selected.length === 0) { setE("Select at least one role."); return; }
+    setBusy(true);
+    try {
+      await roleApi.assignRoles(String(userName).trim(), selected);
+      setMsg("Roles assigned to " + String(userName).trim());
+    } catch (e2) {
+      setE(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 border-b border-outline-variant pb-3">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-md text-label-md ${
-              tab === t.key ? "bg-primary text-on-primary" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant"
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
+    <form onSubmit={submit} className="space-y-3 text-left border border-outline-variant rounded-lg p-4 bg-surface-container-low">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="font-label-md font-bold text-on-surface flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">manage_accounts</span> Assign Roles
+        </h4>
+        <span className="font-body-sm text-[12px] text-outline truncate">{userName || "No user name"}</span>
       </div>
-      {tab === "entitlements" && <EntitlementsCard />}
-      {tab === "users" && <UsersTab />}
-      {tab === "owners" && <OwnersTab />}
-      {tab === "roles" && <RolesTab />}
-      {tab === "mail" && <MailTab />}
-    </div>
+      {err && <Err>{err}</Err>}
+      {!data ? (
+        <p className="font-body-sm text-on-surface-variant">Loading roles…</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {roles.length === 0 && <p className="font-body-sm text-on-surface-variant col-span-2">No assignable roles.</p>}
+          {roles.map((r) => {
+            const n = r.name ?? r.Name;
+            return (
+              <label key={n} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={selected.includes(n)} onChange={() => toggle(n)} />
+                {n}
+              </label>
+            );
+          })}
+        </div>
+      )}
+      <Err>{e}</Err>
+      {msg && <Msg>{msg}</Msg>}
+      <button type="submit" disabled={busy} className="w-full bg-primary text-on-primary py-2 rounded font-label-md disabled:opacity-60">
+        {busy ? "Assigning…" : "Assign Roles"}
+      </button>
+    </form>
   );
 }
