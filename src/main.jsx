@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
+import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { IamAdmin } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
@@ -923,7 +923,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   })()
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Onboarding', icon: 'assignment', subitems: ['Subscriber','PG', collegeTerm,'Department','Programme','Staff','Student']},
+    {label: 'Onboarding', icon: 'assignment', subitems: ['Institution','PG', collegeTerm,'Department','Programme','Staff','Student']},
     {label: 'Subscription', icon: 'card_membership'},
     {label: 'Payment History', icon: 'receipt_long'},
     {label: 'Analytics', icon: 'insights'},
@@ -1264,6 +1264,93 @@ function SystemHome({ go }) {
 }
 
 /* ---------- Institution Home Dashboard ---------- */
+/* ---------- Institution details ----------
+   GET /get-institution/{code} only returns MinimalInstitutionDto (Id, Code, Name),
+   while the editable fields (Email, PhoneNo, InstitutionType, Address, Website,
+   social URLs, logo) live on GET /get-institution (List<InstitutionDto>).
+   Always read the full list first, then enrich/fallback with by-code, owner and
+   token claims so the edit form is populated accurately. */
+const instStr = (...vals) => {
+  for (const v of vals) {
+    if (v === undefined || v === null) continue
+    const s = String(v).trim()
+    if (s && s !== "null" && s !== "undefined") return s
+  }
+  return ""
+}
+const instObj = (res) => {
+  if (Array.isArray(res)) return res[0] || null
+  if (!res || typeof res !== "object") return null
+  const d = res.data
+  if (Array.isArray(d)) return instObj(d)
+  if (d && typeof d === "object") return { ...res, ...d }
+  return res
+}
+const instList = (res) => {
+  if (Array.isArray(res)) return res
+  if (!res || typeof res !== "object") return []
+  for (const k of ["data", "items", "institutions", "result"]) {
+    const v = res[k]
+    if (Array.isArray(v)) return v
+    if (v && typeof v === "object") {
+      const inner = instList(v)
+      if (inner.length) return inner
+    }
+  }
+  return []
+}
+
+async function loadInstitutionDetails({ code = "", name = "", email = "" } = {}) {
+  const { onboardingApi } = await import("./onboarding")
+  const tok = decodeToken()
+  const tokenEmail = tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || tok?.email || tok?.Email || ""
+  const ownerUser = instStr(
+    tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"],
+    tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tokenEmail
+  )
+  let owner = null
+  if (ownerUser) {
+    try { owner = instObj(await ownerApi.getOwnerByName(ownerUser)) } catch {}
+  }
+  const tokenCode = instStr(tok?.institutionCode, tok?.InstitutionCode, code)
+  const tokenName = instStr(tok?.institutionName, tok?.InstitutionName, name)
+  const instCode = instStr(tokenCode, owner?.institutionCode, owner?.InstitutionCode)
+
+  let list = []
+  try { list = instList(await onboardingApi.getInstitutions()) } catch {}
+  const full = instCode
+    ? list.find(r => instStr(r?.code, r?.Code).toLowerCase() === instCode.toLowerCase()) || null
+    : null
+  let byCode = null
+  if (instCode) {
+    try { byCode = instObj(await onboardingApi.getInstitutionByCode(instCode)) } catch {}
+  }
+  const sources = [full, byCode].filter(Boolean)
+  const pick = (...keys) => {
+    for (const src of sources) {
+      for (const k of keys) {
+        const s = instStr(src?.[k])
+        if (s) return s
+      }
+    }
+    return ""
+  }
+  const record = {
+    id: [full, byCode].map(s => s?.id ?? s?.Id).find(v => v !== undefined && v !== null) ?? "",
+    code: pick("code", "Code") || instStr(instCode),
+    name: pick("name", "Name") || instStr(tokenName, owner?.institutionName, owner?.InstitutionName),
+    email: pick("email", "Email") || instStr(email, owner?.ownerEmail, owner?.OwnerEmail, tokenEmail),
+    phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone"),
+    institutionType: pick("institutionType", "InstitutionType", "type", "Type"),
+    address: pick("address", "Address"),
+    website: pick("website", "Website"),
+    facebookUrl: pick("facebookUrl", "FacebookUrl"),
+    linkedinUrl: pick("linkedinUrl", "LinkedinUrl", "LinkedInUrl"),
+    logoUrl: pick("logoUrl", "LogoUrl", "logoPath", "LogoPath", "logo", "Logo"),
+  }
+  return { record, owner, full, byCode }
+}
+
 function InstitutionProfile({ go }) {
   const [inst, setInst] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1279,59 +1366,26 @@ function InstitutionProfile({ go }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setErr("")
-    // Try to fetch via onboarding API by code, fallback to token values
-    const fetchInst = async () => {
-      try {
-        // First try to get the user's institution via owner API (more reliable for GHH)
-        let owner = null
-        try {
-          const { ownerApi } = await import("./iam")
-          owner = await ownerApi.getOwnerByName(tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || "")
-        } catch {}
-        let data = null
-        if (tokenCode) {
-          try { data = await (await import("./onboarding")).onboardingApi.getInstitutionByCode(tokenCode) } catch {}
-        }
-        if (!data && owner?.institutionCode) {
-          try { data = await (await import("./onboarding")).onboardingApi.getInstitutionByCode(owner.institutionCode) } catch {}
-        }
-        // Fallback to token values if onboarding has no record (e.g. University of Gboko not yet created)
-        if (!data) {
-          data = {
-            code: owner?.institutionCode || tokenCode,
-            name: owner?.institutionName || tokenName || owner?.ownerName || "",
-            email: owner?.ownerEmail || tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || "",
-            phoneNo: "",
-            institutionType: "",
-            address: "",
-            website: "",
-            facebookUrl: "",
-            linkedinUrl: "",
-            logoUrl: ""
-          }
-        }
+    loadInstitutionDetails({ code: tokenCode, name: tokenName })
+      .then(({ record }) => {
         if (cancelled) return
-        // Normalize fields (API returns Code/Name etc)
-        const code = data.code ?? data.Code ?? tokenCode ?? ""
-        const name = data.name ?? data.Name ?? tokenName ?? ""
-        const email = data.email ?? data.Email ?? owner?.ownerEmail ?? ""
-        const phoneNo = data.phoneNo ?? data.PhoneNo ?? ""
-        const institutionType = data.institutionType ?? data.InstitutionType ?? ""
-        const address = data.address ?? data.Address ?? ""
-        const website = data.website ?? data.Website ?? ""
-        const facebookUrl = data.facebookUrl ?? data.FacebookUrl ?? ""
-        const linkedinUrl = data.linkedinUrl ?? data.LinkedinUrl ?? ""
-        const logoUrl = data.logoUrl ?? data.LogoUrl ?? data.logo ?? ""
-        setInst(data)
-        setForm({ code, name, email, phoneNo, institutionType, address, website, facebookUrl, linkedinUrl })
-        if (logoUrl) setLogoPreview(logoUrl)
-      } catch (e) {
-        if (!cancelled) setErr(e.message || "Could not load institution profile")
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    fetchInst()
+        setInst(record)
+        setForm({
+          code: record.code,
+          name: record.name,
+          email: record.email,
+          phoneNo: record.phoneNo,
+          institutionType: record.institutionType,
+          address: record.address,
+          website: record.website,
+          facebookUrl: record.facebookUrl,
+          linkedinUrl: record.linkedinUrl,
+        })
+        if (record.logoUrl) setLogoPreview(record.logoUrl)
+        if (!record.code && !record.name) setErr("No institution record found for this account yet.")
+      })
+      .catch(e => { if (!cancelled) setErr(e.message || "Could not load institution profile") })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [tokenCode, tokenName])
 
@@ -3339,7 +3393,7 @@ function InstitutionHome({ go }) {
           ) : section === 'payment history' || section === 'payment-history' ? (
             <PaymentHistoryPage />
           ) : isOnboarding ? (
-            item && item.toLowerCase() === 'subscriber' ? (
+            item && ['institution','subscriber'].includes(item.toLowerCase()) ? (
               <InstitutionProfile go={go} />
             ) : item && item.toLowerCase() === 'pg' ? (
               <PGCreate go={go} />
@@ -3355,7 +3409,7 @@ function InstitutionHome({ go }) {
               <StudentManagementPage go={go} />
             ) : (
               <div className="space-y-4">
-                <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — subscriber, academic structure and people management.</p>
+                <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — institution, academic structure and people management.</p>
                 <AdminOnboarding go={go} />
               </div>
             )
@@ -3379,7 +3433,7 @@ function InstitutionHome({ go }) {
     {label: 'Active Subscription', value: instSubStatus, sub: 'Check status in Subscription', icon: 'card_membership', color: instSubStatus !== 'Inactive' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Subscriber, academic structure and people', subs: ['Subscriber','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
+    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Institution, academic structure and people', subs: ['Institution','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
     {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Manage the current subscription plan', subs: [], color: 'bg-secondary-fixed'},
     {key: 'payment-history', label: 'Payment History', icon: 'receipt_long', desc: 'Subscription and payment records', subs: [], color: 'bg-tertiary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: [], color: 'bg-surface-container-high'},
@@ -4648,8 +4702,21 @@ function FacultyDashboard({ go }) {
 
 
 function AdminPanel({ go }) {
+  const tok = decodeToken()
+  const [title, setTitle] = useState(() =>
+    instStr(tok?.institutionName, tok?.InstitutionName) ||
+    instStr(tok?.institutionCode, tok?.InstitutionCode) ||
+    "Institution Administration"
+  )
+  useEffect(() => {
+    let cancelled = false
+    loadInstitutionDetails()
+      .then(({ record }) => { if (!cancelled && record.name) setTitle(record.name) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   return (
-    <DashShell go={go} active="admin" role="admin" subrole="institution" title="Institution Administration" subtitle="Home dashboard with quick access to onboarding, subscription and payment history.">
+    <DashShell go={go} active="admin" role="admin" subrole="institution" title={title} subtitle="Home dashboard with quick access to onboarding, subscription and payment history.">
       <InstitutionHome go={go} />
     </DashShell>
   )
