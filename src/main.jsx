@@ -2653,6 +2653,7 @@ function StudentManagementPage({ go }) {
   const [filterDeptId, setFilterDeptId] = useState("")
   const [search, setSearch] = useState("")
   const [editSearch, setEditSearch] = useState("")
+  const [creating, setCreating] = useState(false)
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
   const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
@@ -2798,32 +2799,74 @@ function StudentManagementPage({ go }) {
       setErr("Matric No, First Name, Last Name, Email, Department and Level are required.")
       return
     }
+    if (!form.programId) {
+      setErr("Select a Programme — register_student needs a real programId, and 0 is rejected by the database. Create one under Onboarding → Programme if this list is empty.")
+      return
+    }
+    if (creating) return
+    setCreating(true)
+    let instId = jwtInstId
     try {
       const { onboardingApi } = await import("./onboarding")
-      let instId = jwtInstId
-      if (!instId) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) instId = String(list[0].Id ?? list[0].id)
+      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
+      const instRows = Array.isArray(list) ? list : []
+      if (!instId && instRows.length) instId = String(instRows[0].Id ?? instRows[0].id)
+      // The JWT owner id is not always an onboarding InstitutionId — a mismatch is a FK failure on insert.
+      if (instRows.length && !instRows.some(x => String(x.Id ?? x.id) === String(instId))) {
+        const code = String(tok?.institutionCode ?? tok?.InstitutionCode ?? "").toLowerCase()
+        const name = String(tok?.institutionName ?? tok?.InstitutionName ?? "").toLowerCase()
+        const match = instRows.find(x => code && String(x.Code ?? x.code ?? "").toLowerCase() === code)
+          || instRows.find(x => name && String(x.Name ?? x.name ?? "").toLowerCase() === name)
+        if (match) instId = String(match.Id ?? match.id)
       }
+      if (!instId || Number.isNaN(Number(instId))) {
+        setErr("No institution id available for your account — create the institution under Onboarding → Institution first.")
+        return
+      }
+
+      // Duplicate matric/email come back from the API as an opaque EF
+      // "saving the entity changes" error, so catch them before the insert.
+      const norm = (v) => String(v ?? "").trim().toLowerCase()
+      const matric = form.matricNo.trim()
+      if (students.some(s => norm(s.MatricNo ?? s.matricNo) === norm(matric))) {
+        setErr(`Matric ${matric} already exists — close this and use Edit on the existing card.`)
+        return
+      }
+      const mail = norm(form.email)
+      if (students.some(s => norm(s.Email ?? s.email) === mail)) {
+        setErr(`Email ${form.email.trim()} is already in use — register_student also creates an IAM account, which rejects duplicate emails. Edit the existing record or use a different email.`)
+        return
+      }
+      try {
+        const existing = await onboardingApi.getStudent(matric)
+        if (existing && (existing.MatricNo ?? existing.matricNo ?? existing.FirstName ?? existing.firstName)) {
+          setErr(`Matric ${matric} already exists in the database — close this and use Edit on the existing record.`)
+          return
+        }
+      } catch { /* not found (404 / success:false) is the expected outcome */ }
+
       await onboardingApi.registerStudent({
-        MatricNo: form.matricNo.trim(),
+        MatricNo: matric,
         FirstName: form.firstName.trim(),
         LastName: form.lastName.trim(),
         Email: form.email.trim(),
         PhoneNo: form.phoneNo.trim(),
-        ProgramId: form.programId ? Number(form.programId) : 0,
+        ProgramId: Number(form.programId),
         StudentCategory: 2,
         AreaOfInterest: "",
         DepartmentId: Number(form.departmentId),
         InstitutionId: Number(instId),
         Level: form.level.trim(),
       })
-      setMsg(`Student ${form.matricNo.trim()} created.`)
+      setMsg(`Student ${matric} created.`)
       setForm(f=>({...f, matricNo:"", firstName:"", lastName:"", email:"", phoneNo:"", level:"", programId:"", status:"Active" }))
       setShowModal(false)
       loadStudents()
     } catch (e2) {
-      setErr(e2.message || "Could not create student")
+      const raw = e2.message || "Could not create student"
+      setErr(`${raw} — sent matric=${form.matricNo.trim()}, programId=${form.programId}, departmentId=${form.departmentId}, institutionId=${instId || "none"}. If that matric or email already exists, edit the existing student instead of creating a new one.`)
+    } finally {
+      setCreating(false)
     }
   }
   const getDeptName = (id) => {
@@ -2857,6 +2900,7 @@ function StudentManagementPage({ go }) {
     const matric = editing.MatricNo ?? editing.matricNo
     if (!matric) { setErr("Matric No missing — cannot update"); return }
     if (!editForm.matricNo.trim() || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()) { setErr("Matric, First/Last Name and Email required."); return }
+    if (!editForm.programId) { setErr("Select a Programme before saving — the API rejects programId 0."); return }
     try {
       const id = await resolveInstId()
       const payload = {
@@ -3057,13 +3101,14 @@ function StudentManagementPage({ go }) {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme</span>
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme <span className="text-error">*</span></span>
                   <select value={form.programId} onChange={set("programId")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
                     <option value="">Select Programme</option>
                     {programs.map(p=>(
                       <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
                     ))}
                   </select>
+                  {programs.length === 0 && <span className="block text-[11px] text-error mt-1">No programmes for this department — create one under Onboarding → Programme.</span>}
                 </label>
               </div>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Matric No</span><input value={form.matricNo} onChange={set("matricNo")} placeholder="e.g. CSC/2024/001" className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" /></label>
@@ -3087,7 +3132,9 @@ function StudentManagementPage({ go }) {
               {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
               {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
               <div className="flex gap-3 pt-2">
-                <button type="submit" className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim">Create</button>
+                <button type="submit" disabled={creating} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60 flex items-center justify-center gap-2">
+                  {creating ? <><span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span> Creating…</> : "Create"}
+                </button>
                 <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
               </div>
             </form>
@@ -3180,9 +3227,9 @@ function StudentManagementPage({ go }) {
                   ))}
                 </select>
               </label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Program</span>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Program <span className="text-error">*</span></span>
                 <select value={editForm.programId} onChange={handleEditChange("programId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm">
-                  <option value="">None</option>
+                  <option value="">Select Programme</option>
                   {programs.map(p=>(
                     <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
                   ))}
