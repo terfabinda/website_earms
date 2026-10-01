@@ -2698,7 +2698,10 @@ function StudentManagementPage({ go }) {
         setForm(f=>({...f, departmentId: firstDept}))
         try { const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[]); setPrograms(Array.isArray(progs) ? progs : []) } catch {}
       }
-    } catch {}
+    } catch {} finally {
+      // still load the list when meta fails or the institution has no departments yet
+      if (!departments.length && !filterDeptId) loadStudents()
+    }
   }
   const loadStudents = async () => {
     setLoading(true); setErr("")
@@ -3154,7 +3157,7 @@ function StudentManagementPage({ go }) {
                   ))}
                 </select>
               </label>
-              <Msg kind="err" text={err} />
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
               <div className="flex gap-3">
                 <button type="submit" className="flex-1 bg-primary text-on-primary py-2 rounded font-label-md">Update Student</button>
                 <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
@@ -5004,6 +5007,28 @@ function AdminPanel({ go }) {
   )
 }
 
+/* ---------- Route error boundary: a render crash must not blank the app ---------- */
+class RouteErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null } }
+  static getDerivedStateFromError(err) { return { err } }
+  componentDidCatch(err, info) { console.error("EARMS render error", err, info) }
+  render() {
+    if (this.state.err) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+          <div className="max-w-lg w-full bg-surface-container-lowest border border-outline-variant rounded-xl p-6 text-center shadow-elevated">
+            <span className="material-symbols-outlined text-4xl text-error">error</span>
+            <h1 className="font-headline-md font-bold text-on-surface mt-2">Something went wrong</h1>
+            <p className="font-body-sm text-on-surface-variant mt-2 break-words">{String(this.state.err?.message || this.state.err)}</p>
+            <button onClick={()=>window.location.reload()} className="mt-4 px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-container">Reload page</button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function App() {
   const [page, go] = usePage()
   // expose go for e2e debug
@@ -5015,6 +5040,7 @@ function App() {
     }
   }, [page])
   return (
+    <RouteErrorBoundary>
     <div className="min-h-screen">
       {page==='landing' && <Landing go={go} />}
       {page==='gateway' && <Gateway go={go} />}
@@ -5033,6 +5059,7 @@ function App() {
         </DashShell>
       )}
     </div>
+    </RouteErrorBoundary>
   )
 }
 
