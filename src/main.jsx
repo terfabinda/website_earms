@@ -2877,34 +2877,65 @@ function StudentManagementPage({ go }) {
       setMsg(`Student ${editForm.matricNo} updated.`)
       setEditing(null); setEditForm(null)
       loadStudents()
-    } catch (e2) { setErr(e2.message || "Could not update student") }
+    } catch (e2) {
+      const raw = e2.message || "Could not update student"
+      setErr(String(matric).includes("/") && /404|not found/i.test(raw)
+        ? `${raw} — PUT /update_student/{matricNo} cannot accept a matric containing "/" (the path route is unreachable); the API needs a query/body parameter for these matrics.`
+        : raw)
+    }
   }
   const handleDelete = (s)=> setErr("Delete not available — no DELETE endpoint per doc.")
   const handleQuickEditSearch = async () => {
     const q = editSearch.trim()
     if (!q) { setErr("Enter Matric No to edit"); return }
     setErr(""); setMsg("")
-    const foundInList = students.find(s=> String(s.MatricNo ?? s.matricNo).toLowerCase() === q.toLowerCase())
+    const norm = (v) => String(v ?? "").trim().toLowerCase()
+    const findIn = (list, mat) => (Array.isArray(list) ? list : []).find(x => norm(x.MatricNo ?? x.matricNo) === norm(mat)) || null
+    const foundInList = findIn(students, q)
     if (foundInList) { handleEdit(foundInList); setEditSearch(""); return }
+
     try {
       const { onboardingApi } = await import("./onboarding")
+      const tried = []
       let s = null
-      try { s = await onboardingApi.getStudent(q) } catch {}
-      if (!s) try { s = await onboardingApi.getStudentIam(q) } catch {}
-      if (s && (s.DepartmentId || s.departmentId) && !(s.FirstName ?? s.firstName)) {
-        const depId = s.DepartmentId ?? s.departmentId
-        const inst = s.InstitutionId ?? s.institutionId ?? jwtInstId
-        if (depId && inst) {
-          try {
-            const list = await onboardingApi.getDepartmentStudents(String(depId), String(inst))
-            const arr = Array.isArray(list)? list : []
-            const f = arr.find(x=> String(x.MatricNo ?? x.matricNo).toLowerCase() === q.toLowerCase())
-            if (f) s = f
-          } catch {}
-        }
+      let iam = null
+
+      // 1) Full StudentDto (matric is path-encoded by the client)
+      try {
+        const direct = await onboardingApi.getStudent(q)
+        if (direct && (direct.MatricNo ?? direct.matricNo ?? direct.FirstName ?? direct.firstName)) { s = direct; tried.push("get_student") }
+      } catch { tried.push("get_student") }
+
+      // 2) IAM row — query param, so it always accepts matrics containing "/"
+      if (!s) {
+        try {
+          iam = await onboardingApi.getStudentIam(q)
+          if (iam && Object.keys(iam).length) tried.push("get_student_iam")
+        } catch { tried.push("get_student_iam") }
       }
-      if (s && (s.MatricNo ?? s.matricNo)) { handleEdit(s); setEditSearch("") }
-      else setErr(`No student found for ${q} (tried get_student/${q} and get_student_iam)`)
+
+      // 3) Hydrate from list endpoints — prefer the institution the IAM row points at
+      if (!s) {
+        const depId = String(iam?.departmentId ?? iam?.DepartmentId ?? "")
+        const instId = String(iam?.institutionId ?? iam?.InstitutionId ?? jwtInstId ?? "")
+        const lookups = []
+        if (depId && instId) lookups.push(onboardingApi.getDepartmentStudents(depId, instId).catch(() => null))
+        if (instId) lookups.push(onboardingApi.getStudentsByInstitution(instId).catch(() => null))
+        if (instId) lookups.push(onboardingApi.getUnassignedStudents({ institutionId: instId }).catch(() => null))
+        const lists = await Promise.all(lookups)
+        for (const l of lists) { const hit = findIn(l, q); if (hit) { s = hit; break } }
+        if (s) tried.push("student lists")
+      }
+
+      if (s && (s.MatricNo ?? s.matricNo ?? s.FirstName ?? s.firstName)) {
+        const matric = s.MatricNo ?? s.matricNo ?? q
+        handleEdit({ ...s, MatricNo: matric, matricNo: matric })
+        setEditSearch("")
+      } else if (iam && (iam.departmentId ?? iam.DepartmentId)) {
+        setErr(`IAM record found for ${q} (department ${iam.departmentName ?? iam.DepartmentName ?? iam.departmentId ?? "—"}), but no student profile row. Tried: ${[...new Set(tried)].join(", ")}.`)
+      } else {
+        setErr(`No student found for ${q}. Tried: ${[...new Set(tried)].join(", ")}.`)
+      }
     } catch (e) { setErr(e.message || "Could not find student") }
   }
   return (
@@ -3851,18 +3882,6 @@ function StudentDashboard({ go }) {
             const isProbablyIam = s && (s.DepartmentId || s.departmentId) && !(s.FirstName ?? s.firstName)
             if (isProbablyIam) s = null
             try { const direct = await onboardingApi.getStudent(matricNo); if (direct && (direct.FirstName ?? direct.firstName ?? direct.MatricNo ?? direct.matricNo)) s = direct } catch {}
-            if (!s || !(s.FirstName ?? s.firstName)) {
-              try {
-                const { apiFetch } = await import("./iam")
-                const ONB_BASE = ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/")
-                const res = await apiFetch("api/onboarding/get_student/" + matricNo, {}, false, ONB_BASE)
-                if (res.ok) {
-                  const body = await res.json().catch(()=>null)
-                  const data = body?.data ?? body
-                  if (data && (data.MatricNo ?? data.matricNo ?? data.FirstName ?? data.firstName)) s = data
-                }
-              } catch {}
-            }
             if (!s || !(s.FirstName ?? s.firstName)) {
               try {
                 const deptInfo = await onboardingApi.getStudentDepartment(String(matricNo), String(instId || "")).catch(()=>null)

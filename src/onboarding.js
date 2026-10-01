@@ -34,6 +34,16 @@ async function obFetch(path, options = {}) {
   return caseAlias(body ? body.data : null);
 }
 
+// Matric numbers look like UGK/CMS/24/44210. A single-encoded %2F inside a path segment is
+// rejected by the Apache front end (404), which makes get_student / update_student /
+// get_student_department unreachable for every real matric. Double-encoding (%252F) survives
+// Apache and is decoded once by the API router, so the controller still receives the raw
+// matric number. Values without a slash are encoded normally.
+function pathMatric(matricNo) {
+  const s = String(matricNo ?? "");
+  return s.includes("/") ? encodeURIComponent(encodeURIComponent(s)) : encodeURIComponent(s);
+}
+
 function qs(params) {
   const us = new URLSearchParams();
   Object.entries(params || {}).forEach(([k, v]) => {
@@ -178,7 +188,7 @@ export const onboardingApi = {
     });
   },
   async getStudent(matricNo) {
-    return obFetch("get_student/" + encodeURIComponent(matricNo));
+    return obFetch("get_student/" + pathMatric(matricNo));
   },
   async getStudentIam(matricNo) {
     return obFetch("get_student_iam" + qs({ matricNo }));
@@ -196,11 +206,11 @@ export const onboardingApi = {
   },
   async getStudentDepartment(matricNo, institutionId) {
     return obFetch(
-      "get_student_department/" + encodeURIComponent(matricNo) + "/" + encodeURIComponent(institutionId)
+      "get_student_department/" + pathMatric(matricNo) + "/" + encodeURIComponent(institutionId)
     );
   },
   async updateStudent(matricNo, payload) {
-    return obFetch("update_student/" + encodeURIComponent(matricNo), {
+    return obFetch("update_student/" + pathMatric(matricNo), {
       method: "PUT",
       body: JSON.stringify(payload),
     });
