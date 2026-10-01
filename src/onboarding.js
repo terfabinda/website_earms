@@ -31,7 +31,16 @@ async function obFetch(path, options = {}) {
     throw new Error(body.message || body.errorCode || "Operation failed");
   }
   if (body && Array.isArray(body)) return caseAlias(body);
-  return caseAlias(body ? body.data : null);
+  if (body && typeof body === "object") {
+    // Envelope casing is inconsistent across controllers: data / Data / result / items.
+    const isEnvelope = "success" in body || "errorCode" in body || "data" in body || "Data" in body || "message" in body;
+    if (isEnvelope) {
+      const data = body.data ?? body.Data ?? body.result ?? body.Result ?? body.items ?? body.Items;
+      return caseAlias(data === undefined ? null : data);
+    }
+    return caseAlias(body);
+  }
+  return null;
 }
 
 // Matric numbers look like UGK/CMS/24/44210. A single-encoded %2F inside a path segment is

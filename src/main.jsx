@@ -2654,6 +2654,7 @@ function StudentManagementPage({ go }) {
   const [search, setSearch] = useState("")
   const [editSearch, setEditSearch] = useState("")
   const [creating, setCreating] = useState(false)
+  const [loadDiag, setLoadDiag] = useState("")
   const tok = decodeToken()
   const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
   const jwtInstName = tok?.institutionName || tok?.InstitutionName || ""
@@ -2701,43 +2702,61 @@ function StudentManagementPage({ go }) {
       }
     } catch {}
   }
+  // One labelled source call: never swallow an API failure silently, keep a note for the UI.
+  const src = async (label, fn) => {
+    try {
+      const r = await fn()
+      const rows = Array.isArray(r) ? r : (r ? [r] : [])
+      return { rows, note: `${label} → ${rows.length} rows`, err: "" }
+    } catch (e) {
+      return { rows: [], note: `${label} → ERROR ${e.message || e}`, err: e.message || String(e) }
+    }
+  }
   const loadStudents = async () => {
-    setLoading(true); setErr("")
+    setLoading(true); setErr(""); setLoadDiag("")
     try {
       const id = await resolveInstId()
       if (!id) { setErr("No institution id available for your account — create it under Onboarding → Institution."); setStudents([]); return }
       const { onboardingApi } = await import("./onboarding")
       let all = []
+      let notes = []
       if (filterDeptId) {
         const [deptStudents, unassigned, byInst] = await Promise.all([
-          onboardingApi.getDepartmentStudents(String(filterDeptId), String(id)).catch(()=>[]),
-          onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(id) }).catch(()=>[]),
-          onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]),
+          src(`get_department_student/${filterDeptId}`, () => onboardingApi.getDepartmentStudents(String(filterDeptId), String(id))),
+          src(`unassigned-students?departmentId=${filterDeptId}`, () => onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(id) })),
+          src("get_student_by_institution", () => onboardingApi.getStudentsByInstitution(String(id))),
         ])
         all = [
-          ...(Array.isArray(deptStudents)?deptStudents:[]),
-          ...(Array.isArray(unassigned)?unassigned:[]),
-          ...(Array.isArray(byInst)?byInst:[]).filter(s=> String(s.DepartmentId ?? s.departmentId ?? "")===String(filterDeptId)),
+          ...deptStudents.rows,
+          ...unassigned.rows,
+          ...byInst.rows.filter(s=> String(s.DepartmentId ?? s.departmentId ?? "")===String(filterDeptId)),
         ]
+        notes = [deptStudents.note, unassigned.note, byInst.note]
       } else {
         // Institution-wide first: one round trip, and it does not depend on the
         // department list having loaded (the old per-department fan-out raced it).
         const [byInst, unassigned] = await Promise.all([
-          onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]),
-          onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=>[]),
+          src("get_student_by_institution", () => onboardingApi.getStudentsByInstitution(String(id))),
+          src("unassigned-students?institutionId", () => onboardingApi.getUnassignedStudents({ institutionId: String(id) })),
         ])
-        all = [...(Array.isArray(byInst)?byInst:[]), ...(Array.isArray(unassigned)?unassigned:[])]
+        all = [...byInst.rows, ...unassigned.rows]
+        notes = [byInst.note, unassigned.note]
         if (!all.length && departments.length) {
-          const results = await Promise.all(departments.map(async d=>{
+          const fan = await Promise.all(departments.map(async d=>{
             const did = String(d.Id ?? d.id)
             const [deptSt, unass] = await Promise.all([
-              onboardingApi.getDepartmentStudents(did, String(id)).catch(()=>[]),
-              onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(id) }).catch(()=>[])
+              src(`get_department_student/${did}`, () => onboardingApi.getDepartmentStudents(did, String(id))),
+              src(`unassigned-students?departmentId=${did}`, () => onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(id) })),
             ])
-            return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+            return { rows: [...deptSt.rows, ...unass.rows], note: `${deptSt.note} | ${unass.note}` }
           }))
-          all = results.flat()
+          all = fan.flatMap(x=>x.rows)
+          notes = [...notes, ...fan.map(x=>x.note)]
         }
+      }
+      setLoadDiag(notes.join("  ·  "))
+      if (!all.length && notes.some(n => n.includes("ERROR"))) {
+        setErr(`Could not load students — ${notes.filter(n=>n.includes("ERROR")).join("  ·  ")}`)
       }
       const map = new Map()
       for (const s of all) {
@@ -3019,6 +3038,7 @@ function StudentManagementPage({ go }) {
       </div>
       {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
       {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+      {loadDiag && <p className="font-mono text-[11px] text-outline break-all border border-dashed border-outline-variant rounded-lg px-3 py-2">sources: {loadDiag}</p>}
       {loading ? (
         <p className="font-body-sm text-on-surface-variant">Loading students…</p>
       ) : shownStudents.length === 0 ? (
