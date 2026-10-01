@@ -2697,49 +2697,47 @@ function StudentManagementPage({ go }) {
       if (deptArr.length && !form.departmentId) {
         const firstDept = String(deptArr[0].Id ?? deptArr[0].id)
         setForm(f=>({...f, departmentId: firstDept}))
-        try { const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[]); setPrograms(Array.isArray(progs) ? progs : []) } catch {}
+        try { const progs = await onboardingApi.getPrograms(String(id), firstDept).catch(()=>[]);         setPrograms(Array.isArray(progs) ? progs : []) } catch {}
       }
-    } catch {} finally {
-      // still load the list when meta fails or the institution has no departments yet
-      if (!departments.length && !filterDeptId) loadStudents()
-    }
+    } catch {}
   }
   const loadStudents = async () => {
     setLoading(true); setErr("")
     try {
       const id = await resolveInstId()
-      if (!id) { setStudents([]); return }
+      if (!id) { setErr("No institution id available for your account — create it under Onboarding → Institution."); setStudents([]); return }
       const { onboardingApi } = await import("./onboarding")
       let all = []
       if (filterDeptId) {
-        const [deptStudents, unassigned] = await Promise.all([
+        const [deptStudents, unassigned, byInst] = await Promise.all([
           onboardingApi.getDepartmentStudents(String(filterDeptId), String(id)).catch(()=>[]),
-          onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(id) }).catch(()=>[])
+          onboardingApi.getUnassignedStudents({ departmentId: String(filterDeptId), institutionId: String(id) }).catch(()=>[]),
+          onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]),
         ])
-        all = [...(Array.isArray(deptStudents)?deptStudents:[]), ...(Array.isArray(unassigned)?unassigned:[])]
-        if (all.length===0) {
-          const fallback = await onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[])
-          const arr = Array.isArray(fallback)? fallback : []
-          const filtered = arr.filter(s=> String(s.DepartmentId ?? s.departmentId ?? "")===String(filterDeptId))
-          if (filtered.length) all = filtered
-        }
-      } else if (departments.length) {
-        const results = await Promise.all(departments.map(async d=>{
-          const did = String(d.Id ?? d.id)
-          const [deptSt, unass] = await Promise.all([
-            onboardingApi.getDepartmentStudents(did, String(id)).catch(()=>[]),
-            onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(id) }).catch(()=>[])
-          ])
-          return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
-        }))
-        all = results.flat()
-        if (all.length===0) {
-          const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
-          all = Array.isArray(instSt)? instSt : []
-        }
+        all = [
+          ...(Array.isArray(deptStudents)?deptStudents:[]),
+          ...(Array.isArray(unassigned)?unassigned:[]),
+          ...(Array.isArray(byInst)?byInst:[]).filter(s=> String(s.DepartmentId ?? s.departmentId ?? "")===String(filterDeptId)),
+        ]
       } else {
-        const instSt = await onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=> onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]))
-        all = Array.isArray(instSt)? instSt : []
+        // Institution-wide first: one round trip, and it does not depend on the
+        // department list having loaded (the old per-department fan-out raced it).
+        const [byInst, unassigned] = await Promise.all([
+          onboardingApi.getStudentsByInstitution(String(id)).catch(()=>[]),
+          onboardingApi.getUnassignedStudents({ institutionId: String(id) }).catch(()=>[]),
+        ])
+        all = [...(Array.isArray(byInst)?byInst:[]), ...(Array.isArray(unassigned)?unassigned:[])]
+        if (!all.length && departments.length) {
+          const results = await Promise.all(departments.map(async d=>{
+            const did = String(d.Id ?? d.id)
+            const [deptSt, unass] = await Promise.all([
+              onboardingApi.getDepartmentStudents(did, String(id)).catch(()=>[]),
+              onboardingApi.getUnassignedStudents({ departmentId: did, institutionId: String(id) }).catch(()=>[])
+            ])
+            return [...(Array.isArray(deptSt)?deptSt:[]), ...(Array.isArray(unass)?unass:[])]
+          }))
+          all = results.flat()
+        }
       }
       const map = new Map()
       for (const s of all) {
@@ -2764,21 +2762,13 @@ function StudentManagementPage({ go }) {
           map.set(key, merged)
         }
       }
-      let filtered = Array.from(map.values())
-      if (search.trim()) {
-        const q = search.trim().toLowerCase()
-        filtered = filtered.filter(s=>{
-          const hay = [s.MatricNo, s.matricNo, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.DepartmentName, s.departmentName, s.Level, s.level].join(" ").toLowerCase()
-          return hay.includes(q)
-        })
-      }
-      setStudents(filtered)
+      setStudents(Array.from(map.values()))
     } catch (e) { setErr(e.message || "Could not load students"); setStudents([]) } finally { setLoading(false) }
   }
 
   useEffect(()=>{ loadMeta() }, [])
-  useEffect(()=>{ if (departments.length || filterDeptId) loadStudents() }, [departments, filterDeptId])
-  useEffect(()=>{ if (departments.length) loadStudents() }, [search])
+  useEffect(()=>{ loadStudents() }, [])
+  useEffect(()=>{ if (filterDeptId) loadStudents() }, [filterDeptId])
 
   const onDeptChange = async (val) => {
     setForm(f=>({...f, departmentId: val, programId:"" }))
@@ -2982,12 +2972,17 @@ function StudentManagementPage({ go }) {
       }
     } catch (e) { setErr(e.message || "Could not find student") }
   }
+  // Search runs client-side over the loaded list so typing never blanks the grid.
+  const searchQ = search.trim().toLowerCase()
+  const shownStudents = searchQ
+    ? students.filter(s => [s.MatricNo, s.matricNo, s.FirstName, s.firstName, s.LastName, s.lastName, s.Email, s.email, s.DepartmentName, s.departmentName, s.Level, s.level].join(" ").toLowerCase().includes(searchQ))
+    : students
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">school</span> Student Management</h2>
-          <p className="font-body-sm text-on-surface-variant">Manage students — {students.length} {students.length===1?"student":"students"} {filterDeptId ? "in selected department" : "across all departments"} · via get_department_student + unassigned-students</p>
+          <p className="font-body-sm text-on-surface-variant">Manage students — {shownStudents.length} {shownStudents.length===1?"student":"students"} {filterDeptId ? "in selected department" : "across all departments"} · get_student_by_institution + unassigned-students</p>
         </div>
         <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add Student
@@ -3026,7 +3021,7 @@ function StudentManagementPage({ go }) {
       {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
       {loading ? (
         <p className="font-body-sm text-on-surface-variant">Loading students…</p>
-      ) : students.length === 0 ? (
+      ) : shownStudents.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center border border-dashed border-outline-variant bg-surface-container-low">
           <span className="material-symbols-outlined text-4xl text-outline mb-2">school</span>
           <p className="font-headline-sm text-on-surface">No students found</p>
@@ -3034,7 +3029,7 @@ function StudentManagementPage({ go }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {students.map(s=>(
+          {shownStudents.map(s=>(
             <div key={s.Id ?? s.id ?? s.MatricNo} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
               <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
               <div className="p-5">
@@ -3047,7 +3042,7 @@ function StudentManagementPage({ go }) {
                 <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
                   <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
                     <p className="font-label-md text-outline uppercase tracking-wide">Department</p>
-                    <p className="font-body-sm text-on-surface truncate">{getDeptName(s.DepartmentId ?? s.departmentId)}</p>
+                    <p className="font-body-sm text-on-surface truncate">{s.DepartmentName ?? s.departmentName ?? getDeptName(s.DepartmentId ?? s.departmentId)}</p>
                   </div>
                   <div className="bg-surface-container-low rounded-lg p-2 border border-outline-variant">
                     <p className="font-label-md text-outline uppercase tracking-wide">Institution</p>
