@@ -903,12 +903,21 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {key:'pubs', label:'Publications', icon:'article'},
     {key:'team', label:'Team Settings', icon:'group'},
   ]
-  // Billing items live on the Student Dashboard (moved out of Institution Admin)
-  const studentBillingNavItems = [
-    {key:'subscription', label:'Subscription', icon:'card_membership'},
-    {key:'payment-history', label:'Payment History', icon:'receipt_long'},
+  // Student menu: Dashboard, Research Flow (Submit Topic / Chapters / Download), billing, Settings
+  const studentNavItems = [
+    {key:'dashboard', label:'Dashboard', icon:'dashboard'},
+    {key:'research-flow', label:'Research Flow', icon:'science', subitems:[
+      {label:'Submit Topic', icon:'lightbulb', tab:'topics'},
+      {label:'Chapters', icon:'auto_stories', tab:'chapters'},
+      {label:'Download', icon:'download', section:'download'},
+    ]},
+    {key:'subscription', label:'Subscription', icon:'card_membership', section:'subscription'},
+    {key:'payment-history', label:'Payment History', icon:'receipt_long', section:'payment-history'},
+    {key:'settings', label:'Settings', icon:'settings', section:'settings'},
   ]
-  const hashSection = (useHashQuery().get('section') || '').toLowerCase()
+  const hashQuery = useHashQuery()
+  const hashSection = (hashQuery.get('section') || '').toLowerCase()
+  const hashTab = (hashQuery.get('tab') || '').toLowerCase()
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
@@ -954,14 +963,9 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           )}
           <div>
             <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='faculty' ? 'Project Portfolio' : 'Project Portfolio'}</h1>
-            <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">{role==='admin' ? 'Control Panel' : 'Academic Year 2023-24'}</p>
+            {role==='admin' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Control Panel</p>}
           </div>
         </div>
-        {role !== 'admin' && (
-          <button onClick={()=>go('gateway')} className={`mb-6 w-full font-label-md py-2.5 rounded-lg flex items-center justify-center gap-1.5 ${role==='faculty' ? 'bg-primary text-on-primary' : 'bg-secondary-container text-on-secondary-container hover:bg-secondary-fixed'}`}>
-            <span className="material-symbols-outlined text-[18px]">add</span> New Grant Application
-          </button>
-        )}
         <ul className="flex-1 space-y-1 overflow-y-auto">
           {role==='admin' ? (
             subrole === 'institution' ? (
@@ -1033,13 +1037,36 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           ) : (
             // student
             <>
-              <li><button onClick={()=>go('student')} type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
-              {navItems.slice(1).map(it=>(
-                <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
-              ))}
-              {studentBillingNavItems.map(it=>(
-                <li key={it.key}><button onClick={()=>go(`student?section=${it.key}`)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${hashSection===it.key ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-variant'}`}><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
-              ))}
+              {studentNavItems.map(it=>{
+                const hasSub = Array.isArray(it.subitems) && it.subitems.length > 0
+                const isOpen = !!openGroups[it.label]
+                const dashActive = it.key==='dashboard' && !hashSection && (hashTab==='' || hashTab==='overview')
+                const secActive = !dashActive && !!it.section && hashSection===it.section
+                const grpActive = hasSub && it.subitems.some(s => (s.tab && hashTab===s.tab) || (s.section && hashSection===s.section))
+                const active = dashActive || secActive || grpActive
+                if (hasSub) {
+                  return (
+                    <li key={it.key}>
+                      <button onClick={()=>toggleGroup(it.label)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${active ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-variant'}`}>
+                        <span className="material-symbols-outlined">{it.icon}</span> <span className="flex-1 text-left">{it.label}</span> <span className="material-symbols-outlined text-[18px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
+                      </button>
+                      {isOpen && (
+                        <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
+                          {it.subitems.map(sub=>{
+                            const subActive = (sub.tab && hashTab===sub.tab) || (sub.section && hashSection===sub.section)
+                            const subNav = sub.tab ? ()=>go(`student?tab=${sub.tab}`) : sub.section ? ()=>go(`student?section=${sub.section}`) : undefined
+                            return (
+                              <li key={sub.label}><button onClick={subNav} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${subActive ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">{sub.icon}</span> {sub.label}</button></li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </li>
+                  )
+                }
+                const nav = it.key==='dashboard' ? ()=>go('student') : it.section ? ()=>go(`student?section=${it.section}`) : undefined
+                return <li key={it.key}><button onClick={nav} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${active ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-variant'}`}><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
+              })}
             </>
           )}
         </ul>
@@ -1077,13 +1104,25 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
             <h2 className="hidden md:block font-headline-md font-bold text-primary truncate">{title}</h2>
             <div className="flex md:hidden items-center gap-2"><span className="font-headline-sm font-bold">{title}</span></div>
             <nav className="hidden md:flex gap-6 items-center">
-              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Research</button>
-              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Grants</button>
-              <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Compliance</button>
-              <button type="button" className="text-primary border-b-2 border-primary font-bold pb-1 text-sm">Analytics</button>
+              {role==='student' ? (
+                <>
+                  <button onClick={()=>go('student')} type="button" className={!hashSection && (hashTab==='' || hashTab==='overview') ? 'text-primary border-b-2 border-primary font-bold pb-1 text-sm' : 'text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm'}>Research Flow</button>
+                  <button onClick={()=>go('student?tab=topics')} type="button" className={hashTab==='topics' ? 'text-primary border-b-2 border-primary font-bold pb-1 text-sm' : 'text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm'}>Submit Topic</button>
+                  <button onClick={()=>go('student?tab=chapters')} type="button" className={hashTab==='chapters' ? 'text-primary border-b-2 border-primary font-bold pb-1 text-sm' : 'text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm'}>Chapters</button>
+                  <button onClick={()=>go('student?section=download')} type="button" className={hashSection==='download' ? 'text-primary border-b-2 border-primary font-bold pb-1 text-sm' : 'text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm'}>Download</button>
+                  <button onClick={()=>go('student?section=settings')} type="button" className={hashSection==='settings' ? 'text-primary border-b-2 border-primary font-bold pb-1 text-sm' : 'text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm'}>Settings</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Research</button>
+                  <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Grants</button>
+                  <button type="button" className="text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container-low text-sm">Compliance</button>
+                  <button type="button" className="text-primary border-b-2 border-primary font-bold pb-1 text-sm">Analytics</button>
+                </>
+              )}
             </nav>
             <div className="flex items-center gap-2 md:gap-3">
-              <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>
+              {role!=='student' && <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>}
               <button className="p-1 hover:bg-surface-variant rounded-full"><span className="material-symbols-outlined text-[20px]">notifications</span></button>
               <button className="p-1 hover:bg-surface-variant rounded-full hidden md:block"><span className="material-symbols-outlined text-[20px]">apps</span></button>
               <img alt="avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant" src={role==='student' ? AVATAR_STUDENT : AVATAR_FACULTY}/>
@@ -2590,6 +2629,9 @@ function StaffManagementPage({ go }) {
                 <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
               </div>
             </form>
+            <div className="mt-4 pt-4 border-t border-outline-variant">
+              <RoleAssign userName={String(editForm?.email || editing?.Email || editing?.email || editing?.UserName || editing?.userName || editing?.StaffId || editing?.staffId || "").trim()} />
+            </div>
           </div>
         </div>
       )}
@@ -3546,10 +3588,151 @@ function fillStudentMissing(base, extra) {
   }
   return out
 }
+/* ---------- Student Settings (account, academic year, security) ---------- */
+function StudentSettings({ go, student, displayName, matricNo, deptProg }) {
+  const tok = decodeToken()
+  const email = student?.Email ?? student?.email ?? tok?.email ?? tok?.Email ?? ""
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState("")
+  const [err, setErr] = useState("")
+  const sendReset = async () => {
+    if (!email) { setErr("No email is linked to this account."); return }
+    setErr(""); setMsg(""); setBusy(true)
+    try {
+      await authApi.requestPasswordReset(email)
+      setMsg("If the account exists, a password reset link has been sent to your email.")
+    } catch (e) {
+      setErr(e.message || "Could not send the reset email. Please try again.")
+    } finally { setBusy(false) }
+  }
+  const row = (label, value) => (
+    <div key={label} className="flex items-start justify-between gap-4 border-b border-outline-variant last:border-0 py-2.5">
+      <span className="font-label-md text-xs uppercase tracking-wide text-outline">{label}</span>
+      <span className="font-body-sm text-on-surface text-right truncate">{value || "—"}</span>
+    </div>
+  )
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <button onClick={()=>go('student')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Dashboard
+      </button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">person</span></div>
+            <div>
+              <h2 className="font-headline-md font-bold text-primary">Account</h2>
+              <p className="font-body-sm text-on-surface-variant">Your profile as held by the institution.</p>
+            </div>
+          </div>
+          <div>
+            {row('Name', displayName)}
+            {row('Email', email)}
+            {row('Matric No', student?.MatricNo ?? student?.matricNo ?? matricNo)}
+            {row('Programme', student?.ProgramName ?? student?.programName ?? student?.program ?? student?.programme ?? deptProg?.progName)}
+            {row('Department', student?.DepartmentName ?? student?.departmentName ?? deptProg?.deptName)}
+            {row('Institution', student?.InstitutionName ?? student?.institutionName ?? tok?.institutionName)}
+          </div>
+        </div>
+
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center"><span className="material-symbols-outlined text-on-secondary-container">event</span></div>
+            <div>
+              <h2 className="font-headline-md font-bold text-primary">Academic Year</h2>
+              <p className="font-body-sm text-on-surface-variant">Shown across your research portfolio.</p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-dashed border-outline-variant bg-surface-container-low p-4">
+            <p className="font-label-md text-xs uppercase tracking-wide text-outline">Current academic year</p>
+            <p className="font-headline-sm font-bold text-on-surface mt-1">Not configured</p>
+            <p className="text-xs text-on-surface-variant mt-2">This value is meant to come from an institution settings item — that setting does not exist yet.</p>
+          </div>
+        </div>
+
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 lg:col-span-2">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">lock</span></div>
+            <div>
+              <h2 className="font-headline-md font-bold text-primary">Security</h2>
+              <p className="font-body-sm text-on-surface-variant">Password changes are confirmed through an emailed link.</p>
+            </div>
+          </div>
+          {err && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm mb-3">{err}</div>}
+          {msg && <div className="rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm mb-3">{msg}</div>}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <p className="font-body-sm text-on-surface-variant flex-1">We'll send a secure reset link to <span className="font-semibold text-on-surface">{email || "your registered email"}</span>.</p>
+            <button onClick={sendReset} disabled={busy || !email} className="bg-primary text-on-primary font-label-md py-2.5 px-5 rounded-lg hover:bg-primary-container transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">mail</span> {busy ? "Sending…" : "Send reset link"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Student Downloads (chapter + review files) ---------- */
+function StudentDownloads({ go, chapters, currentReview, dash }) {
+  const files = []
+  const push = (label, sub, url) => { if (url) files.push({ label, sub: sub || "", url }) }
+  ;(chapters || []).forEach((c, i) => {
+    const num = c.chapterNumber ?? c.ChapterNumber ?? c.number ?? i + 1
+    const url = c.fileUrl ?? c.FileUrl ?? c.filePath ?? c.FilePath ?? c.latestFileUrl ?? c.LatestFileUrl ?? c.downloadFileUrl
+    push(`Chapter ${num}`, c.title ?? c.Title ?? c.name ?? "", url)
+  })
+  if (currentReview) {
+    push("Latest review file", `Chapter ${currentReview.chapterNumber ?? currentReview.ChapterNumber ?? ""}`, currentReview.reviewFilePath ?? currentReview.ReviewFilePath)
+  }
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <button onClick={()=>go('student')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Dashboard
+      </button>
+      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center"><span className="material-symbols-outlined text-white">download</span></div>
+          <div>
+            <h2 className="font-headline-md font-bold text-primary">Download</h2>
+            <p className="font-body-sm text-on-surface-variant">{dash?.projectTitle ? `Project: ${dash.projectTitle}` : "Chapter uploads and supervisor review files."}</p>
+          </div>
+        </div>
+        {files.length === 0 ? (
+          <div className="py-10 text-center border-2 border-dashed border-outline-variant rounded-xl">
+            <span className="material-symbols-outlined text-4xl text-outline">download</span>
+            <p className="text-sm text-on-surface-variant mt-2">No files available yet</p>
+            <p className="text-xs text-outline">Files appear here once you upload a chapter or your supervisor sends a review.</p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {files.map((f, i) => (
+              <li key={i} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-outline-variant bg-surface-container-low">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="material-symbols-outlined text-primary">description</span>
+                  <div className="min-w-0">
+                    <p className="font-label-md font-bold text-on-surface truncate">{f.label}</p>
+                    <p className="text-xs text-on-surface-variant truncate">{f.sub || f.url}</p>
+                  </div>
+                </div>
+                <a href={f.url} target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold hover:bg-primary-container transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">download</span> Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function StudentDashboard({ go }) {
   const qsHash = useHashQuery()
   const section = (qsHash.get('section') || '').toLowerCase()
+  const sectionTab = (qsHash.get('tab') || '').toLowerCase() // overview | topics | chapters | workspace | reviews
   const billingSection = section === 'subscription' || section === 'payment-history' || section === 'payment history'
+  const settingsSection = section === 'settings'
+  const downloadSection = section === 'download'
   const [student, setStudent] = useState(null)
   const [deptProg, setDeptProg] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -3579,7 +3762,9 @@ function StudentDashboard({ go }) {
   const firstName = displayName.split(" ")[0] || "Student"
 
   // Project Flow state
-  const [activeTab, setActiveTab] = useState("overview") // overview | topics | chapters | workspace | reviews
+  const [activeTab, setActiveTabState] = useState("overview") // overview | topics | chapters | workspace | reviews
+  // Tab selection is URL-driven (?tab=…) so the sidebar and top menu deep-link into the same view
+  const setActiveTab = (id) => go(`student?tab=${id}`)
   const [project, setProject] = useState(null)
   const [dash, setDash] = useState(null)
   const [dashLoading, setDashLoading] = useState(false)
@@ -3906,6 +4091,10 @@ function StudentDashboard({ go }) {
   }, [matricNo, instId, deptProg?.deptId, deptIdFromToken])
 
   useEffect(()=>{ if (matricNo && instId && !loading) fetchProjectFlow() }, [matricNo, instId, loading, fetchProjectFlow])
+  useEffect(()=>{
+    if (['overview','topics','chapters','workspace','reviews'].includes(sectionTab)) setActiveTabState(sectionTab)
+    else if (!sectionTab) setActiveTabState('overview')
+  }, [sectionTab])
 
   const refreshTopics = useCallback(async ()=>{
     if (!projectId) return
@@ -3984,7 +4173,7 @@ function StudentDashboard({ go }) {
   const workspaceStorageKey = `earms_workspace_${matricNo || 'anon'}_${projectId || 'noproject'}_${workspaceChap}`
 
   return (
-    <DashShell go={go} active="student" role="student" title={billingSection ? (section === 'subscription' ? 'Subscription' : 'Payment History') : `Welcome back, ${firstName}.`} subtitle={billingSection ? (section === 'subscription' ? 'View plans and manage your subscription.' : 'Subscription and payment records for your account.') : loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
+    <DashShell go={go} active="student" role="student" title={billingSection ? (section === 'subscription' ? 'Subscription' : 'Payment History') : settingsSection ? 'Settings' : downloadSection ? 'Download' : `Welcome back, ${firstName}.`} subtitle={billingSection ? (section === 'subscription' ? 'View plans and manage your subscription.' : 'Subscription and payment records for your account.') : settingsSection ? 'Account, academic year and security settings.' : downloadSection ? 'Files and documents available for download.' : loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
       {billingSection ? (
         <div className="space-y-6 max-w-5xl">
           <button onClick={()=>go('student')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
@@ -4001,6 +4190,10 @@ function StudentDashboard({ go }) {
             {section==='subscription' ? <SubscriptionPage /> : <PaymentHistoryPage />}
           </div>
         </div>
+      ) : settingsSection ? (
+        <StudentSettings go={go} student={student} displayName={displayName} matricNo={matricNo} deptProg={deptProg} />
+      ) : downloadSection ? (
+        <StudentDownloads go={go} chapters={chapters} currentReview={currentReview} dash={dash} />
       ) : loading ? (
         <div className="py-12 text-center"><span className="material-symbols-outlined text-3xl animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading your dashboard…</p></div>
       ) : (
@@ -4356,10 +4549,7 @@ function StudentDashboard({ go }) {
                 {!projectId && <p className="text-xs text-error">No project linked — supervisor must create project first.</p>}
                 {templates.length>0 && <div className="text-xs bg-surface-container-low rounded-lg p-2 border border-outline-variant"><p className="font-bold">Templates</p><p className="text-outline">{templates.map(t=>t.templateName ?? t.TemplateName).join(", ")}</p></div>}
             </form>
-            <div className="mt-4">
-              <RoleAssign userName={String(editForm.email || editing.Email || editing.email || editing.UserName || editing.userName || editing.StaffId || editing.staffId || "").trim()} />
             </div>
-          </div>
           </div>
 
           {currentReview && (
