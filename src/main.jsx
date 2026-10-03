@@ -2713,6 +2713,7 @@ function StudentManagementPage({ go }) {
     }
   }
   const loadStudents = async () => {
+    if (!tokenService.isAuthenticated()) { go('login'); return }
     setLoading(true); setErr(""); setLoadDiag("")
     try {
       const id = await resolveInstId()
