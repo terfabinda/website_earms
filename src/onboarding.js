@@ -6,7 +6,7 @@
 //     and StudentCategory (1 Non_Degree,2 Undergraduate,3 Postgraduate)
 //   - Institution registration is multipart/form-data (logoFile), everything else JSON
 
-import { apiFetch, BASE_URL } from "./iam";
+import { apiFetch, BASE_URL, decodeToken } from "./iam";
 
 const ONB_BASE =
   ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/");
@@ -287,6 +287,38 @@ export const onboardingApi = {
     });
   },
 };
+
+// Resolve the real onboarding institution id for the current JWT.
+// NEVER use token ownerId as institution id (owner 5 vs institution 4 for JST).
+// Order: institutionCode -> get-institution/{code}, then dropdown/list match.
+export async function resolveInstitutionId() {
+  let tok = null;
+  try { tok = decodeToken(); } catch { tok = null; }
+  const code = String(tok?.institutionCode ?? tok?.InstitutionCode ?? "").trim();
+  const name = String(tok?.institutionName ?? tok?.InstitutionName ?? "").trim();
+  if (code) {
+    try {
+      const rec = await onboardingApi.getInstitutionByCode(code);
+      const id = rec?.Id ?? rec?.id ?? rec?.ID;
+      if (id !== undefined && id !== null && String(id) !== "") return String(id);
+    } catch {}
+  }
+  try {
+    const list = await onboardingApi.getInstitutionsDropdown().catch(() => []);
+    const arr = Array.isArray(list) ? list : [];
+    const match = (r) => {
+      const c = String(r?.Code ?? r?.code ?? "").toLowerCase();
+      const n = String(r?.Name ?? r?.name ?? "").toLowerCase();
+      return (code && c === code.toLowerCase()) || (name && n === name.toLowerCase());
+    };
+    const hit = arr.find(match);
+    if (hit) {
+      const id = hit?.Id ?? hit?.id;
+      if (id !== undefined && id !== null) return String(id);
+    }
+  } catch {}
+  return "";
+}
 
 export const STAFF_CATEGORIES = [
   { value: 1, label: "Academic" },

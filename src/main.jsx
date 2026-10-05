@@ -1605,18 +1605,19 @@ function CollegePage({ go }) {
   const [msg, setMsg] = useState("")
   const [busy, setBusy] = useState(false)
   const tok = decodeToken()
-  const instId = tok?.ownerId || tok?.OwnerId || ""
+  // NOTE: ownerId is NOT the institution id (e.g. owner 5 vs institution 4 for JST).
+  // Always resolve via institutionCode -> get-institution/{code}.
+  const resolveCollegeInstId = async () => {
+    const { resolveInstitutionId } = await import("./onboarding")
+    return resolveInstitutionId()
+  }
 
   const load = async () => {
     setLoading(true); setErr("")
     try {
       const { onboardingApi } = await import("./onboarding")
-      // Try to get institution id from token's ownerId or from dropdown's first institution
-      let id = instId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
+      const id = await resolveCollegeInstId()
+      if (!id) { setColleges([]); setErr("No institution record found for this account yet — complete Onboarding → Institution."); return }
       if (id) {
         const data = await onboardingApi.getColleges(String(id)).catch(()=>[])
         setColleges(Array.isArray(data) ? data : [])
@@ -1645,12 +1646,8 @@ function CollegePage({ go }) {
     setBusy(true)
     try {
       const { onboardingApi } = await import("./onboarding")
-      let id = instId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
-      if (!id) throw new Error("No institution found")
+      const id = await resolveCollegeInstId()
+      if (!id) throw new Error("No institution record found for this account yet — complete Onboarding → Institution first.")
       await onboardingApi.createCollege({ Code: code.trim(), CollegeName: name.trim(), Name: name.trim(), InstitutionId: Number(id) })
       setMsg(`${collegeTerm} created.`)
       setCode(""); setName("")
