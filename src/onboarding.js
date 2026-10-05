@@ -159,6 +159,31 @@ export const onboardingApi = {
       body: JSON.stringify(body),
     });
   },
+  async updateCollege(id, payload) {
+    // Backend currently exposes only POST create-college + GET get-colleges
+    // (no update route in docs; PUT colleges/{id} etc. all 404 as probed).
+    // Follow the programs convention (PUT programs/{id}) so this works
+    // unchanged once backend adds it; until then the 404 surfaces clearly.
+    const p = payload || {};
+    const nameVal = p.CollegeName ?? p.collegeName ?? p.Name ?? p.name ?? "";
+    const codeVal = p.Code ?? p.code ?? "";
+    const instVal = p.InstitutionId ?? p.institutionId ?? 0;
+    return obFetch("colleges/" + encodeURIComponent(id), {
+      method: "PUT",
+      body: JSON.stringify({
+        Id: Number(id),
+        Code: String(codeVal),
+        CollegeName: String(nameVal),
+        Name: String(nameVal),
+        InstitutionId: Number(instVal),
+      }),
+    });
+  },
+  async deleteCollege(id) {
+    // Same note as updateCollege: no delete route in docs/backend yet.
+    // Canonical guess DELETE colleges/{id} (matches programs-style routing).
+    return obFetch("colleges/" + encodeURIComponent(id), { method: "DELETE" });
+  },
   async getLevels(institutionId) {
     return obFetch("get-levels/" + encodeURIComponent(institutionId));
   },

@@ -1604,6 +1604,12 @@ function CollegePage({ go }) {
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
   const [busy, setBusy] = useState(false)
+  const [viewing, setViewing] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [editCode, setEditCode] = useState("")
+  const [editName, setEditName] = useState("")
+  const [deleting, setDeleting] = useState(null)
+  const [actionBusy, setActionBusy] = useState(false)
   const tok = decodeToken()
   // NOTE: ownerId is NOT the institution id (e.g. owner 5 vs institution 4 for JST).
   // Always resolve via institutionCode -> get-institution/{code}.
@@ -1697,9 +1703,9 @@ function CollegePage({ go }) {
                 <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</h4>
                 <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {c.Id ?? c.id} · {collegeTerm}</p>
                 <div className="flex gap-2 mt-4">
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
-                  <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
-                  <button className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                  <button onClick={()=>setViewing(c)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
+                  <button onClick={()=>{ setEditing(c); setEditCode(String(c.Code ?? c.code ?? "")); setEditName(String(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name ?? "")); setMsg(""); setErr("") }} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button onClick={()=>{ setDeleting(c); setMsg(""); setErr("") }} aria-label="Delete college" className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                 </div>
               </div>
             </div>
@@ -1731,6 +1737,88 @@ function CollegePage({ go }) {
                 <button type="button" onClick={()=>setShowModal(false)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View modal */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setViewing(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">{collegeTerm} Details</h3>
+              <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">ID: </span>{viewing.Id ?? viewing.id}</p>
+              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Code: </span>{viewing.Code ?? viewing.code}</p>
+              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Name: </span>{displayName(viewing.CollegeName ?? viewing.collegeName ?? viewing.Name ?? viewing.name)}</p>
+              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution ID: </span>{viewing.InstitutionId ?? viewing.institutionId ?? "—"}</p>
+            </div>
+            <button onClick={()=>setViewing(null)} className="mt-5 w-full border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setEditing(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline-sm font-bold text-primary">Edit {collegeTerm}</h3>
+              <button onClick={()=>setEditing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <form onSubmit={async (e)=>{
+              e.preventDefault(); setMsg(""); setErr("")
+              if (!editCode.trim() || !editName.trim()) { setErr(`${collegeTerm} Code and Name are required.`); return }
+              setActionBusy(true)
+              try {
+                const { onboardingApi } = await import("./onboarding")
+                const id = await resolveCollegeInstId()
+                if (!id) throw new Error("No institution record found for this account yet.")
+                await onboardingApi.updateCollege(String(editing.Id ?? editing.id), { Code: editCode.trim(), CollegeName: editName.trim(), InstitutionId: Number(id) })
+                setMsg(`${collegeTerm} updated.`); setEditing(null); load()
+              } catch (e2) { setErr(e2.message || "Could not update.") } finally { setActionBusy(false) }
+            }} className="space-y-4">
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} Code</span>
+                <input value={editCode} onChange={e=>setEditCode(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              <label className="block">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm} Name</span>
+                <input value={editName} onChange={e=>setEditName(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={actionBusy} className="flex-1 bg-primary text-on-primary py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{actionBusy ? "Saving…" : "Save Changes"}</button>
+                <button type="button" onClick={()=>setEditing(null)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setDeleting(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <h3 className="font-headline-sm font-bold text-primary">Delete {collegeTerm}?</h3>
+            <p className="font-body-sm text-on-surface-variant mt-2">This will remove <span className="font-label-md text-on-surface">{displayName(deleting.CollegeName ?? deleting.collegeName ?? deleting.Name ?? deleting.name)} ({deleting.Code ?? deleting.code})</span>. This cannot be undone.</p>
+            {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm mt-3">{err}</div>}
+            <div className="flex gap-3 pt-4">
+              <button disabled={actionBusy} onClick={async ()=>{
+                setActionBusy(true); setErr(""); setMsg("")
+                try {
+                  const { onboardingApi } = await import("./onboarding")
+                  await onboardingApi.deleteCollege(String(deleting.Id ?? deleting.id))
+                  setMsg(`${collegeTerm} deleted.`); setDeleting(null); load()
+                } catch (e2) { setErr(e2.message || "Could not delete.") } finally { setActionBusy(false) }
+              }} className="flex-1 bg-error text-on-error py-3 rounded-lg font-label-md hover:opacity-90 disabled:opacity-60">{actionBusy ? "Deleting…" : "Delete"}</button>
+              <button onClick={()=>setDeleting(null)} className="flex-1 border border-outline-variant bg-surface py-3 rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+            </div>
           </div>
         </div>
       )}
