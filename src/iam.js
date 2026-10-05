@@ -89,6 +89,7 @@ export async function apiFetch(path, options = {}, _isRetry = false, base = BASE
   options.headers = options.headers || {};
   const token = tokenService.getAccessToken();
   if (token) options.headers["Authorization"] = "Bearer " + token;
+  else delete options.headers["Authorization"];
   if (options.body && !(options.headers["Content-Type"] || options.headers["content-type"])) {
     const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
     if (!isFormData) options.headers["Content-Type"] = "application/json";
@@ -99,11 +100,17 @@ export async function apiFetch(path, options = {}, _isRetry = false, base = BASE
   if (res.status === 401 && token && !_isRetry) {
     try {
       const newToken = await refreshAccessToken();
-      options.headers["Authorization"] = "Bearer " + newToken;
-      res = await fetch(base + path, options);
+      const retryOptions = { ...options, headers: { ...options.headers, Authorization: "Bearer " + newToken } };
+      res = await fetch(base + path, retryOptions);
+      if (res.status === 401) {
+        console.warn("[apiFetch] retry still 401 after refresh:", base + path, "- token rejected or missing institution/role claim");
+      }
     } catch (e) {
+      console.warn("[apiFetch] refresh failed, clearing tokens:", e?.message || e);
       throw e;
     }
+  } else if (res.status === 401 && !token) {
+    console.warn("[apiFetch] 401 with no access token stored for:", base + path, "- user needs to login");
   }
   return res;
 }

@@ -555,7 +555,7 @@ function Signup({ go }) {
         userName: userName.trim(),
         password: pwd,
         region: Number(region),
-        userRoles: [ownerType === 1 ? 'InstitutionAdmin' : 'Admin'],
+        userRoles: [ownerType === 1 ? 'institutionadmin' : 'admin'],
         institutionCode: ownerType === 1 ? institutionCode.trim() : '',
         institutionName: ownerType === 1 ? ownerName.trim() : '',
         isActive: true,
@@ -563,7 +563,27 @@ function Signup({ go }) {
         preferredCurrency: 'NGN',
         timeZone: 'Africa/Lagos',
       })
-      setInfo('Account created. You can now sign in.')
+      // Second step (institution accounts only): IAM owner alone is not enough —
+      // onboarding has no matching institution record, so every onboarding call
+      // 401s with "Institution claim missing". Auto-register it now while we
+      // have the credentials, so a fresh login works end-to-end.
+      if (Number(ownerType) === 1) {
+        try {
+          await authApi.login(userName.trim(), pwd)
+          const { onboardingApi } = await import("./onboarding")
+          const fd = new FormData()
+          fd.append("Code", institutionCode.trim())
+          fd.append("Name", ownerName.trim())
+          fd.append("Email", email.trim())
+          fd.append("InstitutionType", "University")
+          await onboardingApi.createInstitution(fd)
+          setInfo('Account and institution created. You can now sign in.')
+        } catch (secondErr) {
+          setInfo('Account created, but institution registration failed: ' + (secondErr.message || 'unknown error') + ' — sign in, then complete it under Onboarding → Institution.')
+        }
+      } else {
+        setInfo('Account created. You can now sign in.')
+      }
     } catch (err) {
       setError(err.message || 'Could not create account.')
     } finally {

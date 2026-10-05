@@ -114,7 +114,7 @@ function UsersTab() {
   const [createOwner, setCreateOwner] = useState(false);
   const [ownerForm, setOwnerForm] = useState({
     ownerName: "", userName: "", ownerEmail: "", password: "", ownerType: 1,
-    userRoles: ["InstitutionAdmin"], institutionCode: "", institutionName: "",
+    userRoles: ["institutionadmin"], institutionCode: "", institutionName: "",
     isActive: true, preferredLanguage: "en", preferredCurrency: "NGN", timeZone: "Africa/Lagos",
   });
 

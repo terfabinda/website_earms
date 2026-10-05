@@ -16,16 +16,31 @@ const OB = "api/onboarding/";
 async function obFetch(path, options = {}) {
   const res = await apiFetch(OB + path, options, false, ONB_BASE);
   let body = null;
+  let rawText = "";
   try {
-    body = await res.json();
+    rawText = await res.text();
+    body = rawText ? JSON.parse(rawText) : null;
   } catch (e) {
     body = null;
   }
   if (!res.ok) {
-    const msg =
+    const serverMsg =
       (body && (body.message || body.errorCode)) ||
-      "Onboarding request failed (" + res.status + ")";
-    throw new Error(msg);
+      (rawText && rawText.length < 500 ? rawText : "");
+    let msg =
+      serverMsg || "Onboarding request failed (" + res.status + ")";
+    if (res.status === 401) {
+      // 401 from onboarding almost always means: missing/expired JWT,
+      // failed silent refresh, or JWT without the institution claim the
+      // controller reads (get_student_by_institution uses JWT, not query).
+      // Keep the status prefix so callers matching "(401)" still work.
+      msg +=
+        " — unauthorized. Re-login; if it persists the access token is rejected or lacks institution (ownerId) claim.";
+    }
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
   }
   if (body && body.success === false) {
     throw new Error(body.message || body.errorCode || "Operation failed");
@@ -205,8 +220,12 @@ export const onboardingApi = {
   async getStaffIam(staffId) {
     return obFetch("get_staff_iam" + qs({ staffId }));
   },
-  async getStudentsByInstitution(institutionId) {
-    return obFetch("get_student_by_institution" + qs({ institutionId }));
+  async getStudentsByInstitution(_institutionId) {
+    // Spec: GET /get_student_by_institution — Parameters: None.
+    // Institution ID is read from JWT (ownerId claim). Do NOT send
+    // ?institutionId= — the deployed controller ignores it and a stale /
+    // cross-institution id in the query only confuses diagnostics.
+    return obFetch("get_student_by_institution");
   },
   async getDepartmentStudents(departmentId, institutionId) {
     return obFetch(
