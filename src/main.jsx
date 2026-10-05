@@ -1834,7 +1834,12 @@ function DepartmentPage({ go }) {
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const tok = decodeToken()
-  const instId = tok?.ownerId || tok?.OwnerId || ""
+  // NOTE: ownerId is NOT the institution id (owner 5 vs institution 4 for JST).
+  // Resolve via institutionCode like CollegePage does.
+  const resolveDeptInstId = async () => {
+    const { resolveInstitutionId } = await import("./onboarding")
+    return resolveInstitutionId()
+  }
   const collegeTerm = (() => {
     try {
       const code2 = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
@@ -1856,11 +1861,8 @@ function DepartmentPage({ go }) {
     setLoading(true); setErr("")
     try {
       const { onboardingApi } = await import("./onboarding")
-      let id = instId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
+      const id = await resolveDeptInstId()
+      if (!id) { setDepts([]); setFaculties([]); return }
       if (id) {
         const [data, facs] = await Promise.all([
           onboardingApi.getDepartments(String(id)).catch(()=>[]),
@@ -1881,12 +1883,8 @@ function DepartmentPage({ go }) {
     setBusy(true)
     try {
       const { onboardingApi } = await import("./onboarding")
-      let id = instId
-      if (!id) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-      }
-      if (!id) throw new Error("No institution found")
+      const id = await resolveDeptInstId()
+      if (!id) throw new Error("No institution record found for this account yet — complete Onboarding → Institution first.")
       await onboardingApi.createDepartment(String(id), { code: code.trim(), name: name.trim(), collegeId: facultyId ? Number(facultyId) : undefined })
       setMsg("Department created.")
       setCode(""); setName("")
@@ -1901,7 +1899,7 @@ function DepartmentPage({ go }) {
           <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">account_tree</span> Departments</h2>
           <p className="font-body-sm text-on-surface-variant">Manage departments — exquisite grid with actions</p>
         </div>
-        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+        <button onClick={()=>{ setShowModal(true); load() }} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add New Department
         </button>
       </div>
