@@ -1701,7 +1701,7 @@ function CollegePage({ go }) {
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{c.Code ?? c.code ?? "—"}</span>
                 </div>
                 <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</h4>
-                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {c.Id ?? c.id} · {collegeTerm}</p>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{collegeTerm}</p>
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>setViewing(c)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
                   <button onClick={()=>{ setEditing(c); setEditCode(String(c.Code ?? c.code ?? "")); setEditName(String(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name ?? "")); setMsg(""); setErr("") }} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
@@ -1751,10 +1751,8 @@ function CollegePage({ go }) {
               <button onClick={()=>setViewing(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
             </div>
             <div className="space-y-2 text-sm">
-              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">ID: </span>{viewing.Id ?? viewing.id}</p>
               <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Code: </span>{viewing.Code ?? viewing.code}</p>
               <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Name: </span>{displayName(viewing.CollegeName ?? viewing.collegeName ?? viewing.Name ?? viewing.name)}</p>
-              <p><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution ID: </span>{viewing.InstitutionId ?? viewing.institutionId ?? "—"}</p>
             </div>
             <button onClick={()=>setViewing(null)} className="mt-5 w-full border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
           </div>

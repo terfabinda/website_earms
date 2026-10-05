@@ -1548,7 +1548,6 @@ function CollegesTab({ instId }) {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2">Id</th>
                 <th className="py-2">Name</th>
                 <th className="py-2">Code</th>
               </tr>
@@ -1556,7 +1555,6 @@ function CollegesTab({ instId }) {
             <tbody className="divide-y divide-surface-container">
               {items.map((c) => (
                 <tr key={c.Id ?? c.id}>
-                  <td className="py-2 font-medium text-on-surface">{c.Id ?? c.id}</td>
                   <td className="py-2 text-on-surface-variant">{displayName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</td>
                   <td className="py-2 text-on-surface-variant">{c.Code ?? c.code ?? "—"}</td>
                 </tr>
