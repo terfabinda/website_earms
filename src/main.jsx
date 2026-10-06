@@ -2237,16 +2237,10 @@ function StaffManagementPage({ go }) {
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const tok = decodeToken()
-  const jwtInstId = tok?.ownerId || tok?.OwnerId || ""
-
+  // NOTE: ownerId is NOT the institution id (owner 5 vs institution 4 for JST).
   const resolveInstId = async () => {
-    let id = jwtInstId
-    if (!id) {
-      const { onboardingApi } = await import("./onboarding")
-      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-      if (Array.isArray(list) && list.length) id = String(list[0].Id ?? list[0].id)
-    }
-    return id ? String(id) : ""
+    const { resolveInstitutionId } = await import("./onboarding")
+    return resolveInstitutionId()
   }
 
   const loadMeta = async () => {
@@ -2464,7 +2458,7 @@ function StaffManagementPage({ go }) {
           <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">badge</span> Staff Management</h2>
           <p className="font-body-sm text-on-surface-variant">Manage staff — {staff.length} {staff.length===1?"member":"members"} {filterDeptId ? "in selected department" : "across all departments"} · retrieved via stafflist + academic-staff</p>
         </div>
-        <button onClick={()=>setShowModal(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
+        <button onClick={()=>{ setShowModal(true); loadMeta() }} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim shadow-sm">
           <span className="material-symbols-outlined text-[18px]">add</span> Add New Staff
         </button>
       </div>
