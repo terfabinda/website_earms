@@ -2558,11 +2558,8 @@ function StaffManagementPage({ go }) {
     if (!form.staffId.trim() || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) { setErr("Staff ID, First Name, Last Name and Email are required."); return }
     try {
       const { onboardingApi } = await import("./onboarding")
-      let instId = jwtInstId
-      if (!instId) {
-        const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-        if (Array.isArray(list) && list.length) instId = String(list[0].Id ?? list[0].id)
-      }
+      const instId = await resolveInstId()
+      if (!instId) throw new Error("No institution record found for this account yet — complete Onboarding → Institution first.")
       const payload = {
         StaffId: form.staffId.trim(),
         Title: form.title.trim(),
