@@ -19,3 +19,6 @@ dist/stitch/
 # Local implementation reports (not committed)
 IMPLEMENTATION_REPORT.md
 IMPLEMENTATION-REPORT-*.md
+
+# Regulator API guide (internal reference, not shipped)
+regulator-api-guide.md

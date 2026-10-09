@@ -24,11 +24,13 @@ async function obFetch(path, options = {}) {
     body = null;
   }
   if (!res.ok) {
+    const errs = body && (body.errors || body.Errors);
+    const errsText = Array.isArray(errs) && errs.length ? " — " + errs.join(" ") : "";
     const serverMsg =
-      (body && (body.message || body.errorCode)) ||
+      (body && (body.message || body.Message || body.errorCode || body.ErrorCode)) ||
       (rawText && rawText.length < 500 ? rawText : "");
     let msg =
-      serverMsg || "Onboarding request failed (" + res.status + ")";
+      (serverMsg || "Onboarding request failed") + " (" + res.status + ")" + errsText;
     if (res.status === 401) {
       // 401 from onboarding almost always means: missing/expired JWT,
       // failed silent refresh, or JWT without the institution claim the
@@ -43,7 +45,12 @@ async function obFetch(path, options = {}) {
     throw err;
   }
   if (body && body.success === false) {
-    throw new Error(body.message || body.errorCode || "Operation failed");
+    const errs2 = body.errors || body.Errors;
+    const errs2Text = Array.isArray(errs2) && errs2.length ? " — " + errs2.join(" ") : "";
+    const err2 = new Error((body.message || body.Message || body.errorCode || body.ErrorCode || "Operation failed") + errs2Text);
+    err2.status = res.status;
+    err2.body = body;
+    throw err2;
   }
   if (body && Array.isArray(body)) return caseAlias(body);
   if (body && typeof body === "object") {
@@ -283,10 +290,32 @@ export const onboardingApi = {
   async createInstitution(formData) {
     return obFetch("register-institution", { method: "POST", body: formData });
   },
-  async createDepartment(institutionId, { code, name }) {
-    return obFetch(institutionId + "/departments", {
+  async createDepartment(institutionId, { code, name, collegeId, CollegeId }) {
+    // Doc spec TABLE 12: POST /{institutionId}/departments, JSON { Code, Name, InstitutionId:int }
+    // Previous version sent InstitutionId as string (callers pass String(id)) and dropped
+    // collegeId collected by DepartmentPage — both cause 400/validation failures on strict backends.
+    // Normalize like createCollege does.
+    const instNum = Number(institutionId);
+    if (!instNum) {
+      throw new Error(
+        "No institution record found for this account yet — complete Onboarding → Institution first."
+      );
+    }
+    const rawCol = collegeId ?? CollegeId;
+    const colNum = rawCol === undefined || rawCol === "" ? undefined : Number(rawCol);
+    const body = {
+      Code: String(code ?? "").trim(),
+      Name: String(name ?? "").trim(),
+      InstitutionId: instNum,
+      institutionId: instNum,
+    };
+    if (colNum !== undefined && Number.isFinite(colNum) && colNum > 0) {
+      body.CollegeId = colNum;
+      body.collegeId = colNum;
+    }
+    return obFetch(instNum + "/departments", {
       method: "POST",
-      body: JSON.stringify({ Code: code, Name: name, InstitutionId: institutionId }),
+      body: JSON.stringify(body),
     });
   },
   async createProgram(departmentId, { name, institutionId, departmentId: deptId }) {

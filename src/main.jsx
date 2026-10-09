@@ -6,6 +6,7 @@ import { AdminOnboarding } from './onboarding.jsx'
 import { RolesPanel, RoleAssign } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
+import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
 import { billingApi } from './billing'
 import { projectApi, ProjectStatusLabel, ChapterStatusLabel, TopicStatusLabel, VersionStatusLabel } from './project'
 import { TipTapEditor } from './tiptap-editor.jsx'
@@ -24,6 +25,9 @@ const pages = {
   faculty: { label: 'Faculty' },
   admin: { label: 'Admin' },
   system: { label: 'System Admin' },
+  nuc: { label: 'NUC' },
+  nbte: { label: 'NBTE' },
+  ncce: { label: 'NCCE' },
 }
 function usePage() {
   const getInitial = () => {
@@ -388,6 +392,29 @@ function Gateway({ go }) {
             <p className="font-body-sm text-body-sm text-on-surface-variant mb-6 flex-grow z-10">Access assigned project data, log milestones, and collaborate seamlessly with lead faculty.</p>
             <button onClick={()=>go('student')} className="w-full py-3 px-6 bg-surface-container-highest text-on-surface rounded-lg font-label-md border border-outline-variant hover:bg-surface-variant transition-colors duration-200 z-10 flex items-center justify-center gap-2">Login to Portal <span className="material-symbols-outlined text-[18px]">arrow_forward</span></button>
             <button onClick={()=>go('login')} className="z-10 mt-2 font-body-sm text-[12px] underline text-outline hover:text-primary">via Secure Login</button>
+          </div>
+        </div>
+        <div className="w-full max-w-5xl mt-6">
+          <p className="text-center font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-[12px] mb-4">Regulatory Portals — NUC · NBTE · NCCE</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="group bg-surface-container-lowest rounded-xl p-6 flex flex-col items-center text-center shadow-sm hover:shadow-md border border-outline-variant/30 hover:border-primary transition-all duration-300">
+              <div className="w-16 h-16 rounded-full bg-[#1e3a8a] text-white flex items-center justify-center mb-3"><span className="material-symbols-outlined text-[32px]">account_balance</span></div>
+              <h2 className="font-headline-md text-headline-md text-on-surface mb-1">NUC</h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-4 flex-grow text-[13px]">National Universities Commission — oversight of universities.</p>
+              <button onClick={()=>go('nuc')} className="w-full py-2.5 px-6 bg-[#1e3a8a] text-white rounded-lg font-label-md hover:opacity-90 transition-colors flex items-center justify-center gap-2">Open NUC Portal <span className="material-symbols-outlined text-[18px]">arrow_forward</span></button>
+            </div>
+            <div className="group bg-surface-container-lowest rounded-xl p-6 flex flex-col items-center text-center shadow-sm hover:shadow-md border border-outline-variant/30 hover:border-primary transition-all duration-300">
+              <div className="w-16 h-16 rounded-full bg-[#0f766e] text-white flex items-center justify-center mb-3"><span className="material-symbols-outlined text-[32px]">precision_manufacturing</span></div>
+              <h2 className="font-headline-md text-headline-md text-on-surface mb-1">NBTE</h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-4 flex-grow text-[13px]">National Board for Technical Education — polytechnics & monotechnics.</p>
+              <button onClick={()=>go('nbte')} className="w-full py-2.5 px-6 bg-[#0f766e] text-white rounded-lg font-label-md hover:opacity-90 transition-colors flex items-center justify-center gap-2">Open NBTE Portal <span className="material-symbols-outlined text-[18px]">arrow_forward</span></button>
+            </div>
+            <div className="group bg-surface-container-lowest rounded-xl p-6 flex flex-col items-center text-center shadow-sm hover:shadow-md border border-outline-variant/30 hover:border-primary transition-all duration-300">
+              <div className="w-16 h-16 rounded-full bg-[#7c3aed] text-white flex items-center justify-center mb-3"><span className="material-symbols-outlined text-[32px]">school</span></div>
+              <h2 className="font-headline-md text-headline-md text-on-surface mb-1">NCCE</h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-4 flex-grow text-[13px]">National Commission for Colleges of Education — teacher training.</p>
+              <button onClick={()=>go('ncce')} className="w-full py-2.5 px-6 bg-[#7c3aed] text-white rounded-lg font-label-md hover:opacity-90 transition-colors flex items-center justify-center gap-2">Open NCCE Portal <span className="material-symbols-outlined text-[18px]">arrow_forward</span></button>
+            </div>
           </div>
         </div>
         <footer className="mt-10 text-center">
@@ -938,6 +965,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const hashQuery = useHashQuery()
   const hashSection = (hashQuery.get('section') || '').toLowerCase()
   const hashTab = (hashQuery.get('tab') || '').toLowerCase()
+  const hashView = (hashQuery.get('view') || 'overview').toLowerCase()
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
@@ -962,6 +990,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Analytics', icon: 'insights'},
     {label: 'Settings', icon: 'settings'},
   ]
+  // Regulator sidebar route: active is one of 'nuc' | 'nbte' | 'ncce'
+  const regulatorRoute = ['nuc','nbte','ncce'].includes(active) ? active : 'nuc'
+  const regulatorNavItems = [
+    {label: 'Overview', icon: 'dashboard', nav: `${regulatorRoute}?view=overview`},
+    {label: 'Institutions', icon: 'account_balance', nav: `${regulatorRoute}?view=institutions`},
+  ]
+  const regulatorSwitchItems = [
+    {label: 'NUC · Universities', icon: 'account_balance', nav: 'nuc?view=overview', key: 'nuc'},
+    {label: 'NBTE · Poly/Mono', icon: 'precision_manufacturing', nav: 'nbte?view=overview', key: 'nbte'},
+    {label: 'NCCE · Colleges', icon: 'school', nav: 'ncce?view=overview', key: 'ncce'},
+  ]
   // map active to highlight
   const isActive = (k) => {
     if (active==='student' && k==='student') return true
@@ -976,14 +1015,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         <div className="flex items-center gap-2 mb-6">
           {role==='admin' ? (
             <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">school</span></div>
+          ) : role==='regulator' ? (
+            <div className="w-10 h-10 rounded bg-primary flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">verified</span></div>
           ) : role==='faculty' ? (
             <img alt="crest" className="w-10 h-10 object-contain" src={CREST}/>
           ) : (
             <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">EA</div>
           )}
           <div>
-            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='faculty' ? 'Project Portfolio' : 'Project Portfolio'}</h1>
+            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='regulator' ? 'Regulator' : role==='faculty' ? 'Project Portfolio' : 'Project Portfolio'}</h1>
             {role==='admin' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Control Panel</p>}
+            {role==='regulator' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Oversight Portal</p>}
           </div>
         </div>
         <ul className="flex-1 space-y-1 overflow-y-auto">
@@ -1047,6 +1089,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 })}
               </>
             )
+          ) : role==='regulator' ? (
+            <>
+              {regulatorNavItems.map(it => {
+                const isCur = (it.label === 'Overview' && (hashView === '' || hashView === 'overview')) || (it.label === 'Institutions' && (hashView === 'institutions' || hashView === 'institution'));
+                return <li key={it.label}><button onClick={() => go(it.nav)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${isCur ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>;
+              })}
+              <li className="pt-3"><p className="px-3 pb-1 font-label-md text-[11px] uppercase tracking-wider text-on-surface-variant">Switch regulator</p></li>
+              {regulatorSwitchItems.map(it => (
+                <li key={it.key}><button onClick={() => go(it.nav)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${active === it.key ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
+              ))}
+            </>
           ) : role==='faculty' ? (
             <>
               <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
@@ -5206,13 +5259,28 @@ class RouteErrorBoundary extends React.Component {
   }
 }
 
+function RegulatorRoute({ go, regulatorKey }) {
+  const query = useHashQuery();
+  const meta = {
+    nuc: { title: "NUC Dashboard", subtitle: "National Universities Commission — universities oversight." },
+    nbte: { title: "NBTE Dashboard", subtitle: "National Board for Technical Education — polytechnics & monotechnics oversight." },
+    ncce: { title: "NCCE Dashboard", subtitle: "National Commission for Colleges of Education — colleges oversight." },
+  }[regulatorKey] || { title: "Regulator Dashboard", subtitle: "Regulatory oversight." };
+  const Body = regulatorKey === "nbte" ? NbteDashboard : regulatorKey === "ncce" ? NcceDashboard : NucDashboard;
+  return (
+    <DashShell go={go} active={regulatorKey} role="regulator" title={meta.title} subtitle={meta.subtitle}>
+      <Body go={go} query={query} />
+    </DashShell>
+  );
+}
+
 function App() {
   const [page, go] = usePage()
   // expose go for e2e debug
   useEffect(()=>{ window.EARMS_GO = go },[go])
   // protect authenticated routes: bounce to login when there is no token
   useEffect(() => {
-    if (['dashboard','student','faculty','admin','system'].includes(page) && !tokenService.isAuthenticated()) {
+    if (['dashboard','student','faculty','admin','system','nuc','nbte','ncce'].includes(page) && !tokenService.isAuthenticated()) {
       go('login')
     }
   }, [page])
@@ -5235,6 +5303,9 @@ function App() {
           <SystemHome go={go} />
         </DashShell>
       )}
+      {page==='nuc' && <RegulatorRoute go={go} regulatorKey="nuc" />}
+      {page==='nbte' && <RegulatorRoute go={go} regulatorKey="nbte" />}
+      {page==='ncce' && <RegulatorRoute go={go} regulatorKey="ncce" />}
     </div>
     </RouteErrorBoundary>
   )

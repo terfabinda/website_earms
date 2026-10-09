@@ -386,6 +386,11 @@ export function routeForRole(role) {
   const r = String(role).toLowerCase();
   // systemadmin contains "admin" so check system first
   if (r.includes("system")) return "system";
+  // regulators (must precede generic "admin" check: RegulatorAdmin contains "admin")
+  if (r.includes("nuc")) return "nuc";
+  if (r.includes("nbte")) return "nbte";
+  if (r.includes("ncce")) return "ncce";
+  if (r.includes("regulator")) return "nuc"; // generic RegulatorAdmin lands on NUC, can switch to NBTE/NCCE in-app
   if (r.includes("institution")) return "admin";
   if (r === "admin" || r.includes("admin")) return "system";
   if (r.includes("faculty") || r.includes("supervisor")) return "faculty";
