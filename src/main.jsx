@@ -1422,23 +1422,50 @@ async function loadInstitutionDetails({ code = "", name = "", email = "" } = {})
     tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tokenEmail
   )
   let owner = null
+  let ownerError = ""
   if (ownerUser) {
-    try { owner = instObj(await ownerApi.getOwnerByName(ownerUser)) } catch {}
+    try { owner = instObj(await ownerApi.getOwnerByName(ownerUser)) } catch (e) { ownerError = e?.message || "owner lookup failed" }
   }
   const tokenCode = instStr(tok?.institutionCode, tok?.InstitutionCode, code)
   const tokenName = instStr(tok?.institutionName, tok?.InstitutionName, name)
   const instCode = instStr(tokenCode, owner?.institutionCode, owner?.InstitutionCode)
 
+  // Fetch full list (rich InstitutionDto) + minimal by-code record in parallel.
+  // NOTE: by-code returns MinimalInstitutionDto (Id/Code/Name only) — it can NEVER
+  // populate email/phone/type/address/website/socials/logo. The list is authoritative.
+  // Previous version swallowed both errors silently, so a failed list fetch left the
+  // form with only Code+Name and no explanation.
   let list = []
-  try { list = instList(await onboardingApi.getInstitutions()) } catch {}
-  const full = instCode
-    ? list.find(r => instStr(r?.code, r?.Code).toLowerCase() === instCode.toLowerCase()) || null
-    : null
+  let listError = ""
+  try { list = instList(await onboardingApi.getInstitutions()) } catch (e) { listError = e?.message || "institution list failed" }
   let byCode = null
+  let byCodeError = ""
   if (instCode) {
-    try { byCode = instObj(await onboardingApi.getInstitutionByCode(instCode)) } catch {}
+    try { byCode = instObj(await onboardingApi.getInstitutionByCode(instCode)) } catch (e) { byCodeError = e?.message || "institution lookup by code failed" }
   }
-  const sources = [full, byCode].filter(Boolean)
+  const norm = (v) => instStr(v).toLowerCase()
+  // 1) match list by code (case-insensitive, trimmed)
+  let full = instCode
+    ? list.find(r => norm(r?.code ?? r?.Code) === norm(instCode)) || null
+    : null
+  // 2) match list by id from by-code record (covers code casing/whitespace mismatches)
+  const byCodeId = byCode?.id ?? byCode?.Id
+  if (!full && byCodeId !== undefined && byCodeId !== null && byCodeId !== "") {
+    full = list.find(r => String(r?.id ?? r?.Id) === String(byCodeId)) || null
+  }
+  // 3) match list by name (token / owner / explicit)
+  const wantName = norm(tokenName || owner?.institutionName || owner?.InstitutionName || name)
+  if (!full && wantName) {
+    full = list.find(r => norm(r?.name ?? r?.Name) === wantName) || null
+  }
+  // Unwrap in case a source is still an envelope (defensive: instObj normally unwraps)
+  const unwrap = (src) => {
+    if (!src || typeof src !== "object" || Array.isArray(src)) return src
+    const d = src.data ?? src.Data
+    if (d && typeof d === "object" && !Array.isArray(d)) return { ...src, ...d }
+    return src
+  }
+  const sources = [unwrap(full), unwrap(byCode)].filter(Boolean)
   const pick = (...keys) => {
     for (const src of sources) {
       for (const k of keys) {
@@ -1450,24 +1477,30 @@ async function loadInstitutionDetails({ code = "", name = "", email = "" } = {})
   }
   const record = {
     id: [full, byCode].map(s => s?.id ?? s?.Id).find(v => v !== undefined && v !== null) ?? "",
-    code: pick("code", "Code") || instStr(instCode),
-    name: pick("name", "Name") || instStr(tokenName, owner?.institutionName, owner?.InstitutionName),
-    email: pick("email", "Email") || instStr(email, owner?.ownerEmail, owner?.OwnerEmail, tokenEmail),
-    phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone"),
-    institutionType: pick("institutionType", "InstitutionType", "type", "Type"),
-    address: pick("address", "Address"),
-    website: pick("website", "Website"),
-    facebookUrl: pick("facebookUrl", "FacebookUrl"),
-    linkedinUrl: pick("linkedinUrl", "LinkedinUrl", "LinkedInUrl"),
-    logoUrl: pick("logoUrl", "LogoUrl", "logoPath", "LogoPath", "logo", "Logo"),
+    code: pick("code", "Code", "institutionCode", "InstitutionCode") || instStr(instCode),
+    name: pick("name", "Name", "institutionName", "InstitutionName") || instStr(tokenName, owner?.institutionName, owner?.InstitutionName),
+    email: pick("email", "Email", "emailAddress", "EmailAddress", "contactEmail", "ContactEmail") || instStr(email, owner?.ownerEmail, owner?.OwnerEmail, tokenEmail),
+    phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone", "phoneNumber", "PhoneNumber", "telephone", "Telephone", "mobile", "Mobile", "contactPhone", "ContactPhone") || instStr(owner?.phoneNo, owner?.PhoneNo, owner?.phone, owner?.Phone),
+    institutionType: pick("institutionType", "InstitutionType", "type", "Type", "institution_type", "category", "Category"),
+    address: pick("address", "Address", "addressLine", "AddressLine", "location", "Location", "contactAddress", "ContactAddress") || instStr(owner?.address, owner?.Address),
+    website: pick("website", "Website", "webSite", "url", "Url", "site", "Site", "webAddress", "WebAddress") || instStr(owner?.website, owner?.Website),
+    facebookUrl: pick("facebookUrl", "FacebookUrl", "facebookURL", "FacebookURL", "facebook", "Facebook", "fbUrl", "FbUrl"),
+    linkedinUrl: pick("linkedinUrl", "LinkedinUrl", "linkedInUrl", "LinkedInUrl", "linkedinURL", "LinkedInURL", "linkedin", "LinkedIn"),
+    logoUrl: pick("logoUrl", "LogoUrl", "logoPath", "LogoPath", "logo", "Logo", "logoURL", "LogoURL", "imageUrl", "ImageUrl"),
   }
-  return { record, owner, full, byCode }
+  const warnings = []
+  if (listError) warnings.push("Full institution list unavailable (" + listError + ") — showing minimal record.")
+  else if (instCode && !full && list.length) warnings.push("Institution '" + instCode + "' not matched in full list — showing minimal record.")
+  if (!instCode) warnings.push("No institution code on this account/token — showing token fallback values.")
+  if ((full || byCode) && !record.email && !record.phoneNo && !record.address && !record.website) warnings.push("Only Code/Name returned by the API for this institution — contact fields are empty upstream.")
+  return { record, owner, full, byCode, warnings, listError, byCodeError, ownerError }
 }
 
 function InstitutionProfile({ go }) {
   const [inst, setInst] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
+  const [warn, setWarn] = useState("")
   const [msg, setMsg] = useState("")
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ code:"", name:"", email:"", phoneNo:"", institutionType:"", address:"", website:"", facebookUrl:"", linkedinUrl:"" })
@@ -1478,9 +1511,9 @@ function InstitutionProfile({ go }) {
   const tokenName = tok?.institutionName || tok?.InstitutionName || ""
   useEffect(() => {
     let cancelled = false
-    setLoading(true); setErr("")
+    setLoading(true); setErr(""); setWarn("")
     loadInstitutionDetails({ code: tokenCode, name: tokenName })
-      .then(({ record }) => {
+      .then(({ record, warnings }) => {
         if (cancelled) return
         setInst(record)
         setForm({
@@ -1496,6 +1529,7 @@ function InstitutionProfile({ go }) {
         })
         if (record.logoUrl) setLogoPreview(record.logoUrl)
         if (!record.code && !record.name) setErr("No institution record found for this account yet.")
+        else if (warnings && warnings.length) setWarn(warnings.join(" "))
       })
       .catch(e => { if (!cancelled) setErr(e.message || "Could not load institution profile") })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -1562,6 +1596,7 @@ function InstitutionProfile({ go }) {
       </div>
       <form onSubmit={save} className="p-6 space-y-4">
         {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+        {warn && !err && <div className="w-full rounded-lg bg-surface-container-high text-on-surface-variant px-3 py-2 text-sm">{warn}</div>}
         {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Code</span><input value={form.code} onChange={set("code")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="e.g. GHH" /></label>
@@ -1574,12 +1609,12 @@ function InstitutionProfile({ go }) {
         <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution Type</span>
           <select value={form.institutionType} onChange={set("institutionType")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
             <option value="">Select type</option>
-            <option value="University">University</option>
-            <option value="Polytechnic">Polytechnic</option>
-            <option value="College of Education">College of Education</option>
-            <option value="College">College</option>
-            <option value="School">School</option>
-            <option value="Faculty">Faculty</option>
+            {["University","Polytechnic","College of Education","College","School","Faculty"].map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+            {form.institutionType && !["University","Polytechnic","College of Education","College","School","Faculty"].includes(form.institutionType) && (
+              <option value={form.institutionType}>{form.institutionType} (as stored)</option>
+            )}
           </select>
         </label>
         <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Address</span><input value={form.address} onChange={set("address")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="Street, City, State" /></label>
@@ -1910,6 +1945,23 @@ function DepartmentPage({ go }) {
     const core = s.replace(/^(department\s+of\s+)/i, "").trim() || s;
     return core;
   }
+  function displayFacultyName(raw) {
+    if (!raw) return "";
+    const s = String(raw).trim();
+    const core = s.replace(/^(college|school|faculty)\s+of\s+/i, "").replace(/^(college|school|faculty)\s+/i, "").trim() || s;
+    return `${collegeTerm} of ${core}`;
+  }
+  const facultyNameFor = (d) => {
+    const direct = d?.CollegeName ?? d?.collegeName ?? d?.FacultyName ?? d?.facultyName ?? d?.SchoolName ?? d?.schoolName ?? "";
+    if (direct && String(direct).trim()) return displayFacultyName(direct);
+    const cid = d?.CollegeId ?? d?.collegeId ?? d?.CollegeID ?? d?.collegeID ?? d?.FacultyId ?? d?.facultyId ?? "";
+    if (cid !== "" && cid !== undefined && cid !== null) {
+      const f = faculties.find(x => String(x.Id ?? x.id) === String(cid));
+      const fname = f?.CollegeName ?? f?.collegeName ?? f?.Name ?? f?.name ?? "";
+      if (fname) return displayFacultyName(fname);
+    }
+    return "";
+  }
   const load = async () => {
     setLoading(true); setErr("")
     try {
@@ -1978,7 +2030,7 @@ function DepartmentPage({ go }) {
                 </div>
                 <span className="font-label-md text-primary text-[11px] uppercase tracking-widest mt-3 block">Department of</span>
                 <h4 className="font-headline-sm font-bold text-on-surface line-clamp-1">{displayDeptName(d.Name ?? d.name)}</h4>
-                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">ID: {d.Id ?? d.id} · Department</p>
+                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{facultyNameFor(d) || "—"}</p>
                 <div className="flex gap-2 mt-4">
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
                   <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
@@ -2090,12 +2142,16 @@ function ProgrammeCreate({ go }) {
       const id = await resolveInstId()
       if (!id) { setProgrammes([]); return }
       const { onboardingApi } = await import("./onboarding")
-      // Filtered by department if selected, otherwise aggregate across all departments
+      // Filtered by department if selected, otherwise aggregate across the
+      // selected college's departments (or all departments when no college filter)
       if (filterDeptId) {
         const data = await onboardingApi.getPrograms(String(id), String(filterDeptId)).catch(()=>[])
         setProgrammes(Array.isArray(data) ? data : [])
       } else if (departments.length) {
-        const results = await Promise.all(departments.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
+        const scoped = (!filterCollegeId || !departments.some(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") !== ""))
+          ? departments
+          : departments.filter(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") === String(filterCollegeId))
+        const results = await Promise.all(scoped.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
         setProgrammes(results.flat().filter(Boolean))
       } else {
         // No departments yet — try loading after meta
@@ -2111,7 +2167,31 @@ function ProgrammeCreate({ go }) {
   }
 
   useEffect(()=>{ loadMeta() }, [instId])
-  useEffect(()=>{ if (departments.length || filterDeptId) loadProgrammes() }, [departments, filterDeptId])
+  useEffect(()=>{ if (departments.length || filterDeptId) loadProgrammes() }, [departments, filterDeptId, filterCollegeId])
+
+  // Departments carry their parent college (CollegeId) since the department-create
+  // fix — but legacy records / older API variants may not. Filter strictly when
+  // linkage exists; otherwise fall back to the full list so nothing disappears.
+  const deptCollegeId = (d) => {
+    const v = d?.CollegeId ?? d?.collegeId ?? d?.CollegeID ?? d?.collegeID ?? d?.FacultyId ?? d?.facultyId ?? ""
+    return v === undefined || v === null ? "" : String(v)
+  }
+  const hasCollegeLinkage = departments.some(d => deptCollegeId(d) !== "")
+  const visibleDeptsFor = (collegeSel) => {
+    if (!collegeSel || !hasCollegeLinkage) return departments
+    return departments.filter(d => deptCollegeId(d) === String(collegeSel))
+  }
+  const filterDepts = visibleDeptsFor(filterCollegeId)
+  const modalDepts = visibleDeptsFor(collegeId)
+  // Keep department selections valid when the college changes
+  useEffect(()=>{
+    if (!filterCollegeId || !hasCollegeLinkage) return
+    if (filterDeptId && !filterDepts.some(d => String(d.Id ?? d.id) === String(filterDeptId))) setFilterDeptId("")
+  }, [filterCollegeId, hasCollegeLinkage])
+  useEffect(()=>{
+    if (!collegeId || !hasCollegeLinkage) return
+    if (deptId && !modalDepts.some(d => String(d.Id ?? d.id) === String(deptId))) setDeptId("")
+  }, [collegeId, hasCollegeLinkage])
 
   function displayCollegeName(raw) {
     if (!raw) return "—";
@@ -2169,10 +2249,10 @@ function ProgrammeCreate({ go }) {
           </select>
         </label>
         <label className="block flex-1">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department (filter)</span>
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department (filter){filterCollegeId && hasCollegeLinkage ? ` — ${filterDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
           <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-            <option value="">All Departments</option>
-            {departments.map(d=>(
+            <option value="">All Departments{filterCollegeId && hasCollegeLinkage ? ` in selected ${collegeTerm}` : ""}</option>
+            {filterDepts.map(d=>(
               <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
             ))}
           </select>
@@ -2238,13 +2318,16 @@ function ProgrammeCreate({ go }) {
                 </select>
               </label>
               <label className="block">
-                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department{collegeId && hasCollegeLinkage ? ` — ${modalDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
                 <select value={deptId} onChange={e=>setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-                  <option value="">Select Department</option>
-                  {departments.map(d=>(
+                  <option value="">Select Department{collegeId ? ` in selected ${collegeTerm}` : ""}</option>
+                  {modalDepts.map(d=>(
                     <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
                   ))}
                 </select>
+                {collegeId && hasCollegeLinkage && !modalDepts.length && (
+                  <p className="font-body-sm text-[12px] text-on-surface-variant mt-1">No departments under this {collegeTerm.toLowerCase()} yet — create one first.</p>
+                )}
               </label>
               <label className="block">
                 <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Programme Name</span>
