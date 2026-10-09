@@ -2963,18 +2963,16 @@ function StudentManagementPage({ go }) {
     return `${collegeTerm} of ${core}`;
   }
   const resolveInstId = async () => {
-    let id = jwtInstId
-    if (!id) {
-      const { onboardingApi } = await import("./onboarding")
-      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-      if (Array.isArray(list) && list.length) id = String(list[0].Id ?? list[0].id)
-    }
-    return id ? String(id) : ""
+    // NOTE: ownerId is NOT the institution id (owner 5 vs institution 4 for JST).
+    // Querying colleges/departments with ownerId returned empty lists, leaving the
+    // Add Student faculty/department dropdowns unpopulated.
+    const { resolveInstitutionId } = await import("./onboarding")
+    return resolveInstitutionId()
   }
   const loadMeta = async () => {
     try {
       const id = await resolveInstId()
-      if (!id) return
+      if (!id) { setErr("No institution record found for this account yet — complete Onboarding → Institution first."); return }
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
