@@ -1508,12 +1508,28 @@ async function loadInstitutionDetails({ code = "", name = "", email = "" } = {})
     }
     return ""
   }
+  // Last-resort matcher for deployed key variants not enumerated above
+  // (e.g. phone arriving as "Phone_No", "Tel", "Gsm", ...). Exact keys always
+  // win; envelope leftovers ("success", "message", ...) contain none of these.
+  const fuzzyPick = (includes = [], extraSources = []) => {
+    const all = [...sources, ...extraSources.filter(Boolean)]
+    for (const src of all) {
+      if (!src || typeof src !== "object" || Array.isArray(src)) continue
+      for (const k of Object.keys(src)) {
+        if (includes.some(n => k.toLowerCase().includes(n))) {
+          const s = instStr(src[k])
+          if (s) return s
+        }
+      }
+    }
+    return ""
+  }
   const record = {
     id: [full, byCode].map(s => s?.id ?? s?.Id).find(v => v !== undefined && v !== null) ?? "",
     code: pick("code", "Code", "institutionCode", "InstitutionCode") || instStr(instCode),
     name: pick("name", "Name", "institutionName", "InstitutionName") || instStr(tokenName, owner?.institutionName, owner?.InstitutionName),
     email: pick("email", "Email", "emailAddress", "EmailAddress", "contactEmail", "ContactEmail") || instStr(email, owner?.ownerEmail, owner?.OwnerEmail, tokenEmail),
-    phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone", "phoneNumber", "PhoneNumber", "telephone", "Telephone", "mobile", "Mobile", "contactPhone", "ContactPhone") || instStr(owner?.phoneNo, owner?.PhoneNo, owner?.phone, owner?.Phone),
+    phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone", "phoneNumber", "PhoneNumber", "telephone", "Telephone", "mobile", "Mobile", "contactPhone", "ContactPhone") || fuzzyPick(["phone", "tel", "mobile", "gsm"], [owner]) || instStr(owner?.phoneNo, owner?.PhoneNo, owner?.phone, owner?.Phone),
     institutionType: normalizeInstitutionType(pick("institutionType", "InstitutionType", "institutionTypes", "InstitutionTypes", "type", "Type", "institution_type", "category", "Category")),
     address: pick("address", "Address", "addressLine", "AddressLine", "location", "Location", "contactAddress", "ContactAddress") || instStr(owner?.address, owner?.Address),
     website: pick("website", "Website", "webSite", "url", "Url", "site", "Site", "webAddress", "WebAddress") || instStr(owner?.website, owner?.Website),
@@ -2141,22 +2157,19 @@ function ProgrammeCreate({ go }) {
   const [busy, setBusy] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const tok = decodeToken()
-  const instId = tok?.ownerId || tok?.OwnerId || ""
-
+  // NOTE: ownerId is NOT the institution id (owner 5 vs institution 4 for JST) —
+  // Department/College pages already use resolveInstitutionId(); ProgrammeCreate
+  // was still querying with ownerId, so getDepartments hit the wrong id and the
+  // department dropdown came back empty while colleges appeared to load.
   const resolveInstId = async () => {
-    let id = instId
-    if (!id) {
-      const { onboardingApi } = await import("./onboarding")
-      const list = await onboardingApi.getInstitutionsDropdown().catch(()=>[])
-      if (Array.isArray(list) && list.length) id = list[0].Id ?? list[0].id
-    }
-    return id ? String(id) : ""
+    const { resolveInstitutionId } = await import("./onboarding")
+    return resolveInstitutionId()
   }
 
   const loadMeta = async () => {
     try {
       const id = await resolveInstId()
-      if (!id) return
+      if (!id) { setErr("No institution record found for this account yet — complete Onboarding → Institution first."); return }
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
@@ -2205,7 +2218,7 @@ function ProgrammeCreate({ go }) {
     } finally { setLoading(false) }
   }
 
-  useEffect(()=>{ loadMeta() }, [instId])
+  useEffect(()=>{ loadMeta() }, [])
   useEffect(()=>{ if (departments.length || filterDeptId) loadProgrammes() }, [departments, filterDeptId, filterCollegeId])
 
   // Departments carry their parent college (CollegeId) since the department-create
