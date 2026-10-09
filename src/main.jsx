@@ -1412,6 +1412,39 @@ const instList = (res) => {
   }
   return []
 }
+/* ---------- Institution type: backend persists numeric codes, UI shows labels ----------
+   The API doc lists InstitutionType as string and older clients saved labels
+   ("University"), but stored records come back numeric (e.g. 1) — the deployed
+   API serializes the enum as a number. The dropdown below therefore carries
+   numeric values and maps both directions. ASSUMED code table (matches
+   NUC → universities, NBTE → polytechnics/monotechnics, NCCE → colleges of
+   education ordering); if the backend enum differs, correct the numbers here —
+   unknown codes still round-trip via the "(as stored)" fallback. */
+const INSTITUTION_TYPE_OPTIONS = [
+  { code: "1", label: "University" },
+  { code: "2", label: "Polytechnic" },
+  { code: "3", label: "Monotechnic" },
+  { code: "4", label: "College of Education" },
+]
+// Legacy free-text values predate the numeric codes — kept so existing records
+// keep working; they are sent back verbatim.
+const INSTITUTION_TYPE_LEGACY = ["College", "School", "Faculty"]
+const normalizeInstitutionType = (v) => {
+  const s = instStr(v)
+  if (!s) return ""
+  const hit = INSTITUTION_TYPE_OPTIONS.find(o => o.code === s || o.label.toLowerCase() === s.toLowerCase())
+  if (hit) return hit.code
+  const legacy = INSTITUTION_TYPE_LEGACY.find(l => l.toLowerCase() === s.toLowerCase())
+  if (legacy) return legacy
+  return s
+}
+const labelForInstitutionType = (v) => {
+  const s = instStr(v)
+  if (!s) return ""
+  const hit = INSTITUTION_TYPE_OPTIONS.find(o => o.code === s)
+  if (hit) return hit.label
+  return s
+}
 
 async function loadInstitutionDetails({ code = "", name = "", email = "" } = {}) {
   const { onboardingApi } = await import("./onboarding")
@@ -1481,7 +1514,7 @@ async function loadInstitutionDetails({ code = "", name = "", email = "" } = {})
     name: pick("name", "Name", "institutionName", "InstitutionName") || instStr(tokenName, owner?.institutionName, owner?.InstitutionName),
     email: pick("email", "Email", "emailAddress", "EmailAddress", "contactEmail", "ContactEmail") || instStr(email, owner?.ownerEmail, owner?.OwnerEmail, tokenEmail),
     phoneNo: pick("phoneNo", "PhoneNo", "phone", "Phone", "phoneNumber", "PhoneNumber", "telephone", "Telephone", "mobile", "Mobile", "contactPhone", "ContactPhone") || instStr(owner?.phoneNo, owner?.PhoneNo, owner?.phone, owner?.Phone),
-    institutionType: pick("institutionType", "InstitutionType", "type", "Type", "institution_type", "category", "Category"),
+    institutionType: normalizeInstitutionType(pick("institutionType", "InstitutionType", "institutionTypes", "InstitutionTypes", "type", "Type", "institution_type", "category", "Category")),
     address: pick("address", "Address", "addressLine", "AddressLine", "location", "Location", "contactAddress", "ContactAddress") || instStr(owner?.address, owner?.Address),
     website: pick("website", "Website", "webSite", "url", "Url", "site", "Site", "webAddress", "WebAddress") || instStr(owner?.website, owner?.Website),
     facebookUrl: pick("facebookUrl", "FacebookUrl", "facebookURL", "FacebookURL", "facebook", "Facebook", "fbUrl", "FbUrl"),
@@ -1586,7 +1619,7 @@ function InstitutionProfile({ go }) {
         </div>
         <div>
           <h3 className="font-headline-sm font-bold text-primary">{form.name || "Institution"}</h3>
-          <p className="font-body-sm text-on-surface-variant">{form.code ? `Code: ${form.code}` : ""} {form.institutionType ? `· ${form.institutionType}` : ""}</p>
+          <p className="font-body-sm text-on-surface-variant">{form.code ? `Code: ${form.code}` : ""} {form.institutionType ? `· ${labelForInstitutionType(form.institutionType)}` : ""}</p>
         </div>
         <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md cursor-pointer hover:bg-primary-fixed-dim">
           <span className="material-symbols-outlined text-[18px]">upload</span> {logoPreview ? "Change Logo" : "Upload Logo"}
@@ -1609,10 +1642,13 @@ function InstitutionProfile({ go }) {
         <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Institution Type</span>
           <select value={form.institutionType} onChange={set("institutionType")} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
             <option value="">Select type</option>
-            {["University","Polytechnic","College of Education","College","School","Faculty"].map(t => (
+            {INSTITUTION_TYPE_OPTIONS.map(o => (
+              <option key={o.code} value={o.code}>{o.label}</option>
+            ))}
+            {INSTITUTION_TYPE_LEGACY.map(t => (
               <option key={t} value={t}>{t}</option>
             ))}
-            {form.institutionType && !["University","Polytechnic","College of Education","College","School","Faculty"].includes(form.institutionType) && (
+            {form.institutionType && ![...INSTITUTION_TYPE_OPTIONS.map(o=>o.code), ...INSTITUTION_TYPE_LEGACY].includes(form.institutionType) && (
               <option value={form.institutionType}>{form.institutionType} (as stored)</option>
             )}
           </select>
@@ -2148,9 +2184,12 @@ function ProgrammeCreate({ go }) {
         const data = await onboardingApi.getPrograms(String(id), String(filterDeptId)).catch(()=>[])
         setProgrammes(Array.isArray(data) ? data : [])
       } else if (departments.length) {
-        const scoped = (!filterCollegeId || !departments.some(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") !== ""))
-          ? departments
-          : departments.filter(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") === String(filterCollegeId))
+        const linked = departments.some(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") !== "")
+        let scoped = departments
+        if (filterCollegeId && linked) {
+          const match = departments.filter(d => String(d?.CollegeId ?? d?.collegeId ?? d?.FacultyId ?? d?.facultyId ?? "") === String(filterCollegeId))
+          scoped = match.length ? match : departments
+        }
         const results = await Promise.all(scoped.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
         setProgrammes(results.flat().filter(Boolean))
       } else {
@@ -2171,18 +2210,21 @@ function ProgrammeCreate({ go }) {
 
   // Departments carry their parent college (CollegeId) since the department-create
   // fix — but legacy records / older API variants may not. Filter strictly when
-  // linkage exists; otherwise fall back to the full list so nothing disappears.
+  // linkage exists; if the strict filter yields nothing (e.g. legacy unlinked
+  // departments), fall back to the full list so the dropdown never dead-ends empty.
   const deptCollegeId = (d) => {
     const v = d?.CollegeId ?? d?.collegeId ?? d?.CollegeID ?? d?.collegeID ?? d?.FacultyId ?? d?.facultyId ?? ""
     return v === undefined || v === null ? "" : String(v)
   }
   const hasCollegeLinkage = departments.some(d => deptCollegeId(d) !== "")
   const visibleDeptsFor = (collegeSel) => {
-    if (!collegeSel || !hasCollegeLinkage) return departments
-    return departments.filter(d => deptCollegeId(d) === String(collegeSel))
+    if (!collegeSel || !hasCollegeLinkage) return { list: departments, fallback: false }
+    const scoped = departments.filter(d => deptCollegeId(d) === String(collegeSel))
+    if (scoped.length) return { list: scoped, fallback: false }
+    return { list: departments, fallback: departments.length > 0 }
   }
-  const filterDepts = visibleDeptsFor(filterCollegeId)
-  const modalDepts = visibleDeptsFor(collegeId)
+  const { list: filterDepts, fallback: filterFallback } = visibleDeptsFor(filterCollegeId)
+  const { list: modalDepts, fallback: modalFallback } = visibleDeptsFor(collegeId)
   // Keep department selections valid when the college changes
   useEffect(()=>{
     if (!filterCollegeId || !hasCollegeLinkage) return
@@ -2249,13 +2291,16 @@ function ProgrammeCreate({ go }) {
           </select>
         </label>
         <label className="block flex-1">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department (filter){filterCollegeId && hasCollegeLinkage ? ` — ${filterDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department (filter){filterCollegeId && hasCollegeLinkage && !filterFallback ? ` — ${filterDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
           <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-            <option value="">All Departments{filterCollegeId && hasCollegeLinkage ? ` in selected ${collegeTerm}` : ""}</option>
+            <option value="">All Departments{filterCollegeId && hasCollegeLinkage && !filterFallback ? ` in selected ${collegeTerm}` : ""}</option>
             {filterDepts.map(d=>(
               <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
             ))}
           </select>
+          {filterCollegeId && filterFallback && (
+            <p className="font-body-sm text-[12px] text-on-surface-variant mt-1">No departments are linked to this {collegeTerm.toLowerCase()} yet — showing all departments.</p>
+          )}
         </label>
         <button onClick={loadProgrammes} className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px]">refresh</span> Refresh
@@ -2318,15 +2363,18 @@ function ProgrammeCreate({ go }) {
                 </select>
               </label>
               <label className="block">
-                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department{collegeId && hasCollegeLinkage ? ` — ${modalDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department{collegeId && hasCollegeLinkage && !modalFallback ? ` — ${modalDepts.length} in selected ${collegeTerm.toLowerCase()}` : ""}</span>
                 <select value={deptId} onChange={e=>setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-                  <option value="">Select Department{collegeId ? ` in selected ${collegeTerm}` : ""}</option>
+                  <option value="">Select Department{collegeId && hasCollegeLinkage && !modalFallback ? ` in selected ${collegeTerm}` : ""}</option>
                   {modalDepts.map(d=>(
                     <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
                   ))}
                 </select>
-                {collegeId && hasCollegeLinkage && !modalDepts.length && (
+                {collegeId && hasCollegeLinkage && !modalFallback && !modalDepts.length && (
                   <p className="font-body-sm text-[12px] text-on-surface-variant mt-1">No departments under this {collegeTerm.toLowerCase()} yet — create one first.</p>
+                )}
+                {collegeId && modalFallback && (
+                  <p className="font-body-sm text-[12px] text-on-surface-variant mt-1">No departments are linked to this {collegeTerm.toLowerCase()} yet — showing all departments.</p>
                 )}
               </label>
               <label className="block">
