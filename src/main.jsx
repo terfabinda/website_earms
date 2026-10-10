@@ -2742,7 +2742,9 @@ function StaffManagementPage({ go }) {
   const handleDelete = (s) => {
     setErr("Delete not available — doc notes no DELETE endpoint (src/onboarding.js). Use deactivation via update if supported.")
   }
-  const roleUserName = (s) => String(s?.Email ?? s?.email ?? s?.UserName ?? s?.userName ?? s?.StaffId ?? s?.staffId ?? "").trim()
+  // Role assignment identifies the user by Staff ID (e.g. JST/STF/4455) — sent in
+  // the JSON body, so slashes need no encoding. Email kept only as fallback.
+  const roleUserName = (s) => String(s?.StaffId ?? s?.staffId ?? s?.Email ?? s?.email ?? s?.UserName ?? s?.userName ?? "").trim()
   const openRoleModal = async (s) => {
     setRoleFor(s); setRoleMsg(""); setRoleErr(""); setRoleSel([]); setRoleOptions([]); setRoleBusy(true)
     try {
