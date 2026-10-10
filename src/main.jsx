@@ -2435,6 +2435,7 @@ function StaffManagementPage({ go }) {
   const [editForm, setEditForm] = useState(null)
   const [editLoading, setEditLoading] = useState(false)
   const [editNote, setEditNote] = useState("")
+  const [editRaw, setEditRaw] = useState("")
   const [editDirty, setEditDirty] = useState(false)
   const editDirtyRef = useRef(false)
   const editReq = useRef(0)
@@ -2682,7 +2683,7 @@ function StaffManagementPage({ go }) {
   const handleEdit = async (s) => {
     setEditing(s); setErr(""); setMsg("");
     setEditForm(fillEditForm(s));
-    setEditDirty(false); editDirtyRef.current = false; setEditNote(""); setEditLoading(true);
+    setEditDirty(false); editDirtyRef.current = false; setEditNote(""); setEditRaw(""); setEditLoading(true);
     const myReq = ++editReq.current
     // preload programs for that department
     const deptIdVal = s.DepartmentId ?? s.departmentId ?? ""
@@ -2697,6 +2698,8 @@ function StaffManagementPage({ go }) {
       // Don't clobber typing the user already started.
       setEditForm(prev => (prev && editDirtyRef.current) ? prev : fillEditForm(merged))
       setEditing(merged)
+      try { setEditRaw(JSON.stringify(rec, null, 2)) } catch { setEditRaw(String(rec)) }
+      try { console.log("[staff] getStaff response for", staffIdStr || numericId, rec) } catch {}
       setEditNote(`Full profile loaded (${via}).`)
     } catch (e) {
       if (editReq.current === myReq) setEditNote("Server profile unavailable (" + (e?.message || "error") + ") — showing list values.")
@@ -3034,6 +3037,12 @@ function StaffManagementPage({ go }) {
             </div>
             {editLoading && <p className="font-body-sm text-on-surface-variant text-[13px] mb-3 flex items-center gap-2"><span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span> Fetching full staff profile…</p>}
             {editNote && !editLoading && <p className="font-body-sm text-on-surface-variant text-[12px] mb-3">{editNote}</p>}
+            {editRaw && !editLoading && (
+              <details className="mb-3 rounded-lg border border-outline-variant bg-surface-container-low overflow-hidden">
+                <summary className="px-3 py-2 text-[13px] font-label-md text-primary cursor-pointer hover:bg-surface-variant">Server response (raw JSON — copy for backend team)</summary>
+                <pre className="px-3 py-2 text-[11px] overflow-auto max-h-64 whitespace-pre-wrap break-words">{editRaw}</pre>
+              </details>
+            )}
             <form onSubmit={handleUpdate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Staff ID</span><input value={editForm.staffId} onChange={handleEditChange("staffId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
