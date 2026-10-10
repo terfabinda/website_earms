@@ -391,6 +391,9 @@ export function routeForRole(role) {
   if (r.includes("nbte")) return "nbte";
   if (r.includes("ncce")) return "ncce";
   if (r.includes("regulator")) return "nuc"; // generic RegulatorAdmin lands on NUC, can switch to NBTE/NCCE in-app
+  // projectcoordinator / coordinator -> supervisor (faculty) dashboard, which hosts
+  // the coordinator overview + awaiting-action queue; otherwise they land on blank generic dashboard
+  if (r.includes("coordinator")) return "faculty";
   if (r.includes("institution")) return "admin";
   if (r === "admin" || r.includes("admin")) return "system";
   if (r.includes("faculty") || r.includes("supervisor")) return "faculty";
