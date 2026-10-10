@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles } from './iam'
+import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles, prettyRole } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
@@ -5499,21 +5499,49 @@ function StudentDashboard({ go }) {
 
 function FacultyDashboard({ go }) {
   const tok = decodeToken()
-  const staffNo = tok?.staffNo ?? tok?.StaffNo ?? tok?.staff_no ?? tok?.sub ?? tok?.unique_name ?? tok?.email ?? ""
+  // StaffNo: prefer explicit claims + username claims; numeric `sub` (user id)
+  // is last resort — it is NOT a staff number (e.g. sub "13" vs "JST/STF/4455").
+  const staffNo = tok?.staffNo ?? tok?.StaffNo ?? tok?.staff_no
+    ?? tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"]
+    ?? tok?.unique_name ?? tok?.preferred_username ?? tok?.preferredUsername
+    ?? tok?.sub ?? tok?.email ?? ""
   const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? ""
   const deptId = tok?.departmentId ?? tok?.DepartmentId ?? ""
-  // Personalization — who is signed in (name claim, email, institution, role)
-  const displayName = tok?.name ?? tok?.unique_name ?? tok?.preferred_username ?? tok?.preferredUsername ?? staffNo ?? "Faculty"
-  const displayShort = String(displayName).split(/[\s@]+/)[0] || "Faculty"
-  const initials = String(displayName).split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join("") || "F"
-  const userEmail = tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ?? tok?.email ?? tok?.Email ?? ""
-  const instName = tok?.institutionName ?? tok?.InstitutionName ?? ""
-  const instCode = tok?.institutionCode ?? tok?.InstitutionCode ?? ""
-  const roleLabel = (() => {
-    const r = getRoleFromToken() || ""
-    const spaced = String(r).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim()
-    return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : "Faculty"
-  })()
+  // Personalization — resolved from live records below, token values are fallback.
+  const [staffProfile, setStaffProfile] = useState(null)
+  const [instProfile, setInstProfile] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { onboardingApi } = await import("./onboarding")
+        if (staffNo && instId) {
+          const rec = await onboardingApi.getStaff(String(staffNo), String(instId)).catch(() => null)
+          if (!cancelled && rec && (rec.FirstName ?? rec.firstName ?? rec.LastName ?? rec.lastName)) setStaffProfile(rec)
+        }
+        if (instId) {
+          let inst = await onboardingApi.getMinInstitution(String(instId)).catch(() => null)
+          if (!inst) {
+            const list = await onboardingApi.getInstitutions().catch(() => [])
+            const arr = Array.isArray(list) ? list : []
+            inst = arr.find(r => String(r.Id ?? r.id) === String(instId)) || null
+          } else if (Array.isArray(inst)) inst = inst[0] || null
+          if (!cancelled && inst) setInstProfile(inst)
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [staffNo, instId])
+  const firstName = staffProfile?.FirstName ?? staffProfile?.firstName ?? ""
+  const fullName = [staffProfile?.Title ?? staffProfile?.title, staffProfile?.FirstName ?? staffProfile?.firstName, staffProfile?.LastName ?? staffProfile?.lastName].filter(Boolean).join(" ")
+  const displayName = fullName || tok?.name || staffNo || "Faculty"
+  const displayShort = firstName || String(displayName).split(/[\s@/]+/)[0] || "Faculty"
+  const initials = fullName ? [staffProfile?.FirstName ?? staffProfile?.firstName, staffProfile?.LastName ?? staffProfile?.lastName].filter(Boolean).map(w => String(w).charAt(0).toUpperCase()).join("") :
+    String(displayName).split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join("") || "F"
+  const userEmail = staffProfile?.Email ?? staffProfile?.email ?? tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ?? tok?.email ?? tok?.Email ?? ""
+  const instName = instProfile?.Name ?? instProfile?.name ?? tok?.institutionName ?? tok?.InstitutionName ?? ""
+  const instCode = instProfile?.Code ?? instProfile?.code ?? tok?.institutionCode ?? tok?.InstitutionCode ?? ""
+  const roleLabel = prettyRole(getRoleFromToken()) || "Faculty"
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsErr, setStatsErr] = useState("")
@@ -5750,13 +5778,13 @@ function FacultyDashboard({ go }) {
   }, [inspData, inspMatric, loadInspector, fetchProjects])
 
   return (
-    <DashShell go={go} active="faculty" role="faculty" title={`Welcome, ${displayShort}`} subtitle={`${roleLabel}${instName ? ` · ${instName}` : ""} · ${staffNo ? `StaffNo ${staffNo}` : "Manage supervisees, approvals, and research pipeline."}`}>
+    <DashShell go={go} active="faculty" role="faculty" title={`Welcome, ${displayShort}`} subtitle={instName ? `${instName}${instCode ? ` (${instCode})` : ""}` : roleLabel}>
       <div className="space-y-6">
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-lg shrink-0">{initials}</div>
           <div className="min-w-0">
             <p className="font-headline-sm font-bold text-on-surface truncate">{displayName}</p>
-            <p className="font-body-sm text-on-surface-variant text-[13px] truncate">{userEmail}{instName ? ` · ${instName}${instCode ? ` (${instCode})` : ""}` : ""}</p>
+            <p className="font-body-sm text-on-surface-variant text-[13px] truncate">{userEmail}{staffNo ? ` · ${staffNo}` : ""}</p>
           </div>
           <span className="ml-auto px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[12px] whitespace-nowrap">{roleLabel}</span>
         </div>

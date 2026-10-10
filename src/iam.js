@@ -373,8 +373,34 @@ export function decodeToken(token) {
   }
 }
 
-export function getRoleFromToken(token) {
-  const p = decodeToken(token);
+const ROLE_LABELS = {
+  projectsupervisor: "Project Supervisor",
+  projectcoordinator: "Project Coordinator",
+  researchcoordinator: "Research Coordinator",
+  internalexaminer: "Internal Examiner",
+  externalexaminer: "External Examiner",
+  examinationofficer: "Examination Officer",
+  institutionadmin: "Institution Admin",
+  systemadmin: "System Admin",
+  regulatoradmin: "Regulator Admin",
+  faculty: "Faculty",
+  supervisor: "Supervisor",
+  student: "Student",
+  staff: "Staff",
+  admin: "Admin",
+};
+
+// Human-readable role label ("projectcoordinator" -> "Project Coordinator").
+// Falls back to light prettifying for unknown roles.
+export function prettyRole(role) {
+  const key = String(role ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (!key) return "";
+  if (ROLE_LABELS[key]) return ROLE_LABELS[key];
+  const spaced = String(role).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim();
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : String(role);
+}
+
+export function getRoleFromToken(token) {  const p = decodeToken(token);
   if (!p) return null;
   const raw = p[ROLE_CLAIM] || p.role;
   const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
