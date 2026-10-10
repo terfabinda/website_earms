@@ -2604,10 +2604,10 @@ function StaffManagementPage({ go }) {
       firstName: s.FirstName ?? s.firstName ?? "",
       lastName: s.LastName ?? s.lastName ?? "",
       email: s.Email ?? s.email ?? "",
-      phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
-      highestQualification: staffQualification(s),
+      phoneNo: s.PhoneNo ?? s.phoneNo ?? staffFuzzy(s, "phone", "mobile", "gsm", "cell"),
+      highestQualification: staffQualification(s) || staffFuzzy(s, "qualif", "degree", "certificate"),
       staffCategory: staffCategoryCode(s.StaffCategory ?? s.staffCategory ?? 1),
-      specialization: s.Specialization ?? s.specialization ?? "",
+      specialization: s.Specialization ?? s.specialization ?? staffFuzzy(s, "special", "expertise", "field"),
       programId: progId ? String(progId) : "",
       departmentId: deptIdVal ? String(deptIdVal) : "",
       facultyId: form.facultyId || "",
@@ -2789,6 +2789,17 @@ function StaffManagementPage({ go }) {
     return t
   }
   const staffQualification = (s) => s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? s.Qualification ?? s.qualification ?? s.highestQual ?? ""
+  // Last-resort: any key containing one of these substrings (exact keys above win).
+  const staffFuzzy = (s, ...needles) => {
+    if (!s || typeof s !== "object" || Array.isArray(s)) return ""
+    for (const k of Object.keys(s)) {
+      if (needles.some(n => k.toLowerCase().includes(n))) {
+        const v = String(s[k] ?? "").trim()
+        if (v) return v
+      }
+    }
+    return ""
+  }
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -3049,6 +3060,9 @@ function StaffManagementPage({ go }) {
                   {programs.map(p=>(
                     <option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>
                   ))}
+                  {editForm.programId && !programs.some(p => String(p.Id ?? p.id) === String(editForm.programId)) && (
+                    <option value={editForm.programId}>{editing?.ProgramName ?? editing?.programName ?? `Prog ${editForm.programId}`} (as stored)</option>
+                  )}
                 </select>
               </label>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
@@ -3056,6 +3070,9 @@ function StaffManagementPage({ go }) {
                   {departments.map(d=>(
                     <option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>
                   ))}
+                  {editForm.departmentId && !departments.some(d => String(d.Id ?? d.id) === String(editForm.departmentId)) && (
+                    <option value={editForm.departmentId}>{editing?.DepartmentName ?? editing?.departmentName ?? `Dept ${editForm.departmentId}`} (as stored)</option>
+                  )}
                 </select>
               </label>
               {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
