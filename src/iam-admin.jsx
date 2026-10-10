@@ -8,6 +8,7 @@ import {
   roleApi,
   mailApi,
   filterAssignableRoles,
+  prettyRole,
 } from "./iam";
 
 const FIELD = "w-full px-3 py-2 text-sm rounded-md border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none";
@@ -213,7 +214,7 @@ function UsersTab() {
               {roles.map((r) => (
                 <label key={r.id ?? r.Id} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={form.roles.includes(r.name ?? r.Name)} onChange={() => toggleRole(r.name ?? r.Name)} />
-                  {r.name ?? r.Name}
+                  {prettyRole(r.name ?? r.Name)}
                 </label>
               ))}
             </div>
@@ -394,9 +395,9 @@ export function RolesTab() {
           <ul className="divide-y divide-surface-container text-sm">
             {roles.length === 0 && <li className="py-2 text-on-surface-variant">No assignable roles.</li>}
             {roles.map((r) => (
-              <li key={r.id ?? r.Id} className="py-2 flex justify-between">
-                <span className="font-medium text-on-surface">{r.name ?? r.Name}</span>
-                <span className="text-on-surface-variant">{r.normalizedName ?? r.NormalizedName}</span>
+              <li key={r.id ?? r.Id} className="py-2 flex justify-between gap-3">
+                <span className="font-medium text-on-surface">{prettyRole(r.name ?? r.Name)}</span>
+                <span className="text-on-surface-variant font-mono text-[12px]">{r.normalizedName ?? r.NormalizedName ?? r.name ?? r.Name}</span>
               </li>
             ))}
           </ul>
@@ -414,7 +415,7 @@ export function RolesTab() {
                 return (
                   <label key={n} className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={selected.includes(n)} onChange={() => toggle(n)} />
-                    {n}
+                    {prettyRole(n)}
                   </label>
                 );
               })}
@@ -570,7 +571,7 @@ export function RoleAssign({ userName }) {
             return (
               <label key={n} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={selected.includes(n)} onChange={() => toggle(n)} />
-                {n}
+                {prettyRole(n)}
               </label>
             );
           })}

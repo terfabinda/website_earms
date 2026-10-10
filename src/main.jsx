@@ -3304,7 +3304,7 @@ function StaffManagementPage({ go }) {
                     return (
                       <label key={n} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 cursor-pointer hover:bg-surface-variant">
                         <input type="checkbox" checked={roleSel.includes(n)} onChange={()=>toggleRole(n)} className="w-4 h-4 accent-primary" />
-                        {n}
+                        {prettyRole(n)}
                       </label>
                     )
                   })}
