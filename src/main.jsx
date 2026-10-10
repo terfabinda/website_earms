@@ -5502,6 +5502,18 @@ function FacultyDashboard({ go }) {
   const staffNo = tok?.staffNo ?? tok?.StaffNo ?? tok?.staff_no ?? tok?.sub ?? tok?.unique_name ?? tok?.email ?? ""
   const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? ""
   const deptId = tok?.departmentId ?? tok?.DepartmentId ?? ""
+  // Personalization — who is signed in (name claim, email, institution, role)
+  const displayName = tok?.name ?? tok?.unique_name ?? tok?.preferred_username ?? tok?.preferredUsername ?? staffNo ?? "Faculty"
+  const displayShort = String(displayName).split(/[\s@]+/)[0] || "Faculty"
+  const initials = String(displayName).split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 2).map(w => w.charAt(0).toUpperCase()).join("") || "F"
+  const userEmail = tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ?? tok?.email ?? tok?.Email ?? ""
+  const instName = tok?.institutionName ?? tok?.InstitutionName ?? ""
+  const instCode = tok?.institutionCode ?? tok?.InstitutionCode ?? ""
+  const roleLabel = (() => {
+    const r = getRoleFromToken() || ""
+    const spaced = String(r).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim()
+    return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : "Faculty"
+  })()
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsErr, setStatsErr] = useState("")
@@ -5618,8 +5630,16 @@ function FacultyDashboard({ go }) {
   }, [inspData, inspMatric, loadInspector, fetchProjects])
 
   return (
-    <DashShell go={go} active="faculty" role="faculty" title="Faculty Overview" subtitle={`Supervisor ${staffNo || "—"} • Manage supervisees, approvals, and research pipeline.`}>
+    <DashShell go={go} active="faculty" role="faculty" title={`Welcome, ${displayShort}`} subtitle={`${roleLabel}${instName ? ` · ${instName}` : ""} · ${staffNo ? `StaffNo ${staffNo}` : "Manage supervisees, approvals, and research pipeline."}`}>
       <div className="space-y-6">
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-4 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-lg shrink-0">{initials}</div>
+          <div className="min-w-0">
+            <p className="font-headline-sm font-bold text-on-surface truncate">{displayName}</p>
+            <p className="font-body-sm text-on-surface-variant text-[13px] truncate">{userEmail}{instName ? ` · ${instName}${instCode ? ` (${instCode})` : ""}` : ""}</p>
+          </div>
+          <span className="ml-auto px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[12px] whitespace-nowrap">{roleLabel}</span>
+        </div>
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
