@@ -2660,6 +2660,23 @@ function StaffManagementPage({ go }) {
         errors.push(`stafflist: no match in ${arr.length} rows`)
       } catch (e) { errors.push("stafflist: " + (e?.message || e)) }
     }
+    // Last resort: academic-only rows carry no department, so scan every loaded
+    // department's stafflist for the same person (explicit edit click only).
+    if ((staffIdStr || (numericId !== undefined && numericId !== null && numericId !== "")) && instId && Array.isArray(departments) && departments.length) {
+      try {
+        const scans = await Promise.all(departments.map(d =>
+          onboardingApi.getStaffList(String(d.Id ?? d.id), String(instId)).catch(() => [])
+        ))
+        for (const list of scans) {
+          const hit = (Array.isArray(list) ? list : []).find(x =>
+            (staffIdStr && String(x.StaffId ?? x.staffId ?? "") === staffIdStr) ||
+            (numericId !== undefined && numericId !== null && numericId !== "" && String(x.Id ?? x.id ?? "") === String(numericId))
+          )
+          if (hit) return { rec: hit, via: "staff list scan" }
+        }
+        errors.push("staff scan: no match across departments")
+      } catch (e) { errors.push("staff scan: " + (e?.message || e)) }
+    }
     throw new Error(errors.join(" · ") || "no staff identifier on this row")
   }
   const handleEdit = async (s) => {

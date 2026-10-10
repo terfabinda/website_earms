@@ -70,9 +70,13 @@ async function obFetch(path, options = {}) {
 // get_student_department unreachable for every real matric. Double-encoding (%252F) survives
 // Apache and is decoded once by the API router, so the controller still receives the raw
 // matric number. Values without a slash are encoded normally.
-function pathMatric(matricNo) {
-  const s = String(matricNo ?? "");
+// Staff IDs hit the same Apache 404 (e.g. "UST/STF/001"), so getStaff uses it too.
+function pathSeg(v) {
+  const s = String(v ?? "");
   return s.includes("/") ? encodeURIComponent(encodeURIComponent(s)) : encodeURIComponent(s);
+}
+function pathMatric(matricNo) {
+  return pathSeg(matricNo);
 }
 
 function qs(params) {
@@ -235,7 +239,7 @@ export const onboardingApi = {
     return obFetch("departments/" + encodeURIComponent(departmentId) + "/stafflist" + qs({ institutionId }));
   },
   async getStaff(staffId, institutionId) {
-    return obFetch("staff/" + encodeURIComponent(staffId) + "/" + encodeURIComponent(institutionId));
+    return obFetch("staff/" + pathSeg(staffId) + "/" + encodeURIComponent(institutionId));
   },
   async updateStaff(staffId, payload) {
     return obFetch("staff/" + encodeURIComponent(staffId), {
