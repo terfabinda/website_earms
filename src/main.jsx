@@ -5778,7 +5778,7 @@ function FacultyDashboard({ go }) {
   }, [inspData, inspMatric, loadInspector, fetchProjects])
 
   return (
-    <DashShell go={go} active="faculty" role="faculty" title={`Welcome, ${displayShort}`} subtitle={instName ? `${instName}${instCode ? ` (${instCode})` : ""}` : roleLabel}>
+    <DashShell go={go} active="faculty" role="faculty" title={roleLabel} subtitle={instName ? `${instName}${instCode ? ` (${instCode})` : ""}` : `Welcome, ${displayShort}`}>
       <div className="space-y-6">
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-lg shrink-0">{initials}</div>
