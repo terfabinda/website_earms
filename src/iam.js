@@ -394,6 +394,9 @@ export function routeForRole(role) {
   // projectcoordinator / coordinator -> supervisor (faculty) dashboard, which hosts
   // the coordinator overview + awaiting-action queue; otherwise they land on blank generic dashboard
   if (r.includes("coordinator")) return "faculty";
+  // internal/external examiners + examination officers use the same project/review
+  // tooling (no dedicated dashboard exists yet) — keep them off the blank generic page
+  if (r.includes("examiner") || r.includes("examination") || r.includes("officer")) return "faculty";
   if (r.includes("institution")) return "admin";
   if (r === "admin" || r.includes("admin")) return "system";
   if (r.includes("faculty") || r.includes("supervisor")) return "faculty";
