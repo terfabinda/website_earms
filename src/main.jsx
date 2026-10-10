@@ -944,7 +944,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   }
   const navItems = [
     {key:'student', label:'Dashboard', icon:'dashboard'},
-    {key:'student-projects', label:'Active Projects', icon:'folder_managed'},
+    {key:'student-projects', label:'Projects', icon:'folder_managed'},
     {key:'grant', label:'Grant Tracking', icon:'payments'},
     {key:'milestones', label:'Milestones', icon:'flag'},
     {key:'pubs', label:'Publications', icon:'article'},
@@ -1102,8 +1102,19 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
             </>
           ) : role==='faculty' ? (
             <>
-              <li><button type="button" className="w-full flex items-center gap-3 px-3 py-2 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg text-left"><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
-              {navItems.slice(1).map(it=>(
+              <li><button onClick={()=>go('faculty')} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${(hashView===''||hashView==='dashboard') ? 'bg-secondary-fixed text-on-secondary-fixed font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined" style={{fontVariationSettings:"'FILL' 1"}}>dashboard</span> Dashboard</button></li>
+              <li>
+                <button onClick={()=>toggleGroup('Projects')} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                  <span className="material-symbols-outlined text-[20px]">folder_managed</span> <span className="flex-1 text-left">Projects</span> <span className="material-symbols-outlined text-[18px]">{openGroups['Projects'] === false ? 'expand_more' : 'expand_less'}</span>
+                </button>
+                {openGroups['Projects'] !== false && (
+                  <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
+                    <li><button onClick={()=>go('faculty?view=dashboard')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${(hashView===''||hashView==='dashboard') ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Overview</button></li>
+                    <li><button onClick={()=>go('faculty?view=create')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='create' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Create Project</button></li>
+                  </ul>
+                )}
+              </li>
+              {navItems.slice(2).map(it=>(
                 <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
             </>
@@ -5497,6 +5508,225 @@ function StudentDashboard({ go }) {
   )
 }
 
+/* ---------- Create Project page (coordinator function, split out of the dashboard) ----------
+   POST /api/Project/create { matricNo, supervisors:[{staffNo, role}], session,
+   programId, departmentId, institutionId, assignedBy, startDate, endDate,
+   chapterTemplateId, projectStatus } and POST /api/Project/autocreate. */
+function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
+  const [cpDepts, setCpDepts] = useState([])
+  const [cpProgs, setCpProgs] = useState([])
+  const [cpStaff, setCpStaff] = useState([])
+  const [cpTemplates, setCpTemplates] = useState([])
+  const [cpForm, setCpForm] = useState({ matricNo: "", session: "", departmentId: "", programId: "", supStaffNo: "", supRole: 1, startDate: "", endDate: "", chapterTemplateId: "", projectStatus: 1 })
+  const [cpSups, setCpSups] = useState([])
+  const [cpBusy, setCpBusy] = useState(false)
+  const [cpMsg, setCpMsg] = useState("")
+  const [cpErr, setCpErr] = useState("")
+  const [acProgs, setAcProgs] = useState([])
+  const [acForm, setAcForm] = useState({ departmentId: "", programId: "", session: "", useSpecialization: false })
+  const [acBusy, setAcBusy] = useState(false)
+  const [acMsg, setAcMsg] = useState("")
+  const [acErr, setAcErr] = useState("")
+  const fetchCreateMeta = useCallback(async ()=>{
+    if (!instId) return
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
+      const arr = Array.isArray(depts) ? depts : []
+      setCpDepts(arr)
+      const own = deptId && arr.some(d => String(d.Id ?? d.id) === String(deptId)) ? String(deptId) : ""
+      if (own) {
+        setCpForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
+        setAcForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
+      }
+    } catch {}
+  }, [instId, deptId])
+  const loadCpDept = useCallback(async (dept)=>{
+    if (!dept || !instId) { setCpProgs([]); setCpStaff([]); setCpTemplates([]); return }
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const [progs, staff, tmpl] = await Promise.all([
+        onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[]),
+        onboardingApi.getAcademicStaff({ departmentId: String(dept), institutionId: String(instId) }).catch(()=>[]),
+        projectApi.getTemplates({ institutionId: instId, departmentId: dept }).catch(()=>[]),
+      ])
+      setCpProgs(Array.isArray(progs) ? progs : [])
+      setCpStaff(Array.isArray(staff) ? staff : [])
+      setCpTemplates(Array.isArray(tmpl) ? tmpl : [])
+    } catch { setCpProgs([]); setCpStaff([]); setCpTemplates([]) }
+  }, [instId])
+  const loadAcDept = useCallback(async (dept)=>{
+    if (!dept || !instId) { setAcProgs([]); return }
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const progs = await onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[])
+      setAcProgs(Array.isArray(progs) ? progs : [])
+    } catch { setAcProgs([]) }
+  }, [instId])
+  useEffect(()=>{ fetchCreateMeta() }, [fetchCreateMeta])
+  useEffect(()=>{ loadCpDept(cpForm.departmentId) }, [cpForm.departmentId, loadCpDept])
+  useEffect(()=>{ loadAcDept(acForm.departmentId) }, [acForm.departmentId, loadAcDept])
+  // Default the creator as Supervisor once on sign-in.
+  useEffect(()=>{ if (staffNo && cpSups.length === 0) setCpSups([{ staffNo, role: 1 }]) }, [staffNo])
+  const cpSet = (k) => (e) => setCpForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }))
+  const addSupervisor = () => {
+    const no = String(cpForm.supStaffNo || "").trim()
+    if (!no) { setCpErr("Pick a staff member to add as supervisor."); return }
+    if (cpSups.some(s => String(s.staffNo).toLowerCase() === no.toLowerCase())) { setCpErr("That supervisor is already added."); return }
+    setCpErr("")
+    setCpSups(s => [...s, { staffNo: no, role: Number(cpForm.supRole) || 1 }])
+    setCpForm(f => ({ ...f, supStaffNo: "" }))
+  }
+  const submitCreateProject = async (e) => {
+    e.preventDefault()
+    setCpMsg(""); setCpErr("")
+    if (!cpForm.matricNo.trim()) { setCpErr("Student matric number is required."); return }
+    if (!cpForm.departmentId) { setCpErr("Department is required."); return }
+    if (!cpForm.programId) { setCpErr("Programme is required."); return }
+    if (!cpSups.length) { setCpErr("Add at least one supervisor."); return }
+    if (!instId) { setCpErr("No institution on your login — re-login."); return }
+    setCpBusy(true)
+    try {
+      await projectApi.createProject({
+        matricNo: cpForm.matricNo.trim(),
+        supervisors: cpSups,
+        session: cpForm.session.trim() || undefined,
+        programId: Number(cpForm.programId),
+        departmentId: Number(cpForm.departmentId),
+        institutionId: Number(instId),
+        assignedBy: staffNo || undefined,
+        startDate: cpForm.startDate || undefined,
+        endDate: cpForm.endDate || undefined,
+        chapterTemplateId: cpForm.chapterTemplateId ? Number(cpForm.chapterTemplateId) : undefined,
+        projectStatus: Number(cpForm.projectStatus) || 1,
+      })
+      setCpMsg(`Project created for ${cpForm.matricNo.trim()}.`)
+      setCpForm(f => ({ ...f, matricNo: "", session: "", startDate: "", endDate: "" }))
+      if (onChanged) await onChanged()
+    } catch (err) { setCpErr(err.message || "Project creation failed") }
+    finally { setCpBusy(false) }
+  }
+  const submitAutocreate = async (e) => {
+    e.preventDefault()
+    setAcMsg(""); setAcErr("")
+    if (!acForm.departmentId) { setAcErr("Department is required."); return }
+    if (!acForm.programId) { setAcErr("Programme is required."); return }
+    if (!instId) { setAcErr("No institution on your login — re-login."); return }
+    setAcBusy(true)
+    try {
+      const res = await projectApi.autocreateProjects({
+        programId: Number(acForm.programId),
+        departmentId: Number(acForm.departmentId),
+        institutionId: Number(instId),
+        session: acForm.session.trim() || undefined,
+        assignedBy: staffNo || undefined,
+        useSpecialization: !!acForm.useSpecialization,
+      })
+      const n = res?.created ?? res?.count ?? res?.total ?? ""
+      setAcMsg(`Auto-create submitted${n !== "" ? ` — ${n} projects` : ""}.`)
+      if (onChanged) await onChanged()
+    } catch (err) { setAcErr(err.message || "Auto-create failed") }
+    finally { setAcBusy(false) }
+  }
+  return (
+    <div className="space-y-6">
+      <button onClick={()=>go('faculty?view=dashboard')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Projects
+      </button>
+      <div>
+        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">add_task</span> Create Project</h2>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — single project (POST /api/Project/create) or bulk auto-create for a programme (POST /api/Project/autocreate).</p>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <form onSubmit={submitCreateProject} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-3">
+          <h4 className="font-label-md font-bold text-on-surface">Single project</h4>
+          {cpErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{cpErr}</div>}
+          {cpMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{cpMsg}</div>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No *</span><input value={cpForm.matricNo} onChange={cpSet("matricNo")} placeholder="CSC/2024/001" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
+              <select value={cpForm.departmentId} onChange={cpSet("departmentId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                <option value="">Select</option>
+                {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
+              </select>
+            </label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
+              <select value={cpForm.programId} onChange={cpSet("programId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                <option value="">Select</option>
+                {cpProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
+              </select>
+            </label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Start</span><input type="date" value={cpForm.startDate} onChange={cpSet("startDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">End</span><input type="date" value={cpForm.endDate} onChange={cpSet("endDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Template</span>
+              <select value={cpForm.chapterTemplateId} onChange={cpSet("chapterTemplateId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                <option value="">Default</option>
+                {cpTemplates.map(t=>(<option key={t.id ?? t.Id} value={String(t.id ?? t.Id)}>{t.templateName ?? t.TemplateName ?? `Template ${t.id ?? t.Id}`}</option>))}
+              </select>
+            </label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Initial Status</span>
+              <select value={cpForm.projectStatus} onChange={cpSet("projectStatus")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                <option value={1}>Initiated</option>
+                <option value={2}>Approved</option>
+                <option value={3}>Ongoing</option>
+                <option value={4}>Completed</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors *</span>
+            <div className="flex gap-2 mt-1">
+              <select value={cpForm.supStaffNo} onChange={cpSet("supStaffNo")} className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                <option value="">Pick staff…</option>
+                {cpStaff.map(s=>(<option key={s.staffId ?? s.StaffId} value={String(s.staffId ?? s.StaffId)}>{s.staffId ?? s.StaffId}{s.specialization ?? s.Specialization ? ` · ${s.specialization ?? s.Specialization}` : ""}</option>))}
+              </select>
+              <select value={cpForm.supRole} onChange={cpSet("supRole")} className="border border-outline-variant rounded-lg px-2 py-2 bg-surface text-sm">
+                <option value={1}>Supervisor</option>
+                <option value={2}>Co-supervisor</option>
+              </select>
+              <button type="button" onClick={addSupervisor} className="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-variant">Add</button>
+            </div>
+            {cpSups.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {cpSups.map((s,i)=>(
+                  <li key={i} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5">
+                    <span className="font-semibold">{s.staffNo}</span>
+                    <span className="text-xs text-outline">{Number(s.role)===2 ? "Co-supervisor" : "Supervisor"}</span>
+                    <button type="button" onClick={()=>setCpSups(list=>list.filter((_,j)=>j!==i))} className="ml-auto text-error text-xs hover:underline">Remove</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button type="submit" disabled={cpBusy} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{cpBusy ? "Creating…" : "Create Project"}</button>
+        </form>
+        <form onSubmit={submitAutocreate} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-3 h-fit">
+          <h4 className="font-label-md font-bold text-on-surface">Bulk auto-create</h4>
+          <p className="text-xs text-on-surface-variant">Creates projects for unassigned students in a programme.</p>
+          {acErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{acErr}</div>}
+          {acMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{acMsg}</div>}
+          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
+            <select value={acForm.departmentId} onChange={e=>setAcForm(f=>({...f, departmentId: e.target.value, programId: ""}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+              <option value="">Select</option>
+              {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
+            </select>
+          </label>
+          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
+            <select value={acForm.programId} onChange={e=>setAcForm(f=>({...f, programId: e.target.value}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+              <option value="">Select</option>
+              {acProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
+            </select>
+          </label>
+          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={acForm.session} onChange={e=>setAcForm(f=>({...f, session: e.target.value}))} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={acForm.useSpecialization} onChange={e=>setAcForm(f=>({...f, useSpecialization: e.target.checked}))} className="w-4 h-4 accent-primary" /> Match by specialization</label>
+          <button type="submit" disabled={acBusy} className="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{acBusy ? "Working…" : "Auto-create Projects"}</button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function FacultyDashboard({ go }) {
   const tok = decodeToken()
   // StaffNo: prefer explicit claims + username claims; numeric `sub` (user id)
@@ -5620,126 +5850,6 @@ function FacultyDashboard({ go }) {
     finally { setReviewBusy(false) }
   }, [reviewForm, staffNo, fetchPending, fetchProjects])
 
-  // Create Project (coordinator function): single project + bulk auto-create.
-  // POST /api/Project/create { matricNo, supervisors:[{staffNo, role}], session,
-  // programId, departmentId, institutionId, assignedBy, startDate, endDate,
-  // chapterTemplateId, projectStatus } and POST /api/Project/autocreate.
-  const [cpDepts, setCpDepts] = useState([])
-  const [cpProgs, setCpProgs] = useState([])
-  const [cpStaff, setCpStaff] = useState([])
-  const [cpTemplates, setCpTemplates] = useState([])
-  const [cpForm, setCpForm] = useState({ matricNo: "", session: "", departmentId: "", programId: "", supStaffNo: "", supRole: 1, startDate: "", endDate: "", chapterTemplateId: "", projectStatus: 1 })
-  const [cpSups, setCpSups] = useState([])
-  const [cpBusy, setCpBusy] = useState(false)
-  const [cpMsg, setCpMsg] = useState("")
-  const [cpErr, setCpErr] = useState("")
-  const [acProgs, setAcProgs] = useState([])
-  const [acForm, setAcForm] = useState({ departmentId: "", programId: "", session: "", useSpecialization: false })
-  const [acBusy, setAcBusy] = useState(false)
-  const [acMsg, setAcMsg] = useState("")
-  const [acErr, setAcErr] = useState("")
-  const fetchCreateMeta = useCallback(async ()=>{
-    if (!instId) return
-    try {
-      const { onboardingApi } = await import("./onboarding")
-      const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
-      const arr = Array.isArray(depts) ? depts : []
-      setCpDepts(arr)
-      const own = deptId && arr.some(d => String(d.Id ?? d.id) === String(deptId)) ? String(deptId) : ""
-      if (own) {
-        setCpForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
-        setAcForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
-      }
-    } catch {}
-  }, [instId, deptId])
-  const loadCpDept = useCallback(async (dept)=>{
-    if (!dept || !instId) { setCpProgs([]); setCpStaff([]); setCpTemplates([]); return }
-    try {
-      const { onboardingApi } = await import("./onboarding")
-      const [progs, staff, tmpl] = await Promise.all([
-        onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[]),
-        onboardingApi.getAcademicStaff({ departmentId: String(dept), institutionId: String(instId) }).catch(()=>[]),
-        projectApi.getTemplates({ institutionId: instId, departmentId: dept }).catch(()=>[]),
-      ])
-      setCpProgs(Array.isArray(progs) ? progs : [])
-      setCpStaff(Array.isArray(staff) ? staff : [])
-      setCpTemplates(Array.isArray(tmpl) ? tmpl : [])
-    } catch { setCpProgs([]); setCpStaff([]); setCpTemplates([]) }
-  }, [instId])
-  const loadAcDept = useCallback(async (dept)=>{
-    if (!dept || !instId) { setAcProgs([]); return }
-    try {
-      const { onboardingApi } = await import("./onboarding")
-      const progs = await onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[])
-      setAcProgs(Array.isArray(progs) ? progs : [])
-    } catch { setAcProgs([]) }
-  }, [instId])
-  useEffect(()=>{ fetchCreateMeta() }, [fetchCreateMeta])
-  useEffect(()=>{ loadCpDept(cpForm.departmentId) }, [cpForm.departmentId, loadCpDept])
-  useEffect(()=>{ loadAcDept(acForm.departmentId) }, [acForm.departmentId, loadAcDept])
-  // Default the creator as Supervisor once on sign-in.
-  useEffect(()=>{ if (staffNo && cpSups.length === 0) setCpSups([{ staffNo, role: 1 }]) }, [staffNo])
-  const cpSet = (k) => (e) => setCpForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }))
-  const addSupervisor = () => {
-    const no = String(cpForm.supStaffNo || "").trim()
-    if (!no) { setCpErr("Pick a staff member to add as supervisor."); return }
-    if (cpSups.some(s => String(s.staffNo).toLowerCase() === no.toLowerCase())) { setCpErr("That supervisor is already added."); return }
-    setCpErr("")
-    setCpSups(s => [...s, { staffNo: no, role: Number(cpForm.supRole) || 1 }])
-    setCpForm(f => ({ ...f, supStaffNo: "" }))
-  }
-  const submitCreateProject = async (e) => {
-    e.preventDefault()
-    setCpMsg(""); setCpErr("")
-    if (!cpForm.matricNo.trim()) { setCpErr("Student matric number is required."); return }
-    if (!cpForm.departmentId) { setCpErr("Department is required."); return }
-    if (!cpForm.programId) { setCpErr("Programme is required."); return }
-    if (!cpSups.length) { setCpErr("Add at least one supervisor."); return }
-    if (!instId) { setCpErr("No institution on your login — re-login."); return }
-    setCpBusy(true)
-    try {
-      await projectApi.createProject({
-        matricNo: cpForm.matricNo.trim(),
-        supervisors: cpSups,
-        session: cpForm.session.trim() || undefined,
-        programId: Number(cpForm.programId),
-        departmentId: Number(cpForm.departmentId),
-        institutionId: Number(instId),
-        assignedBy: staffNo || undefined,
-        startDate: cpForm.startDate || undefined,
-        endDate: cpForm.endDate || undefined,
-        chapterTemplateId: cpForm.chapterTemplateId ? Number(cpForm.chapterTemplateId) : undefined,
-        projectStatus: Number(cpForm.projectStatus) || 1,
-      })
-      setCpMsg(`Project created for ${cpForm.matricNo.trim()}.`)
-      setCpForm(f => ({ ...f, matricNo: "", session: "", startDate: "", endDate: "" }))
-      await fetchProjects()
-    } catch (err) { setCpErr(err.message || "Project creation failed") }
-    finally { setCpBusy(false) }
-  }
-  const submitAutocreate = async (e) => {
-    e.preventDefault()
-    setAcMsg(""); setAcErr("")
-    if (!acForm.departmentId) { setAcErr("Department is required."); return }
-    if (!acForm.programId) { setAcErr("Programme is required."); return }
-    if (!instId) { setAcErr("No institution on your login — re-login."); return }
-    setAcBusy(true)
-    try {
-      const res = await projectApi.autocreateProjects({
-        programId: Number(acForm.programId),
-        departmentId: Number(acForm.departmentId),
-        institutionId: Number(instId),
-        session: acForm.session.trim() || undefined,
-        assignedBy: staffNo || undefined,
-        useSpecialization: !!acForm.useSpecialization,
-      })
-      const n = res?.created ?? res?.count ?? res?.total ?? ""
-      setAcMsg(`Auto-create submitted${n !== "" ? ` — ${n} projects` : ""}.`)
-      await fetchProjects()
-    } catch (err) { setAcErr(err.message || "Auto-create failed") }
-    finally { setAcBusy(false) }
-  }
-
   // Project inspector — student ↔ supervisor transaction trail for one supervisee:
   // details → proposed topics (status) → chapters/versions → advance project status.
   const [inspMatric, setInspMatric] = useState("")
@@ -5777,6 +5887,15 @@ function FacultyDashboard({ go }) {
     finally { setStatusBusy(false) }
   }, [inspData, inspMatric, loadInspector, fetchProjects])
 
+  const facQuery = useHashQuery()
+  const facView = (facQuery.get("view") || "dashboard").toLowerCase()
+  if (facView === "create") {
+    return (
+      <DashShell go={go} active="faculty" role="faculty" title="Create Project" subtitle="Coordinator function — new project or bulk auto-create.">
+        <CreateProjectPage go={go} staffNo={staffNo} instId={instId} deptId={deptId} onChanged={fetchProjects} />
+      </DashShell>
+    )
+  }
   return (
     <DashShell go={go} active="faculty" role="faculty" title={roleLabel} subtitle={instName ? `${instName}${instCode ? ` (${instCode})` : ""}` : `Welcome, ${displayShort}`}>
       <div className="space-y-6">
@@ -5945,97 +6064,6 @@ function FacultyDashboard({ go }) {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
-          <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">add_task</span> Create Project</h3>
-          <p className="text-xs text-on-surface-variant mb-4">Coordinator function — single project (POST /api/Project/create) or bulk auto-create for a programme (POST /api/Project/autocreate).</p>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <form onSubmit={submitCreateProject} className="space-y-3 border border-outline-variant rounded-xl p-4 bg-surface-container-lowest">
-              <h4 className="font-label-md font-bold text-on-surface">Single project</h4>
-              {cpErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{cpErr}</div>}
-              {cpMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{cpMsg}</div>}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No *</span><input value={cpForm.matricNo} onChange={cpSet("matricNo")} placeholder="CSC/2024/001" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
-                  <select value={cpForm.departmentId} onChange={cpSet("departmentId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                    <option value="">Select</option>
-                    {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
-                  </select>
-                </label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
-                  <select value={cpForm.programId} onChange={cpSet("programId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                    <option value="">Select</option>
-                    {cpProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
-                  </select>
-                </label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Start</span><input type="date" value={cpForm.startDate} onChange={cpSet("startDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">End</span><input type="date" value={cpForm.endDate} onChange={cpSet("endDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Template</span>
-                  <select value={cpForm.chapterTemplateId} onChange={cpSet("chapterTemplateId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                    <option value="">Default</option>
-                    {cpTemplates.map(t=>(<option key={t.id ?? t.Id} value={String(t.id ?? t.Id)}>{t.templateName ?? t.TemplateName ?? `Template ${t.id ?? t.Id}`}</option>))}
-                  </select>
-                </label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Initial Status</span>
-                  <select value={cpForm.projectStatus} onChange={cpSet("projectStatus")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                    <option value={1}>Initiated</option>
-                    <option value={2}>Approved</option>
-                    <option value={3}>Ongoing</option>
-                    <option value={4}>Completed</option>
-                  </select>
-                </label>
-              </div>
-              <div>
-                <span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors *</span>
-                <div className="flex gap-2 mt-1">
-                  <select value={cpForm.supStaffNo} onChange={cpSet("supStaffNo")} className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                    <option value="">Pick staff…</option>
-                    {cpStaff.map(s=>(<option key={s.staffId ?? s.StaffId} value={String(s.staffId ?? s.StaffId)}>{s.staffId ?? s.StaffId}{s.specialization ?? s.Specialization ? ` · ${s.specialization ?? s.Specialization}` : ""}</option>))}
-                  </select>
-                  <select value={cpForm.supRole} onChange={cpSet("supRole")} className="border border-outline-variant rounded-lg px-2 py-2 bg-surface text-sm">
-                    <option value={1}>Supervisor</option>
-                    <option value={2}>Co-supervisor</option>
-                  </select>
-                  <button type="button" onClick={addSupervisor} className="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-variant">Add</button>
-                </div>
-                {cpSups.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {cpSups.map((s,i)=>(
-                      <li key={i} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5">
-                        <span className="font-semibold">{s.staffNo}</span>
-                        <span className="text-xs text-outline">{Number(s.role)===2 ? "Co-supervisor" : "Supervisor"}</span>
-                        <button type="button" onClick={()=>setCpSups(list=>list.filter((_,j)=>j!==i))} className="ml-auto text-error text-xs hover:underline">Remove</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <button type="submit" disabled={cpBusy} className="w-full bg-primary text-on-primary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{cpBusy ? "Creating…" : "Create Project"}</button>
-            </form>
-            <form onSubmit={submitAutocreate} className="space-y-3 border border-outline-variant rounded-xl p-4 bg-surface-container-lowest h-fit">
-              <h4 className="font-label-md font-bold text-on-surface">Bulk auto-create</h4>
-              <p className="text-xs text-on-surface-variant">Creates projects for unassigned students in a programme.</p>
-              {acErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{acErr}</div>}
-              {acMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{acMsg}</div>}
-              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
-                <select value={acForm.departmentId} onChange={e=>setAcForm(f=>({...f, departmentId: e.target.value, programId: ""}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                  <option value="">Select</option>
-                  {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
-                </select>
-              </label>
-              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
-                <select value={acForm.programId} onChange={e=>setAcForm(f=>({...f, programId: e.target.value}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                  <option value="">Select</option>
-                  {acProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
-                </select>
-              </label>
-              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={acForm.session} onChange={e=>setAcForm(f=>({...f, session: e.target.value}))} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={acForm.useSpecialization} onChange={e=>setAcForm(f=>({...f, useSpecialization: e.target.checked}))} className="w-4 h-4 accent-primary" /> Match by specialization</label>
-              <button type="submit" disabled={acBusy} className="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{acBusy ? "Working…" : "Auto-create Projects"}</button>
-            </form>
-          </div>
         </div>
 
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
