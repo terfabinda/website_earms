@@ -1018,14 +1018,15 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           ) : role==='regulator' ? (
             <div className="w-10 h-10 rounded bg-primary flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">verified</span></div>
           ) : role==='faculty' ? (
-            <img alt="crest" className="w-10 h-10 object-contain" src={CREST}/>
+            <img alt="EARMS Logo" className="h-10 w-auto object-contain shrink-0" src={LOGO_EARMS}/>
           ) : (
             <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">EA</div>
           )}
           <div>
-            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='regulator' ? 'Regulator' : role==='faculty' ? 'Project Portfolio' : 'Project Portfolio'}</h1>
+            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='regulator' ? 'Regulator' : role==='faculty' ? 'EARMS' : 'Project Portfolio'}</h1>
             {role==='admin' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Control Panel</p>}
             {role==='regulator' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Oversight Portal</p>}
+            {role==='faculty' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Supervision Portal</p>}
           </div>
         </div>
         <ul className="flex-1 space-y-1 overflow-y-auto">
