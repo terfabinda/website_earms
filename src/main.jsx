@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken } from './iam'
+import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
-import { RolesPanel, RoleAssign } from './iam-admin.jsx'
+import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
@@ -2433,6 +2433,17 @@ function StaffManagementPage({ go }) {
   const [viewing, setViewing] = useState(null)
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(null)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editNote, setEditNote] = useState("")
+  const [editDirty, setEditDirty] = useState(false)
+  const editDirtyRef = useRef(false)
+  const editReq = useRef(0)
+  const [roleFor, setRoleFor] = useState(null)
+  const [roleOptions, setRoleOptions] = useState([])
+  const [roleSel, setRoleSel] = useState([])
+  const [roleBusy, setRoleBusy] = useState(false)
+  const [roleMsg, setRoleMsg] = useState("")
+  const [roleErr, setRoleErr] = useState("")
   const tok = decodeToken()
   // NOTE: ownerId is NOT the institution id (owner 5 vs institution 4 for JST).
   const resolveInstId = async () => {
@@ -2584,11 +2595,10 @@ function StaffManagementPage({ go }) {
     }
   }
   const handleView = (s) => { setViewing(s); setErr(""); setMsg(""); }
-  const handleEdit = (s) => {
-    setEditing(s); setErr(""); setMsg("");
+  const fillEditForm = (s) => {
     const progId = s.ProgramId ?? s.programId ?? ""
     const deptIdVal = s.DepartmentId ?? s.departmentId ?? ""
-    setEditForm({
+    return {
       staffId: s.StaffId ?? s.staffId ?? "",
       title: s.Title ?? s.title ?? "",
       firstName: s.FirstName ?? s.firstName ?? "",
@@ -2601,11 +2611,47 @@ function StaffManagementPage({ go }) {
       programId: progId ? String(progId) : "",
       departmentId: deptIdVal ? String(deptIdVal) : "",
       facultyId: form.facultyId || "",
-    })
-    // preload programs for that department
-    if (deptIdVal) onDeptChange(String(deptIdVal))
+    }
   }
-  const handleEditChange = (k) => (e) => setEditForm(f=>({...f, [k]: e.target.value}))
+  // Fetched server values win over list-row values wherever non-empty.
+  const mergeStaff = (base, over) => {
+    const out = { ...(base || {}) }
+    for (const [k, v] of Object.entries(over || {})) {
+      if (v === undefined || v === null) continue
+      if (typeof v === "string" && !v.trim()) continue
+      out[k] = v
+    }
+    return out
+  }
+  const handleEdit = async (s) => {
+    setEditing(s); setErr(""); setMsg("");
+    setEditForm(fillEditForm(s));
+    setEditDirty(false); editDirtyRef.current = false; setEditNote(""); setEditLoading(true);
+    const myReq = ++editReq.current
+    // preload programs for that department
+    const deptIdVal = s.DepartmentId ?? s.departmentId ?? ""
+    if (deptIdVal) onDeptChange(String(deptIdVal))
+    try {
+      // List rows are partial/merged aggregates — fetch the complete server profile
+      // (GET staff/{staffId}/{institutionId}) and prefill from it.
+      const staffIdStr = String(s.StaffId ?? s.staffId ?? "").trim()
+      if (!staffIdStr) { if (editReq.current === myReq) setEditNote("No staff ID on this row — showing list values."); return }
+      const id = await resolveInstId()
+      const { onboardingApi } = await import("./onboarding")
+      const full = await onboardingApi.getStaff(staffIdStr, String(id || s.InstitutionId || s.institutionId || ""))
+      if (editReq.current !== myReq) return
+      const merged = mergeStaff(s, full)
+      // Don't clobber typing the user already started.
+      setEditForm(prev => (prev && editDirtyRef.current) ? prev : fillEditForm(merged))
+      setEditing(merged)
+      setEditNote("Full profile loaded from server.")
+    } catch (e) {
+      if (editReq.current === myReq) setEditNote("Server profile unavailable (" + (e?.message || "error") + ") — showing list values.")
+    } finally {
+      if (editReq.current === myReq) setEditLoading(false)
+    }
+  }
+  const handleEditChange = (k) => (e) => { editDirtyRef.current = true; setEditDirty(true); setEditForm(f=>({...f, [k]: e.target.value})) }
   const handleUpdate = async (e) => {
     e.preventDefault()
     if (!editing || !editForm) return
@@ -2638,6 +2684,27 @@ function StaffManagementPage({ go }) {
   }
   const handleDelete = (s) => {
     setErr("Delete not available — doc notes no DELETE endpoint (src/onboarding.js). Use deactivation via update if supported.")
+  }
+  const roleUserName = (s) => String(s?.Email ?? s?.email ?? s?.UserName ?? s?.userName ?? s?.StaffId ?? s?.staffId ?? "").trim()
+  const openRoleModal = async (s) => {
+    setRoleFor(s); setRoleMsg(""); setRoleErr(""); setRoleSel([]); setRoleOptions([]); setRoleBusy(true)
+    try {
+      const list = await roleApi.getRoles()
+      setRoleOptions(filterAssignableRoles(list))
+    } catch (e) { setRoleErr(e?.message || "Could not load roles") } finally { setRoleBusy(false) }
+  }
+  const toggleRole = (name) => setRoleSel(sel => sel.includes(name) ? sel.filter(x => x !== name) : [...sel, name])
+  const submitRoles = async (e) => {
+    e.preventDefault()
+    setRoleMsg(""); setRoleErr("")
+    const userName = roleUserName(roleFor)
+    if (!userName) { setRoleErr("This staff record has no email/username to assign roles to."); return }
+    if (!roleSel.length) { setRoleErr("Select at least one role."); return }
+    setRoleBusy(true)
+    try {
+      await roleApi.assignRoles(userName, roleSel)
+      setRoleMsg(`Roles assigned to ${userName}.`)
+    } catch (e2) { setRoleErr(e2?.message || "Could not assign roles") } finally { setRoleBusy(false) }
   }
   function displayCollegeName(raw){
     if(!raw) return "—";
@@ -2716,6 +2783,7 @@ function StaffManagementPage({ go }) {
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>handleView(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-md text-[13px] hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">visibility</span> View</button>
                   <button onClick={()=>handleEdit(s)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                  <button onClick={()=>openRoleModal(s)} title="Manage roles" className="w-10 h-10 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">manage_accounts</span></button>
                   <button onClick={()=>handleDelete(s)} className="w-10 h-10 rounded-lg border border-error/30 text-error hover:bg-error-container flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                 </div>
               </div>
@@ -2876,6 +2944,8 @@ function StaffManagementPage({ go }) {
               <h3 className="font-headline-sm font-bold text-primary">Edit Staff — {editing.StaffId ?? editing.staffId}</h3>
               <button onClick={()=>{setEditing(null); setEditForm(null)}} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
             </div>
+            {editLoading && <p className="font-body-sm text-on-surface-variant text-[13px] mb-3 flex items-center gap-2"><span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span> Fetching full staff profile…</p>}
+            {editNote && !editLoading && <p className="font-body-sm text-on-surface-variant text-[12px] mb-3">{editNote}</p>}
             <form onSubmit={handleUpdate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Staff ID</span><input value={editForm.staffId} onChange={handleEditChange("staffId")} className="mt-1 w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm" /></label>
@@ -2918,9 +2988,43 @@ function StaffManagementPage({ go }) {
                 <button type="button" onClick={()=>{setEditing(null); setEditForm(null)}} className="flex-1 border border-outline-variant bg-surface py-2 rounded font-label-md">Cancel</button>
               </div>
             </form>
-            <div className="mt-4 pt-4 border-t border-outline-variant">
-              <RoleAssign userName={String(editForm?.email || editing?.Email || editing?.email || editing?.UserName || editing?.userName || editing?.StaffId || editing?.staffId || "").trim()} />
+          </div>
+        </div>
+      )}
+      {/* Assign Roles Modal — opened from the manage-roles button on each staff card */}
+      {roleFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setRoleFor(null)}></div>
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-headline-sm font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">manage_accounts</span> Manage Roles</h3>
+              <button onClick={()=>setRoleFor(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
             </div>
+            <p className="font-body-sm text-on-surface-variant text-[13px] mb-4 truncate">{[roleFor.FirstName ?? roleFor.firstName, roleFor.LastName ?? roleFor.lastName].filter(Boolean).join(" ") || "Staff"} · {roleUserName(roleFor) || "no username"}</p>
+            {roleErr && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm mb-3">{roleErr}</div>}
+            {roleMsg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm mb-3">{roleMsg}</div>}
+            {roleBusy && !roleOptions.length ? (
+              <p className="font-body-sm text-on-surface-variant">Loading roles…</p>
+            ) : (
+              <form onSubmit={submitRoles} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {roleOptions.length === 0 && <p className="font-body-sm text-on-surface-variant col-span-2">No assignable roles.</p>}
+                  {roleOptions.map(r => {
+                    const n = r.name ?? r.Name
+                    return (
+                      <label key={n} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 cursor-pointer hover:bg-surface-variant">
+                        <input type="checkbox" checked={roleSel.includes(n)} onChange={()=>toggleRole(n)} className="w-4 h-4 accent-primary" />
+                        {n}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-3">
+                  <button type="submit" disabled={roleBusy} className="flex-1 bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{roleBusy ? "Assigning…" : "Save"}</button>
+                  <button type="button" onClick={()=>setRoleFor(null)} className="flex-1 border border-outline-variant bg-surface py-2.5 rounded-lg font-label-md hover:bg-surface-variant">Close</button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
