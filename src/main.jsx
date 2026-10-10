@@ -1413,18 +1413,19 @@ const instList = (res) => {
   return []
 }
 /* ---------- Institution type: backend persists numeric codes, UI shows labels ----------
-   Source: Onboarding_API_Documentation 08-10-2026.docx §1 + Enum Reference —
-   InstitutionType int: University=1, College=2, Polytechnic=3. Older clients saved
-   labels ("University"), so normalize both directions. Unknown codes round-trip
-   via the "(as stored)" fallback. */
+   FIRM frontend decision (agreed with backend team — supersedes the 08-10-2026 doc
+   table): University=1, Polytechnic=2, Monotechnic=3, College of Education=4.
+   Older clients saved labels ("University"), so normalize both directions.
+   Unknown codes round-trip via the "(as stored)" fallback. */
 const INSTITUTION_TYPE_OPTIONS = [
   { code: "1", label: "University" },
-  { code: "2", label: "College" },
-  { code: "3", label: "Polytechnic" },
+  { code: "2", label: "Polytechnic" },
+  { code: "3", label: "Monotechnic" },
+  { code: "4", label: "College of Education" },
 ]
 // Legacy free-text values predate the numeric codes — kept so existing records
 // keep working; they are sent back verbatim.
-const INSTITUTION_TYPE_LEGACY = ["Monotechnic", "College of Education", "School", "Faculty"]
+const INSTITUTION_TYPE_LEGACY = ["College", "School", "Faculty"]
 const normalizeInstitutionType = (v) => {
   const s = instStr(v)
   if (!s) return ""
