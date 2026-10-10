@@ -2530,7 +2530,7 @@ function StaffManagementPage({ go }) {
         }
       }
       let filtered = Array.from(map.values())
-      if (filterCategory) filtered = filtered.filter(s=> String(s.StaffCategory ?? s.staffCategory ?? "") === String(filterCategory))
+      if (filterCategory) filtered = filtered.filter(s=> String(staffCategoryCode(s.StaffCategory ?? s.staffCategory ?? "")) === String(filterCategory))
       if (search.trim()) {
         const q = search.trim().toLowerCase()
         filtered = filtered.filter(s=>{
@@ -2605,8 +2605,8 @@ function StaffManagementPage({ go }) {
       lastName: s.LastName ?? s.lastName ?? "",
       email: s.Email ?? s.email ?? "",
       phoneNo: s.PhoneNo ?? s.phoneNo ?? "",
-      highestQualification: s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? "",
-      staffCategory: Number(s.StaffCategory ?? s.staffCategory ?? 1),
+      highestQualification: staffQualification(s),
+      staffCategory: staffCategoryCode(s.StaffCategory ?? s.staffCategory ?? 1),
       specialization: s.Specialization ?? s.specialization ?? "",
       programId: progId ? String(progId) : "",
       departmentId: deptIdVal ? String(deptIdVal) : "",
@@ -2712,6 +2712,30 @@ function StaffManagementPage({ go }) {
     const core=s.replace(/^(college|school|faculty)\s+of\s+/i,"").replace(/^(college|school|faculty)\s+/i,"").trim()||s;
     return `${collegeTerm} of ${core}`;
   }
+  // Backend serializes StaffCategory inconsistently (1/2/3 vs "Academic"/...).
+  // Accept both so the pills, filter and edit form never blank out.
+  const staffCategoryCode = (v) => {
+    if (v === 1 || v === 2 || v === 3) return v
+    const n = Number(v)
+    if (n === 1 || n === 2 || n === 3) return n
+    const t = String(v ?? "").trim().toLowerCase()
+    if (t.includes("acad")) return 1
+    if (t.includes("tech")) return 2
+    if (t.includes("admin")) return 3
+    return 1
+  }
+  const staffCategoryLabel = (v) => {
+    const t = String(v ?? "").trim()
+    if (!t || t === "—") return "—"
+    const n = Number(t)
+    if (!Number.isNaN(n)) return n === 1 ? "Academic" : n === 2 ? "Technologist" : n === 3 ? "Admin" : "—"
+    const l = t.toLowerCase()
+    if (l.includes("acad")) return "Academic"
+    if (l.includes("tech")) return "Technologist"
+    if (l.includes("admin")) return "Admin"
+    return t
+  }
+  const staffQualification = (s) => s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? s.Qualification ?? s.qualification ?? s.highestQual ?? ""
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -2776,8 +2800,8 @@ function StaffManagementPage({ go }) {
                 <p className="font-body-sm text-on-surface-variant text-[12px] mt-1 truncate">{s.Email ?? s.email ?? "—"}</p>
                 <p className="font-body-sm text-on-surface-variant text-[12px] truncate">{s.PhoneNo ?? s.phoneNo ?? ""} {s.PhoneNo && s.Specialization ? "·" : ""} {s.Specialization ?? s.specialization ?? ""}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary-container text-[11px] font-label-md">{s.HighestQualification ?? s.highestQualification ?? s.Highestqualificattion ?? "—"}</span>
-                  <span className="px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] border border-outline-variant">{Number(s.StaffCategory ?? s.staffCategory)===1?"Academic":Number(s.StaffCategory ?? s.staffCategory)===2?"Technologist":Number(s.StaffCategory ?? s.staffCategory)===3?"Admin":"—"}</span>
+                  <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary-container text-[11px] font-label-md">{staffQualification(s) || "—"}</span>
+                  <span className="px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] border border-outline-variant">{staffCategoryLabel(s.StaffCategory ?? s.staffCategory)}</span>
                 </div>
                 <p className="font-body-sm text-outline text-[11px] mt-2 truncate">{s.DepartmentName ?? s.departmentName ?? (()=>{ const d=departments.find(x=> String(x.Id??x.id)===String(s.DepartmentId??s.departmentId)); return d? (d.Name??d.name): `Dept ${s.DepartmentId??"—"}`})()} {s.ProgramId ? `· Prog ${s.ProgramId}` : ""}</p>
                 <div className="flex gap-2 mt-4">
@@ -2893,7 +2917,7 @@ function StaffManagementPage({ go }) {
               </div>
               <div className="flex flex-wrap gap-1.5 mt-3">
                 <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{viewing.StaffId ?? viewing.staffId}</span>
-                <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{Number(viewing.StaffCategory ?? viewing.staffCategory)===1?"Academic":Number(viewing.StaffCategory ?? viewing.staffCategory)===2?"Technologist":"Admin"}</span>
+                <span className="px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[11px]">{staffCategoryLabel(viewing.StaffCategory ?? viewing.staffCategory)}</span>
                 <span className="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-[11px]">{viewing.Specialization ?? viewing.specialization ?? "—"}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
@@ -2907,7 +2931,7 @@ function StaffManagementPage({ go }) {
                 </div>
                 <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
                   <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">school</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Qualification</span></div>
-                  <p className="font-body-sm text-on-surface mt-1">{viewing.HighestQualification ?? viewing.highestQualification ?? viewing.Highestqualificattion ?? "—"}</p>
+                  <p className="font-body-sm text-on-surface mt-1">{staffQualification(viewing) || "—"}</p>
                 </div>
                 <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
                   <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">psychology</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Specialization</span></div>
