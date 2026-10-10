@@ -264,7 +264,9 @@ function useList(fetcher, instId) {
     if (!instId) return;
     setLoading(true);
     fetcher()
-      .then((d) => setItems(d || []))
+      // get-levels returns a single LevelsDto object (not a list) per the
+      // 08-10-2026 doc notes — wrap lone objects so .map never crashes.
+      .then((d) => setItems(Array.isArray(d) ? d : (d ? [d] : [])))
       .catch((e) => setError(e.message || "Failed to load"))
       .finally(() => setLoading(false));
   }, [instId]);

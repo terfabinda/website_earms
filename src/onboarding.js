@@ -344,6 +344,48 @@ export const onboardingApi = {
       body: JSON.stringify(payload),
     });
   },
+
+  // ---- Bulk Import (Onboarding_API_Documentation 08-10-2026.docx §8) ----
+  // Flow: download template → POST bulkup-load (validate) → POST {id}/confirm
+  // (execute) or POST {id}/cancel. InstitutionId is NEVER sent — derived from JWT.
+  async downloadBulkTemplate(kind) {
+    // kind: "staff" | "student" → .xlsx File (endpoint carries no [Authorize]
+    // but the bearer token is attached anyway; Blob preserves it, unlike window.open).
+    const k = String(kind || "").toLowerCase() === "student" ? "student" : "staff";
+    const res = await apiFetch(OB + "bulk-import/templates/" + k, { method: "GET" }, false, ONB_BASE);
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error((t && t.length < 300 ? t : "Template download failed") + " (" + res.status + ")");
+    }
+    return await res.blob();
+  },
+  async uploadBulkImport({ type, file, collegeId, departmentId }) {
+    // multipart: Type = enum NAME ("Staff" | "Student"), File (.xlsx),
+    // CollegeId + DepartmentId (both required). No InstitutionId (JWT-derived).
+    const t = String(type || "").toLowerCase() === "student" ? "Student" : "Staff";
+    if (!file) throw new Error("Select an .xlsx file first.");
+    if (!collegeId || !departmentId) throw new Error("College and Department are required for bulk import.");
+    const fd = new FormData();
+    fd.append("Type", t);
+    fd.append("File", file);
+    fd.append("CollegeId", String(collegeId));
+    fd.append("DepartmentId", String(departmentId));
+    // Returns ImportValidationResult: { importId, totalRecords, validRecords,
+    // invalidRecords, status, errors:[{rowNumber,columnName,value,errorCode,errorMessage,severity}] }
+    return obFetch("bulkup-load", { method: "POST", body: fd });
+  },
+  async confirmBulkImport(importId) {
+    // Returns BulkImportResult: { importId, totalRecords, importedRecords, failedRecords, status, errorMessage }
+    return obFetch("bulk-import/" + encodeURIComponent(importId) + "/confirm", { method: "POST" });
+  },
+  async cancelBulkImport(importId) {
+    const res = await apiFetch(OB + "bulk-import/" + encodeURIComponent(importId) + "/cancel", { method: "POST" }, false, ONB_BASE);
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error((t && t.length < 300 ? t : "Cancel failed") + " (" + res.status + ")");
+    }
+    return true;
+  },
 };
 
 // Resolve the real onboarding institution id for the current JWT.
@@ -389,3 +431,17 @@ export const STUDENT_CATEGORIES = [
   { value: 2, label: "Undergraduate" },
   { value: 3, label: "Postgraduate" },
 ];
+
+// Bulk import enums (08-10-2026 doc §8). Type is sent as enum NAME ("Staff"/"Student").
+export const BULK_IMPORT_STATUS = {
+  1: "Uploaded",
+  2: "Validating",
+  3: "Awaiting Confirmation",
+  4: "Processing",
+  5: "Completed",
+  6: "Completed With Errors",
+  7: "Failed",
+  8: "Cancelled",
+};
+
+export const BULK_IMPORT_ERROR_SEVERITY = { 1: "Warning", 2: "Error" };

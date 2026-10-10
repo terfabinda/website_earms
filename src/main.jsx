@@ -986,7 +986,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   })()
   const institutionAdminNavItems = [
     {label: 'Home', icon: 'home'},
-    {label: 'Onboarding', icon: 'assignment', subitems: ['Institution','PG', collegeTerm,'Department','Programme','Staff','Student']},
+    {label: 'Onboarding', icon: 'assignment', subitems: ['Institution','PG', collegeTerm,'Department','Programme','Staff','Student','Bulk Import']},
     {label: 'Analytics', icon: 'insights'},
     {label: 'Settings', icon: 'settings'},
   ]
@@ -1413,22 +1413,18 @@ const instList = (res) => {
   return []
 }
 /* ---------- Institution type: backend persists numeric codes, UI shows labels ----------
-   The API doc lists InstitutionType as string and older clients saved labels
-   ("University"), but stored records come back numeric (e.g. 1) — the deployed
-   API serializes the enum as a number. The dropdown below therefore carries
-   numeric values and maps both directions. ASSUMED code table (matches
-   NUC → universities, NBTE → polytechnics/monotechnics, NCCE → colleges of
-   education ordering); if the backend enum differs, correct the numbers here —
-   unknown codes still round-trip via the "(as stored)" fallback. */
+   Source: Onboarding_API_Documentation 08-10-2026.docx §1 + Enum Reference —
+   InstitutionType int: University=1, College=2, Polytechnic=3. Older clients saved
+   labels ("University"), so normalize both directions. Unknown codes round-trip
+   via the "(as stored)" fallback. */
 const INSTITUTION_TYPE_OPTIONS = [
   { code: "1", label: "University" },
-  { code: "2", label: "Polytechnic" },
-  { code: "3", label: "Monotechnic" },
-  { code: "4", label: "College of Education" },
+  { code: "2", label: "College" },
+  { code: "3", label: "Polytechnic" },
 ]
 // Legacy free-text values predate the numeric codes — kept so existing records
 // keep working; they are sent back verbatim.
-const INSTITUTION_TYPE_LEGACY = ["College", "School", "Faculty"]
+const INSTITUTION_TYPE_LEGACY = ["Monotechnic", "College of Education", "School", "Faculty"]
 const normalizeInstitutionType = (v) => {
   const s = instStr(v)
   if (!s) return ""
@@ -1680,6 +1676,177 @@ function InstitutionProfile({ go }) {
           <button type="button" onClick={()=>go('admin')} className="px-6 py-3 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Back to Home</button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/* ---------- Bulk Import (Onboarding 08-10-2026 §8: templates → bulkup-load validate → confirm/cancel) ---------- */
+function BulkImportPage({ go }) {
+  const [colleges, setColleges] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [collegeId, setCollegeId] = useState("")
+  const [deptId, setDeptId] = useState("")
+  const [impType, setImpType] = useState("Staff")
+  const [file, setFile] = useState(null)
+  const [validation, setValidation] = useState(null)
+  const [result, setResult] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [dlBusy, setDlBusy] = useState("")
+  const [err, setErr] = useState("")
+  const [msg, setMsg] = useState("")
+  useEffect(() => {
+    (async () => {
+      try {
+        const { onboardingApi, resolveInstitutionId } = await import("./onboarding")
+        const id = await resolveInstitutionId()
+        if (!id) { setErr("No institution record found for this account yet — complete Onboarding → Institution first."); return }
+        const [cols, depts] = await Promise.all([
+          onboardingApi.getColleges(String(id)).catch(() => []),
+          onboardingApi.getDepartments(String(id)).catch(() => []),
+        ])
+        if (Array.isArray(cols)) setColleges(cols)
+        if (Array.isArray(depts)) setDepartments(depts)
+      } catch (e) { setErr(e.message || "Could not load colleges/departments") }
+    })()
+  }, [])
+  const downloadTemplate = async (kind) => {
+    setErr(""); setDlBusy(kind)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const blob = await onboardingApi.downloadBulkTemplate(kind)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = (kind === "student" ? "Student" : "Staff") + ".xlsx"
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      setMsg(`${kind === "student" ? "Student" : "Staff"} template downloaded — fill it and upload below.`)
+    } catch (e) { setErr(e.message || "Template download failed") } finally { setDlBusy("") }
+  }
+  const upload = async (e) => {
+    e.preventDefault()
+    setErr(""); setMsg(""); setValidation(null); setResult(null)
+    if (!file) { setErr("Select an .xlsx file first."); return }
+    if (!collegeId || !deptId) { setErr("College and Department are required."); return }
+    setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const v = await onboardingApi.uploadBulkImport({ type: impType, file, collegeId, departmentId: deptId })
+      setValidation(v)
+      setMsg(`Validation complete — ${v.validRecords ?? v.ValidRecords ?? 0} valid, ${v.invalidRecords ?? v.InvalidRecords ?? 0} invalid. Confirm to import or Cancel.`)
+    } catch (e2) { setErr(e2.message || "Upload failed") } finally { setBusy(false) }
+  }
+  const importId = validation?.importId ?? validation?.ImportId
+  const confirm = async () => {
+    if (!importId) return
+    setErr(""); setMsg(""); setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const r = await onboardingApi.confirmBulkImport(importId)
+      setResult(r)
+      setMsg(`Import executed — ${r.importedRecords ?? r.ImportedRecords ?? 0} imported, ${r.failedRecords ?? r.FailedRecords ?? 0} failed.`)
+    } catch (e) { setErr(e.message || "Confirm failed") } finally { setBusy(false) }
+  }
+  const cancel = async () => {
+    if (!importId) return
+    setErr(""); setMsg(""); setBusy(true)
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      await onboardingApi.cancelBulkImport(importId)
+      setValidation(null)
+      setMsg("Pending import cancelled.")
+    } catch (e) { setErr(e.message || "Cancel failed") } finally { setBusy(false) }
+  }
+  const valErrors = validation?.errors ?? validation?.Errors ?? []
+  const valStatus = validation?.status ?? validation?.Status
+  const statusLabel = (s) => ({ 1: "Uploaded", 2: "Validating", 3: "Awaiting Confirmation", 4: "Processing", 5: "Completed", 6: "Completed With Errors", 7: "Failed", 8: "Cancelled" }[Number(s)] ?? (s ?? "—"))
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">upload_file</span> Bulk Import</h2>
+        <p className="font-body-sm text-on-surface-variant">Import staff or students from Excel — download a template, upload for validation, then confirm. Institution is derived from your login; only Type, File, College and Department are sent.</p>
+      </div>
+      {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
+      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+        <h3 className="font-headline-sm font-bold text-primary mb-1">1 · Download template</h3>
+        <p className="font-body-sm text-on-surface-variant text-[13px] mb-3">Fill the template offline — one row per {impType === "Student" ? "student" : "staff"}.</p>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={() => downloadTemplate("staff")} disabled={!!dlBusy} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant disabled:opacity-60"><span className="material-symbols-outlined text-[18px]">download</span> {dlBusy === "staff" ? "Downloading…" : "Staff.xlsx"}</button>
+          <button onClick={() => downloadTemplate("student")} disabled={!!dlBusy} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant bg-surface font-label-md hover:bg-surface-variant disabled:opacity-60"><span className="material-symbols-outlined text-[18px]">download</span> {dlBusy === "student" ? "Downloading…" : "Student.xlsx"}</button>
+        </div>
+      </div>
+      <form onSubmit={upload} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-4">
+        <h3 className="font-headline-sm font-bold text-primary">2 · Upload & validate</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Import Type</span>
+            <select value={impType} onChange={e => setImpType(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="Staff">Staff</option>
+              <option value="Student">Student</option>
+            </select>
+          </label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Excel File (.xlsx)</span>
+            <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] || null)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-primary file:text-on-primary file:font-label-md" />
+          </label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">College</span>
+            <select value={collegeId} onChange={e => setCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="">Select College</option>
+              {colleges.map(c => (<option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{c.CollegeName ?? c.collegeName ?? c.Name ?? c.name}</option>))}
+            </select>
+          </label>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
+            <select value={deptId} onChange={e => setDeptId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+              <option value="">Select Department</option>
+              {departments.map(d => (<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
+            </select>
+          </label>
+        </div>
+        <button type="submit" disabled={busy} className="px-6 py-3 rounded-lg bg-primary text-on-primary font-label-md hover:bg-primary-fixed-dim disabled:opacity-60 inline-flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">fact_check</span> {busy ? "Uploading…" : "Upload & Validate"}</button>
+      </form>
+      {validation && (
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-4">
+          <h3 className="font-headline-sm font-bold text-primary">3 · Review validation — confirm or cancel</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[["Import ID", importId ?? "—"], ["Total", validation.totalRecords ?? validation.TotalRecords ?? "—"], ["Valid", validation.validRecords ?? validation.ValidRecords ?? "—"], ["Invalid", validation.invalidRecords ?? validation.InvalidRecords ?? "—"], ["Status", statusLabel(valStatus)]].map(([l, v]) => (
+              <div key={l} className="rounded-lg bg-surface-container-low p-3 text-center border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-on-surface-variant font-label-md">{l}</p><p className="font-headline-sm font-bold text-on-surface">{v}</p></div>
+            ))}
+          </div>
+          {Array.isArray(valErrors) && valErrors.length > 0 ? (
+            <div className="overflow-x-auto border border-outline-variant rounded-lg">
+              <table className="w-full text-left text-sm min-w-[640px]">
+                <thead><tr className="bg-surface-container-low text-on-surface-variant text-[12px] uppercase tracking-wide"><th className="py-2 px-3">Row</th><th className="py-2 px-3">Column</th><th className="py-2 px-3">Value</th><th className="py-2 px-3">Message</th><th className="py-2 px-3">Severity</th></tr></thead>
+                <tbody className="divide-y divide-surface-container">
+                  {valErrors.map((er, i) => (
+                    <tr key={i} className="hover:bg-surface-container-low">
+                      <td className="py-2 px-3 font-medium">{er.rowNumber ?? er.RowNumber ?? "—"}</td>
+                      <td className="py-2 px-3">{er.columnName ?? er.ColumnName ?? "—"}</td>
+                      <td className="py-2 px-3 truncate max-w-[180px]">{String(er.value ?? er.Value ?? "")}</td>
+                      <td className="py-2 px-3 text-on-surface-variant">{er.errorMessage ?? er.ErrorMessage ?? er.errorCode ?? ""}</td>
+                      <td className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-[11px] font-label-md ${(Number(er.severity ?? er.Severity) === 2) ? "bg-error-container text-on-error-container" : "bg-surface-container-high text-on-surface-variant"}`}>{Number(er.severity ?? er.Severity) === 2 ? "Error" : "Warning"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="font-body-sm text-on-surface-variant text-sm">No validation errors — ready to confirm.</p>}
+          <div className="flex flex-wrap gap-3">
+            <button onClick={confirm} disabled={busy} className="px-6 py-3 rounded-lg bg-green-700 text-white font-label-md hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">check_circle</span> {busy ? "Working…" : `Confirm Import (${validation.validRecords ?? validation.ValidRecords ?? 0} records)`}</button>
+            <button onClick={cancel} disabled={busy} className="px-6 py-3 rounded-lg border border-error/40 text-error font-label-md hover:bg-error-container disabled:opacity-60">Cancel</button>
+          </div>
+        </div>
+      )}
+      {result && (
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <h3 className="font-headline-sm font-bold text-primary mb-3">Import result</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[["Imported", result.importedRecords ?? result.ImportedRecords ?? "—"], ["Failed", result.failedRecords ?? result.FailedRecords ?? "—"], ["Total", result.totalRecords ?? result.TotalRecords ?? "—"], ["Status", statusLabel(result.status ?? result.Status)]].map(([l, v]) => (
+              <div key={l} className="rounded-lg bg-surface-container-low p-3 text-center border border-outline-variant"><p className="text-[11px] uppercase tracking-wide text-on-surface-variant font-label-md">{l}</p><p className="font-headline-sm font-bold text-on-surface">{v}</p></div>
+            ))}
+          </div>
+          {(result.errorMessage ?? result.ErrorMessage) && <p className="text-sm text-error mt-3">{result.errorMessage ?? result.ErrorMessage}</p>}
+        </div>
+      )}
+      <button onClick={() => go('admin')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Home</button>
     </div>
   )
 }
@@ -4070,6 +4237,8 @@ function InstitutionHome({ go }) {
               <StaffManagementPage go={go} />
             ) : item && item.toLowerCase() === 'student' ? (
               <StudentManagementPage go={go} />
+            ) : item && ['bulk import','bulk-import','bulkimport'].includes(item.toLowerCase()) ? (
+              <BulkImportPage go={go} />
             ) : (
               <div className="space-y-4">
                 <p className="font-body-sm text-on-surface-variant">Onboarding module for {item || 'overview'} — institution, academic structure and people management.</p>
@@ -4096,7 +4265,7 @@ function InstitutionHome({ go }) {
     {label: 'Active Subscription', value: instSubStatus, sub: 'View it on the Student Dashboard', icon: 'card_membership', color: instSubStatus !== 'Inactive' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Institution, academic structure and people', subs: ['Institution','PG', collegeChoice,'Department','Programme','Staff','Student'], color: 'bg-primary-fixed'},
+    {key: 'onboarding', label: 'Onboarding', icon: 'assignment', desc: 'Institution, academic structure and people', subs: ['Institution','PG', collegeChoice,'Department','Programme','Staff','Student','Bulk Import'], color: 'bg-primary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'insights', desc: 'Summary and insights', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'Password, preferences and system', subs: [], color: 'bg-surface-container-low'},
   ]
@@ -5394,6 +5563,43 @@ function FacultyDashboard({ go }) {
     finally { setReviewBusy(false) }
   }, [reviewForm, staffNo, fetchPending, fetchProjects])
 
+  // Project inspector — student ↔ supervisor transaction trail for one supervisee:
+  // details → proposed topics (status) → chapters/versions → advance project status.
+  const [inspMatric, setInspMatric] = useState("")
+  const [inspData, setInspData] = useState(null)
+  const [inspLoading, setInspLoading] = useState(false)
+  const [inspErr, setInspErr] = useState("")
+  const [statusBusy, setStatusBusy] = useState(false)
+  const [statusMsg, setStatusMsg] = useState("")
+  const loadInspector = useCallback(async (matric)=>{
+    const m = String(matric ?? "").trim()
+    if (!m) { setInspErr("Enter a student matric number"); return }
+    setInspLoading(true); setInspErr(""); setInspData(null); setStatusMsg("")
+    try {
+      const details = await projectApi.getProjectDetails({ matricNo: m, institutionId: instId || undefined }).catch(()=>null)
+        ?? await projectApi.getProjectByMatric(m).catch(()=>null)
+      const pid = details?.id ?? details?.Id ?? details?.projectId ?? details?.ProjectId
+      const [topics, chapters] = await Promise.all([
+        pid ? projectApi.getTopicsByProjectId(pid).catch(e=>({ __error: e.message || String(e) })) : [],
+        pid ? projectApi.getChaptersByProject(pid).catch(e=>({ __error: e.message || String(e) })) : [],
+      ])
+      setInspData({ details, topics, chapters, projectId: pid })
+    } catch (e) { setInspErr(e.message || "Could not load project") }
+    finally { setInspLoading(false) }
+  }, [instId])
+  const advanceStatus = useCallback(async (s)=>{
+    const pid = inspData?.projectId
+    if (!pid) { setInspErr("Load a project first"); return }
+    setStatusBusy(true); setStatusMsg(""); setInspErr("")
+    try {
+      await projectApi.updateProjectStatus({ projectId: pid, projectStatus: s })
+      setStatusMsg(`Project moved to ${ProjectStatusLabel[s] ?? s}`)
+      await loadInspector(inspMatric)
+      await fetchProjects()
+    } catch (e) { setInspErr(e.message || "Status update failed") }
+    finally { setStatusBusy(false) }
+  }, [inspData, inspMatric, loadInspector, fetchProjects])
+
   return (
     <DashShell go={go} active="faculty" role="faculty" title="Faculty Overview" subtitle={`Supervisor ${staffNo || "—"} • Manage supervisees, approvals, and research pipeline.`}>
       <div className="space-y-6">
@@ -5441,10 +5647,8 @@ function FacultyDashboard({ go }) {
               <table className="w-full text-left border-collapse">
                 <thead><tr className="bg-surface-container-low border-b border-outline-variant font-label-md text-on-surface-variant"><th className="p-3 font-semibold">Student</th><th className="p-3 font-semibold">Session</th><th className="p-3 font-semibold">Status</th><th className="p-3 font-semibold">Project</th><th className="p-3 font-semibold text-right">Action</th></tr></thead>
                 <tbody className="font-body-sm divide-y divide-surface-container">
-                  {(projects.length ? projects : [
-                    { matricNo: "CSC/2024/001", session:"2025/2026", projectStatus:3, programId:1, MatricNo:"CSC/2024/001 (mock)", ProjectStatus:3 },
-                    { matricNo: "CSC/2024/002", session:"2025/2026", projectStatus:2, programId:1, MatricNo:"CSC/2024/002 (mock)", ProjectStatus:2 },
-                  ].slice(0, projects.length===0 ? 2 : 0)).map((p,i)=>{
+                  {projects.length === 0 && !projErr && <tr><td colSpan="5" className="p-6 text-center text-sm text-on-surface-variant">No supervisee projects found for this filter.</td></tr>}
+                  {projects.map((p,i)=>{
                     const matric = p.matricNo ?? p.MatricNo ?? p.Matric_no ?? "—"
                     const sess = p.session ?? p.Session ?? "—"
                     const st = p.projectStatus ?? p.ProjectStatus ?? p.status ?? 1
@@ -5454,11 +5658,10 @@ function FacultyDashboard({ go }) {
                         <td className="p-3 text-on-surface-variant">{sess}</td>
                         <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs border font-bold ${st===3?'bg-amber-50 text-amber-800 border-amber-200': st===2?'bg-green-50 text-green-800 border-green-200': st===4?'bg-primary-container':'bg-surface border-outline-variant'}`}>{ProjectStatusLabel[st] ?? st}</span></td>
                         <td className="p-3 text-xs truncate max-w-[160px]">#{p.id ?? p.Id ?? i+1} {p.programId ? `Prog ${p.programId}` : ""}</td>
-                        <td className="p-3 text-right"><button onClick={()=>{ if(p.id||p.Id) { setReviewForm(f=>({...f, chapterVersionId: String(p.id ?? p.Id)})) } }} className="text-primary hover:underline font-label-md text-[13px]">Review</button></td>
+                        <td className="p-3 text-right"><button onClick={()=>{ setInspMatric(matric); loadInspector(matric); }} className="text-primary hover:underline font-label-md text-[13px]">Inspect</button></td>
                       </tr>
                     )
                   })}
-                  {projects.length===0 && !projErr && <tr><td colSpan="5" className="p-4 text-center text-xs text-outline">No projects returned — API may be empty; mock rows above.</td></tr>}
                 </tbody>
               </table>
               )}
@@ -5481,16 +5684,6 @@ function FacultyDashboard({ go }) {
                   <span className="material-symbols-outlined text-3xl text-outline">check_circle</span>
                   <p className="text-sm text-on-surface-variant mt-2">No pending chapters</p>
                   <p className="text-xs text-outline">GET /api/Project/awaiting-action?StaffNo={staffNo}&institutionId={instId || "—"}</p>
-                  {[
-                    {matricNo:'STU001', chapterNumber:1, versionNumber:2, supervisorNote:'Please review.', submittedAt: new Date().toISOString()},
-                  ].map(it=>(
-                    <div key={it.matricNo} className="mt-4 p-3 border border-outline-variant rounded-lg bg-surface-container-low text-left">
-                      <div className="flex justify-between items-start mb-1"><span className="font-label-md font-bold text-on-surface">{it.matricNo} — Ch {it.chapterNumber} v{it.versionNumber}</span><span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Mock</span></div>
-                      <p className="font-body-sm text-on-surface-variant mb-1">{it.supervisorNote}</p>
-                      <p className="text-[11px] text-outline">{new Date(it.submittedAt).toLocaleString()} • file: /uploads/chapter mock</p>
-                      <button onClick={()=>setReviewForm(f=>({...f, chapterVersionId: "15"}))} className="mt-2 w-full bg-primary text-on-primary py-1.5 rounded text-xs font-semibold">Open Review</button>
-                    </div>
-                  ))}
                 </div>
               ) : (
                 pending.map((it,i)=>(
@@ -5507,6 +5700,66 @@ function FacultyDashboard({ go }) {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+          <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">manage_search</span> Project Inspector — student ↔ supervisor trail</h3>
+          <p className="text-xs text-on-surface-variant mb-3">Topics proposed by the student → chapters submitted → your reviews → advance the project status. (Topic approval + chapter edit have no dedicated endpoints in the current API; status and reviews below are the supervisor's levers.)</p>
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input value={inspMatric} onChange={e=>setInspMatric(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); loadInspector(inspMatric) } }} placeholder="Matric No e.g. CSC/2024/001" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
+            <button onClick={()=>loadInspector(inspMatric)} disabled={inspLoading} className="bg-primary text-on-primary px-5 py-2 rounded-lg font-label-md text-sm disabled:opacity-40">Load</button>
+          </div>
+          {inspErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm mb-3">{inspErr}</div>}
+          {statusMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm mb-3">{statusMsg}</div>}
+          {inspLoading && <p className="text-sm text-on-surface-variant">Loading project trail…</p>}
+          {inspData && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-[11px] uppercase font-bold text-outline">Project</p><p className="font-bold">#{inspData.projectId ?? "—"}</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-[11px] uppercase font-bold text-outline">Status</p><p className="font-bold">{ProjectStatusLabel[inspData.details?.projectStatus ?? inspData.details?.ProjectStatus] ?? (inspData.details?.projectStatus ?? inspData.details?.ProjectStatus ?? "—")}</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-[11px] uppercase font-bold text-outline">Session</p><p className="font-bold">{inspData.details?.session ?? inspData.details?.Session ?? "—"}</p></div>
+                <div className="bg-surface-container-low rounded-lg p-3 border border-outline-variant"><p className="text-[11px] uppercase font-bold text-outline">Template</p><p className="font-bold">{inspData.details?.chapterTemplateId ?? inspData.details?.templateName ?? "—"}</p></div>
+              </div>
+              <div>
+                <h4 className="font-label-md font-bold text-on-surface mb-2">Proposed Topics ({Array.isArray(inspData.topics) ? inspData.topics.length : 0})</h4>
+                {inspData.topics && inspData.topics.__error ? <p className="text-xs text-error">{inspData.topics.__error}</p> :
+                (Array.isArray(inspData.topics) && inspData.topics.length) ? (
+                  <ul className="space-y-1.5">
+                    {inspData.topics.map((t,i)=>(
+                      <li key={i} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2">
+                        <span className="flex-1">{t.topic ?? t.Topic ?? t.title ?? t.Title ?? JSON.stringify(t)}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-surface-container-high border border-outline-variant">{TopicStatusLabel[t.topicStatus ?? t.TopicStatus ?? t.status] ?? (t.topicStatus ?? t.TopicStatus ?? "")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-xs text-outline">No topics proposed yet.</p>}
+              </div>
+              <div>
+                <h4 className="font-label-md font-bold text-on-surface mb-2">Chapters</h4>
+                {inspData.chapters && inspData.chapters.__error ? <p className="text-xs text-error">{inspData.chapters.__error} (backend GetChaptersByProject is flagged NotImplemented in the API doc)</p> :
+                (Array.isArray(inspData.chapters) && inspData.chapters.length) ? (
+                  <ul className="space-y-1.5">
+                    {inspData.chapters.map((c,i)=>(
+                      <li key={i} className="flex items-center gap-2 text-sm bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2">
+                        <span className="font-bold">Ch {c.chapterNumber ?? c.ChapterNumber ?? i+1}</span>
+                        <span className="flex-1 truncate">{c.title ?? c.Title ?? ""}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-surface-container-high border border-outline-variant">{ChapterStatusLabel[c.chapterStatus ?? c.ChapterStatus] ?? ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-xs text-outline">No chapters yet.</p>}
+              </div>
+              <div>
+                <h4 className="font-label-md font-bold text-on-surface mb-2">Advance status (supervisor)</h4>
+                <div className="flex flex-wrap gap-2">
+                  {[1,2,3,4].map(s=>(
+                    <button key={s} onClick={()=>advanceStatus(s)} disabled={statusBusy} className="px-4 py-2 rounded-lg border text-sm font-label-md disabled:opacity-40 border-outline-variant hover:bg-surface-variant">{ProjectStatusLabel[s]}</button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-outline mt-1">PUT /api/Project/update-project-status?projectId={inspData.projectId ?? "—"}&projectStatus=… (ProjectSupervisor role)</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
