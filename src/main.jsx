@@ -1683,6 +1683,22 @@ function InstitutionProfile({ go }) {
 
 /* ---------- Bulk Import (Onboarding 08-10-2026 §8: templates → bulkup-load validate → confirm/cancel) ---------- */
 function BulkImportPage({ go }) {
+  const collegeTerm = (() => {
+    try {
+      const tok = decodeToken()
+      const code = tok?.institutionCode || tok?.InstitutionCode || tok?.ownerId || ""
+      const key = code ? `earms_college_term_${code}` : "earms_college_term"
+      const v = localStorage.getItem(key)
+      if (v === "School" || v === "Faculty" || v === "College") return v
+      return "College"
+    } catch { return "College" }
+  })()
+  function displayCollegeName(raw) {
+    if (!raw) return "—";
+    const s = String(raw).trim();
+    const core = s.replace(/^(college|school|faculty)\s+of\s+/i, "").replace(/^(college|school|faculty)\s+/i, "").trim() || s;
+    return `${collegeTerm} of ${core}`;
+  }
   const [colleges, setColleges] = useState([])
   const [departments, setDepartments] = useState([])
   const [collegeId, setCollegeId] = useState("")
@@ -1728,7 +1744,7 @@ function BulkImportPage({ go }) {
     e.preventDefault()
     setErr(""); setMsg(""); setValidation(null); setResult(null)
     if (!file) { setErr("Select an .xlsx file first."); return }
-    if (!collegeId || !deptId) { setErr("College and Department are required."); return }
+    if (!collegeId || !deptId) { setErr(`${collegeTerm} and Department are required.`); return }
     setBusy(true)
     try {
       const { onboardingApi } = await import("./onboarding")
@@ -1765,7 +1781,7 @@ function BulkImportPage({ go }) {
     <div className="space-y-6">
       <div>
         <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">upload_file</span> Bulk Import</h2>
-        <p className="font-body-sm text-on-surface-variant">Import staff or students from Excel — download a template, upload for validation, then confirm. Institution is derived from your login; only Type, File, College and Department are sent.</p>
+        <p className="font-body-sm text-on-surface-variant">Import staff or students from Excel — download a template, upload for validation, then confirm. Institution is derived from your login; only Type, File, {collegeTerm} and Department are sent.</p>
       </div>
       {err && <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
       {msg && <div className="w-full rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm">{msg}</div>}
@@ -1789,10 +1805,10 @@ function BulkImportPage({ go }) {
           <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Excel File (.xlsx)</span>
             <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] || null)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-primary file:text-on-primary file:font-label-md" />
           </label>
-          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">College</span>
+          <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">{collegeTerm}</span>
             <select value={collegeId} onChange={e => setCollegeId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
-              <option value="">Select College</option>
-              {colleges.map(c => (<option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{c.CollegeName ?? c.collegeName ?? c.Name ?? c.name}</option>))}
+              <option value="">Select {collegeTerm}</option>
+              {colleges.map(c => (<option key={c.Id ?? c.id} value={String(c.Id ?? c.id)}>{displayCollegeName(c.CollegeName ?? c.collegeName ?? c.Name ?? c.name)}</option>))}
             </select>
           </label>
           <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Department</span>
