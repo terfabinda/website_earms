@@ -2623,6 +2623,45 @@ function StaffManagementPage({ go }) {
     }
     return out
   }
+  // Complete-profile fetch with fallbacks: the direct GET staff/{id}/{inst}
+  // route is finicky across deployments (string vs numeric id), so if it fails
+  // we scan the department stafflist (full StaffDto rows) for the same person.
+  const fetchFullStaff = async (s, instId) => {
+    const { onboardingApi } = await import("./onboarding")
+    const staffIdStr = String(s.StaffId ?? s.staffId ?? "").trim()
+    const numericId = s.Id ?? s.id
+    const deptId = s.DepartmentId ?? s.departmentId
+    const errors = []
+    if (!instId) errors.push("no institution id resolved")
+    const looksFull = (r) => r && (r.StaffId ?? r.staffId ?? r.FirstName ?? r.firstName ?? r.Email ?? r.email)
+    if (staffIdStr && instId) {
+      try {
+        const r = await onboardingApi.getStaff(staffIdStr, String(instId))
+        if (looksFull(r)) return { rec: r, via: "staff record" }
+        errors.push("id lookup returned empty")
+      } catch (e) { errors.push("id lookup: " + (e?.message || e)) }
+    }
+    if (numericId !== undefined && numericId !== null && numericId !== "" && instId) {
+      try {
+        const r = await onboardingApi.getStaff(String(numericId), String(instId))
+        if (looksFull(r)) return { rec: r, via: "staff record" }
+        errors.push("numeric lookup returned empty")
+      } catch (e) { errors.push("numeric lookup: " + (e?.message || e)) }
+    }
+    if (deptId && instId) {
+      try {
+        const list = await onboardingApi.getStaffList(String(deptId), String(instId))
+        const arr = Array.isArray(list) ? list : []
+        const hit = arr.find(x =>
+          (staffIdStr && String(x.StaffId ?? x.staffId ?? "") === staffIdStr) ||
+          (numericId !== undefined && numericId !== null && numericId !== "" && String(x.Id ?? x.id ?? "") === String(numericId))
+        )
+        if (hit) return { rec: hit, via: "department staff list" }
+        errors.push(`stafflist: no match in ${arr.length} rows`)
+      } catch (e) { errors.push("stafflist: " + (e?.message || e)) }
+    }
+    throw new Error(errors.join(" · ") || "no staff identifier on this row")
+  }
   const handleEdit = async (s) => {
     setEditing(s); setErr(""); setMsg("");
     setEditForm(fillEditForm(s));
@@ -2633,18 +2672,15 @@ function StaffManagementPage({ go }) {
     if (deptIdVal) onDeptChange(String(deptIdVal))
     try {
       // List rows are partial/merged aggregates — fetch the complete server profile
-      // (GET staff/{staffId}/{institutionId}) and prefill from it.
-      const staffIdStr = String(s.StaffId ?? s.staffId ?? "").trim()
-      if (!staffIdStr) { if (editReq.current === myReq) setEditNote("No staff ID on this row — showing list values."); return }
+      // and prefill from it.
       const id = await resolveInstId()
-      const { onboardingApi } = await import("./onboarding")
-      const full = await onboardingApi.getStaff(staffIdStr, String(id || s.InstitutionId || s.institutionId || ""))
+      const { rec, via } = await fetchFullStaff(s, id)
       if (editReq.current !== myReq) return
-      const merged = mergeStaff(s, full)
+      const merged = mergeStaff(s, rec)
       // Don't clobber typing the user already started.
       setEditForm(prev => (prev && editDirtyRef.current) ? prev : fillEditForm(merged))
       setEditing(merged)
-      setEditNote("Full profile loaded from server.")
+      setEditNote(`Full profile loaded (${via}).`)
     } catch (e) {
       if (editReq.current === myReq) setEditNote("Server profile unavailable (" + (e?.message || "error") + ") — showing list values.")
     } finally {
