@@ -2635,6 +2635,7 @@ function StaffManagementPage({ go }) {
     const errors = []
     if (!instId) errors.push("no institution id resolved")
     const looksFull = (r) => r && (r.StaffId ?? r.staffId ?? r.FirstName ?? r.firstName ?? r.Email ?? r.email)
+    try { console.log("[staff] prefill fetch for", staffIdStr || numericId, "instId=" + (instId || "none"), "deptId=" + (deptId || "none")) } catch {}
     if (staffIdStr && instId) {
       try {
         const r = await onboardingApi.getStaff(staffIdStr, String(instId))
@@ -2678,7 +2679,7 @@ function StaffManagementPage({ go }) {
         errors.push("staff scan: no match across departments")
       } catch (e) { errors.push("staff scan: " + (e?.message || e)) }
     }
-    throw new Error(errors.join(" · ") || "no staff identifier on this row")
+    throw new Error(`[instId=${instId || "none"}, deptId=${deptId || "none"}] ` + (errors.join(" · ") || "no staff identifier on this row"))
   }
   const handleEdit = async (s) => {
     setEditing(s); setErr(""); setMsg("");
