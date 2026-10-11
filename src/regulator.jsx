@@ -3,6 +3,7 @@
 // Shared <RegulatorDashboard regulatorKey> + thin wrappers for routing.
 import React, { useState, useEffect, useCallback } from "react";
 import { regulatorApi, REGULATORS, matchesRegulatorType, classifyOwnership } from "./regulator";
+import { analyticsApi, ANALYTICS_STATUS_COLORS } from "./analytics";
 import { authApi } from "./iam";
 
 const fmtNum = (v) => Number(v || 0).toLocaleString("en-NG");
@@ -861,6 +862,218 @@ function SettingsView({ reg, onLogout }) {
   );
 }
 
+/* ---------- Analytics view: project-analytics API (summary, distribution, sessions, trends, topics, units) ---------- */
+function AnalyticsView({ reg }) {
+  const [session, setSession] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [groupBy, setGroupBy] = useState("institution");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const filters = {};
+  if (session.trim()) filters.Session = session.trim();
+  if (startDate && endDate) { filters.StartDate = startDate; filters.EndDate = endDate; }
+  const dateError = (startDate && !endDate) || (!startDate && endDate) ? "StartDate and EndDate must be provided together." : "";
+
+  const load = useCallback(async () => {
+    if (dateError) return;
+    setLoading(true); setErr("");
+    try {
+      const [summary, dist, sessions, trends, topics, units] = await Promise.all([
+        analyticsApi.getSummary(filters).catch((e) => ({ __error: e.message })),
+        analyticsApi.getStatusDistribution(filters).catch((e) => ({ __error: e.message })),
+        analyticsApi.getSessions(filters).catch((e) => ({ __error: e.message })),
+        analyticsApi.getTrends(filters).catch((e) => ({ __error: e.message })),
+        analyticsApi.getTopics(filters).catch((e) => ({ __error: e.message })),
+        analyticsApi.getUnits({ groupBy, ...filters }).catch((e) => ({ __error: e.message })),
+      ]);
+      setData({ summary, dist, sessions, trends, topics, units });
+    } catch (e) { setErr(e.message || "Could not load analytics"); }
+    finally { setLoading(false); }
+  }, [session, startDate, endDate, groupBy]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const s = data?.summary && !data.summary.__error ? data.summary : null;
+  const dist = Array.isArray(data?.dist) ? data.dist : [];
+  const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+  const trends = Array.isArray(data?.trends) ? data.trends : [];
+  const topics = data?.topics && !data.topics.__error ? data.topics : null;
+  const units = Array.isArray(data?.units) ? data.units : [];
+  const maxTrend = Math.max(...trends.flatMap((t) => [Number(t.projectsCreated) || 0, Number(t.projectsCompleted) || 0]), 1);
+  const cards = s ? [
+    { label: "Total Projects", value: fmtNum(s.totalProjects), icon: "folder_managed", color: "#0b6639" },
+    { label: "Completed", value: fmtNum(s.completedProjects), icon: "task", color: "#166534" },
+    { label: "In Progress", value: fmtNum(s.inProgressProjects), icon: "autorenew", color: "#b45309" },
+    { label: "Initiated", value: fmtNum(s.initiatedProjects), icon: "fiber_new", color: "#0284c7" },
+    { label: "Pending Topics", value: fmtNum(s.pendingTopicApprovals), icon: "pending_actions", color: "#ea580c" },
+    { label: "Approved Topics", value: fmtNum(s.approvedTopics), icon: "check_circle", color: "#059669" },
+    { label: "Students", value: fmtNum(s.totalStudents), icon: "school", color: "#7c3aed" },
+    { label: "Supervisors", value: fmtNum(s.totalSupervisors), icon: "supervisor_account", color: "#0d9488" },
+  ] : [];
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4 flex flex-col md:flex-row gap-3 md:items-end">
+        <label className="block flex-1">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Session</span>
+          <input value={session} onChange={(e) => setSession(e.target.value)} placeholder="e.g. 2024/2025 (blank = all)" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-emerald-700" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Start Date</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-emerald-700" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">End Date</span>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-emerald-700" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Group Units By</span>
+          <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-emerald-700">
+            <option value="institution">Institution</option>
+            <option value="department">Department</option>
+            <option value="program">Program</option>
+          </select>
+        </label>
+        <button onClick={load} disabled={loading} className="px-4 py-2 rounded-lg bg-[#0b6639] text-white text-sm font-semibold disabled:opacity-60">Apply</button>
+      </div>
+      {dateError && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{dateError}</div>}
+      {err && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+      {loading && <p className="text-sm text-slate-500">Loading analytics…</p>}
+      {data && (
+        <>
+          {s ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {cards.map((c) => (<StitchMetricCard key={c.label} label={c.label} value={c.value} icon={c.icon} color={c.color} />))}
+            </div>
+          ) : <p className="text-sm text-slate-500">{data.summary?.__error || "No summary."}</p>}
+          {(s?.projectsCreatedThisPeriod !== undefined || s?.projectsCompletedThisPeriod !== undefined) && (
+            <p className="text-xs text-slate-500">This period: {fmtNum(s.projectsCreatedThisPeriod)} created · {fmtNum(s.projectsCompletedThisPeriod)} completed (reporting dates only affect these two).</p>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <section className="lg:col-span-4 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-[18px] text-slate-700">pie_chart</span>
+                <h4 className="text-sm font-bold text-slate-800">Status Distribution</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">Share of projects by status</p>
+              {dist.length ? (
+                <div className="space-y-3">
+                  {dist.map((d, i) => (
+                    <div key={i}>
+                      <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
+                        <span>{d.status}</span>
+                        <span className="font-bold text-slate-800">{fmtNum(d.count)} · {Number(d.percentage ?? 0).toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2.5">
+                        <div className="h-2.5 rounded-full" style={{ width: `${Math.max(Number(d.percentage) || 0, 2)}%`, background: ANALYTICS_STATUS_COLORS[d.status] || STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length] }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-slate-500">{data.dist?.__error || "No data."}</p>}
+            </section>
+            <section className="lg:col-span-8 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-[18px] text-slate-700">show_chart</span>
+                <h4 className="text-sm font-bold text-slate-800">Monthly Trends</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">Created (green) vs completed (blue) per month</p>
+              {trends.length ? (
+                <div className="flex items-end gap-3 overflow-x-auto pb-1" style={{ minHeight: 150 }}>
+                  {trends.map((t, i) => (
+                    <div key={i} className="flex flex-col items-center gap-1 shrink-0" title={`${t.period}: ${t.projectsCreated} created, ${t.projectsCompleted} completed`}>
+                      <div className="flex items-end gap-1 h-28">
+                        <div className="w-5 rounded-t bg-[#0b6639]" style={{ height: `${Math.max((Number(t.projectsCreated) / maxTrend) * 100, 3)}%` }}></div>
+                        <div className="w-5 rounded-t bg-[#1d4ed8]" style={{ height: `${Math.max((Number(t.projectsCompleted) / maxTrend) * 100, 3)}%` }}></div>
+                      </div>
+                      <span className="text-[10px] text-slate-500">{t.period}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-slate-500">{data.trends?.__error || "No trend data."}</p>}
+            </section>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-[18px] text-slate-700">forum</span>
+                <h4 className="text-sm font-bold text-slate-800">Topics</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">Submissions and AI-check averages</p>
+              {topics ? (
+                <div className="space-y-2.5 text-sm">
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    {[["Total", topics.totalTopics], ["Pending", topics.pendingTopics], ["Approved", topics.approvedTopics], ["Rejected", topics.rejectedTopics]].map(([l, v]) => (
+                      <div key={l} className="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                        <p className="text-[10px] uppercase text-slate-500 font-semibold">{l}</p>
+                        <p className="font-bold text-slate-800">{fmtNum(v)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {[["Similarity", topics.averageSimilarityScore, "#b45309"], ["Originality", topics.averageOriginalityScore, "#0b6639"], ["Plagiarism", topics.averagePlagiarismScore, "#be123c"]].map(([l, v, c]) => (
+                    v !== null && v !== undefined ? (
+                      <div key={l}>
+                        <div className="flex justify-between text-[11px] text-slate-500 mb-0.5"><span>Avg {l}</span><span className="font-bold text-slate-800">{Number(v).toFixed(1)}</span></div>
+                        <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${Math.max(Number(v) || 0, 2)}%`, background: c }}></div></div>
+                      </div>
+                    ) : null
+                  ))}
+                  {topics.scoreNote && <p className="text-[11px] text-slate-400 italic">{topics.scoreNote}</p>}
+                </div>
+              ) : <p className="text-xs text-slate-500">{data.topics?.__error || "No data."}</p>}
+            </section>
+            <section className="lg:col-span-7 bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="p-5 border-b border-slate-100">
+                <h4 className="text-sm font-bold text-slate-800">Units Comparison — by {groupBy}</h4>
+              </div>
+              {units.length ? (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="w-full text-left text-sm min-w-[520px]">
+                    <thead><tr className="text-slate-500 text-[11px] uppercase border-b border-slate-100"><th className="py-2 px-4">Unit</th><th className="py-2 px-4 text-right">Total</th><th className="py-2 px-4 text-right">Completed</th><th className="py-2 px-4 text-right">In Progress</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {units.map((u, i) => (
+                        <tr key={i} className="hover:bg-slate-50">
+                          <td className="py-2 px-4 font-medium text-slate-800 truncate max-w-[280px]" title={u.institutionName || u.departmentName || u.programName}>{u.institutionName || u.departmentName || u.programName || "—"}</td>
+                          <td className="py-2 px-4 text-right font-bold">{fmtNum(u.totalProjects)}</td>
+                          <td className="py-2 px-4 text-right text-emerald-700">{fmtNum(u.completedProjects)}</td>
+                          <td className="py-2 px-4 text-right text-amber-700">{fmtNum(u.inProgressProjects)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="p-6 text-xs text-slate-500">{data.units?.__error || "No data."}</p>}
+            </section>
+          </div>
+          <section className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100"><h4 className="text-sm font-bold text-slate-800">Sessions</h4></div>
+            {sessions.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm min-w-[560px]">
+                  <thead><tr className="text-slate-500 text-[11px] uppercase border-b border-slate-100"><th className="py-2 px-4">Session</th><th className="py-2 px-4 text-right">Total</th><th className="py-2 px-4 text-right">Completed</th><th className="py-2 px-4 text-right">In Progress</th><th className="py-2 px-4 text-right">Overdue</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sessions.map((s2, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="py-2 px-4 font-medium text-slate-800">{s2.session}</td>
+                        <td className="py-2 px-4 text-right font-bold">{fmtNum(s2.totalProjects)}</td>
+                        <td className="py-2 px-4 text-right text-emerald-700">{fmtNum(s2.completedProjects)}</td>
+                        <td className="py-2 px-4 text-right text-amber-700">{fmtNum(s2.inProgressProjects)}</td>
+                        <td className="py-2 px-4 text-right text-red-700">{fmtNum(s2.overdueProjects)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="p-6 text-xs text-slate-500">{data.sessions?.__error || "No data."}</p>}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function RegulatorDashboard({ go, regulatorKey, query }) {
   const reg = REGULATORS[regulatorKey] || REGULATORS.nuc;
   const view = (query?.get("view") || "overview").toLowerCase();
@@ -978,8 +1191,8 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
           {(view === "overview" || view === "analytics") && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h1 className="text-3xl font-extrabold text-[#093d22] tracking-tight">{reg.dashTitle}</h1>
-                <p className="text-xs text-slate-500 font-normal mt-0.5">{reg.titleSub}</p>
+                <h1 className="text-3xl font-extrabold text-[#093d22] tracking-tight">{view === "analytics" ? `${reg.short} Project Analytics` : reg.dashTitle}</h1>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{view === "analytics" ? "Project activity, sessions, trends and topics — token-scoped" : reg.titleSub}</p>
               </div>
               <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-200/90 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-medium self-start sm:self-auto">
                 <span className="material-symbols-outlined text-[16px] text-amber-600">workspace_premium</span>
@@ -990,7 +1203,8 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
           <ErrBar err={err} />
           {loading && !dash && !err ? <p className="text-sm text-slate-500">Loading {reg.short} dashboard…</p> : (
             <>
-              {(view === "overview" || view === "analytics") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
+              {(view === "overview") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
+              {(view === "analytics") && <AnalyticsView reg={reg} />}
               {(view === "institutions") && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
               {(view === "institution" && institutionId) && <InstitutionDetails id={institutionId} reg={reg} onBack={() => nav("institutions")} />}
               {(view === "institution" && !institutionId) && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}

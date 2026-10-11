@@ -22,3 +22,5 @@ IMPLEMENTATION-REPORT-*.md
 
 # Regulator API guide (internal reference, not shipped)
 regulator-api-guide.md
+# Regulator Analytics API guide (internal reference, not shipped)
+RegulatorAnalyticsApi.md
