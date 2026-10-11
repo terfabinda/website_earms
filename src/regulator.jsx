@@ -167,7 +167,7 @@ function OverviewTab({ dash, reg, go, route }) {
     { label: "Repository Records", value: fmtNum(reg.recordsTotal), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
-    { label: "Colleges", value: fmtNum(scopedColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
+    { label: reg.unitTerm, value: fmtNum(scopedColleges), sub: `${reg.unitTerm} under mandate`, icon: "apartment", color: CARD_ICON_BG[1] },
     { label: "Departments", value: fmtNum(scopedDepts), icon: "account_tree", color: CARD_ICON_BG[2] },
     { label: "Approved Programmes", value: fmtNum(scopedProgs), icon: "menu_book", color: CARD_ICON_BG[3] },
     { label: "Total Supervisors & Staff", value: fmtNum(scopedStaff), icon: "supervisor_account", color: CARD_ICON_BG[4] },
@@ -421,7 +421,7 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
               <tr className="text-on-surface-variant border-b border-outline-variant text-[12px] uppercase tracking-wide">
                 <th className="py-2.5 px-4">Institution</th>
                 <th className="py-2.5 px-4">Type</th>
-                <th className="py-2.5 px-4 text-right">Colleges</th>
+                <th className="py-2.5 px-4 text-right">{reg.unitTerm}</th>
                 <th className="py-2.5 px-4 text-right">Departments</th>
                 <th className="py-2.5 px-4 text-right">Programmes</th>
                 <th className="py-2.5 px-4"></th>
@@ -458,6 +458,8 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
 
 /* ---------- Institution details (guide endpoints #3–#8) ---------- */
 function InstitutionDetails({ id, reg, onBack }) {
+  const unitTerm = reg.unitTerm || "Colleges";
+  const unitSing = unitTerm.replace(/s$/, "");
   const [detail, setDetail] = useState(null);
   const [colleges, setColleges] = useState([]);
   const [depts, setDepts] = useState([]);
@@ -507,7 +509,7 @@ function InstitutionDetails({ id, reg, onBack }) {
   if (!detail) return null;
 
   const tabs = [
-    { key: "colleges", label: `Colleges (${colleges.length})`, icon: "account_balance" },
+    { key: "colleges", label: `${unitTerm} (${colleges.length})`, icon: "account_balance" },
     { key: "departments", label: `Departments (${depts.length})`, icon: "account_tree" },
     { key: "programmes", label: `Programmes (${progs.length})`, icon: "menu_book" },
     { key: "staff", label: "Staff Statistics", icon: "supervisor_account" },
@@ -537,7 +539,7 @@ function InstitutionDetails({ id, reg, onBack }) {
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
-          {[["Colleges", detail.collegeCount, "account_balance"], ["Departments", detail.departmentCount, "account_tree"], ["Programmes", detail.programmeCount, "menu_book"], ["Staff", detail.staffCount, "supervisor_account"], ["Students", detail.studentCount, "school"]].map(([l, v, ic]) => (
+          {[[unitTerm, detail.collegeCount, "account_balance"], ["Departments", detail.departmentCount, "account_tree"], ["Programmes", detail.programmeCount, "menu_book"], ["Staff", detail.staffCount, "supervisor_account"], ["Students", detail.studentCount, "school"]].map(([l, v, ic]) => (
             <div key={l} className="rounded-lg bg-surface-container-low p-3 text-center">
               <p className="text-[11px] uppercase tracking-wide text-on-surface-variant font-label-md">{l}</p>
               <p className="font-headline-sm font-bold text-on-surface">{fmtNum(v)}</p>
@@ -590,7 +592,7 @@ function InstitutionDetails({ id, reg, onBack }) {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[640px]">
-              <thead><tr className="text-on-surface-variant border-b border-outline-variant text-[12px] uppercase tracking-wide"><th className="py-2.5 px-4">Programme</th><th className="py-2.5 px-4">Department</th><th className="py-2.5 px-4">College</th><th className="py-2.5 px-4"></th></tr></thead>
+              <thead><tr className="text-on-surface-variant border-b border-outline-variant text-[12px] uppercase tracking-wide"><th className="py-2.5 px-4">Programme</th><th className="py-2.5 px-4">Department</th><th className="py-2.5 px-4">{unitSing}</th><th className="py-2.5 px-4"></th></tr></thead>
               <tbody className="divide-y divide-surface-container">
                 {filteredProgs.map((p) => (
                   <tr key={p.id} className="hover:bg-surface-container-low">
@@ -610,7 +612,7 @@ function InstitutionDetails({ id, reg, onBack }) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card className="p-5">
             <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Staff: {fmtNum(staffStats?.totalStaff)}</h3>
-            <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By College</h4>
+            <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By {unitSing}</h4>
             <div className="space-y-2.5">{(staffStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(staffStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
           <Card className="p-5">
@@ -625,7 +627,7 @@ function InstitutionDetails({ id, reg, onBack }) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card className="p-5">
             <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Students: {fmtNum(studStats?.totalStudents)}</h3>
-            <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By College</h4>
+            <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By {unitSing}</h4>
             <div className="space-y-2.5">{(studStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(studStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
           <Card className="p-5">
@@ -647,7 +649,7 @@ function InstitutionDetails({ id, reg, onBack }) {
               : (<div className="space-y-1.5 text-sm">
                 <p className="font-bold text-on-surface text-base">{progDetail.name}</p>
                 <p className="text-on-surface-variant">{progDetail.collegeName} → {progDetail.departmentName}</p>
-                <p className="text-on-surface-variant text-[12px]">Programme ID {progDetail.id} · Dept {progDetail.departmentId} · College {progDetail.collegeId}</p>
+                <p className="text-on-surface-variant text-[12px]">Programme ID {progDetail.id} · Dept {progDetail.departmentId} · {unitSing} {progDetail.collegeId}</p>
               </div>)}
           </div>
         </div>
