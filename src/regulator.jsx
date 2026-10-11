@@ -9,14 +9,15 @@ const PALETTE = ["#1e3a8a", "#0f766e", "#7c3aed", "#b45309", "#0e7490", "#be123c
 
 /* ---------- tiny primitives (match app styling) ---------- */
 function StatCard({ label, value, sub, icon, accent }) {
+  const color = accent || "#1e3a8a";
   return (
     <div className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
       <div>
-        <p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">{label}</p>
-        <p className="font-headline-lg font-bold text-primary leading-none mt-1">{value}</p>
+        <p className="font-label-md text-[11px] uppercase tracking-wide" style={{ color }}>{label}</p>
         {sub && <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{sub}</p>}
+        <p className="font-headline-lg font-bold text-primary leading-none mt-1">{value}</p>
       </div>
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-white" style={{ background: accent || "#1e3a8a" }}>
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-white" style={{ background: color }}>
         <span className="material-symbols-outlined">{icon}</span>
       </div>
     </div>
