@@ -410,6 +410,81 @@ function OverviewTab({ dash, reg, go, route }) {
           </div>
         </div>
       )}
+      {reg.proposalLevels && (
+        <section className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-slate-700">assignment</span>
+              <h3 className="text-sm font-bold text-slate-800">Submitted Projects/Project Proposals</h3>
+            </div>
+            <p className="text-[11px] text-slate-500 font-normal">Proposals for 2025/2026 * Repository records all sessions</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[760px]">
+              <thead>
+                <tr className="text-slate-500 text-[11px] uppercase border-b border-slate-100">
+                  <th className="py-2.5 px-4 font-semibold">Study Level/Research Type</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Students</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Completed</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Pending</th>
+                  <th className="py-2.5 px-4 font-semibold">Completion</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Repository Records</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {reg.proposalLevels.map((r) => {
+                  const pending = r.students - r.completed;
+                  const pct = (r.completed / r.students) * 100;
+                  return (
+                    <tr key={r.level} className="hover:bg-slate-50">
+                      <td className="py-2.5 px-4 font-medium text-slate-800">{r.level}</td>
+                      <td className="py-2.5 px-4 text-right font-bold">{fmtNum(r.students)}</td>
+                      <td className="py-2.5 px-4 text-right text-emerald-700">{fmtNum(r.completed)}</td>
+                      <td className="py-2.5 px-4 text-right text-amber-700">{fmtNum(pending)}</td>
+                      <td className="py-2.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-100 rounded-full h-2 min-w-[80px]">
+                            <div className="bg-[#0b6639] h-2 rounded-full" style={{ width: `${Math.max(pct, 2)}%` }} />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-700 w-12">{pct.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-4 text-right">{fmtNum(r.records)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                {(() => {
+                  const tS = reg.proposalLevels.reduce((s, r) => s + r.students, 0);
+                  const tC = reg.proposalLevels.reduce((s, r) => s + r.completed, 0);
+                  const tP = tS - tC;
+                  const avg = reg.proposalLevels.reduce((s, r) => s + (r.completed / r.students) * 100, 0) / reg.proposalLevels.length;
+                  const tR = reg.proposalLevels.reduce((s, r) => s + r.records, 0);
+                  return (
+                    <tr className="bg-slate-50 font-bold text-slate-800 border-t border-slate-200">
+                      <td className="py-2.5 px-4">Total</td>
+                      <td className="py-2.5 px-4 text-right">{fmtNum(tS)}</td>
+                      <td className="py-2.5 px-4 text-right text-emerald-700">{fmtNum(tC)}</td>
+                      <td className="py-2.5 px-4 text-right text-amber-700">{fmtNum(tP)}</td>
+                      <td className="py-2.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-200 rounded-full h-2 min-w-[80px]">
+                            <div className="bg-[#0b6639] h-2 rounded-full" style={{ width: `${Math.max(avg, 2)}%` }} />
+                          </div>
+                          <span className="text-[11px] font-bold w-12">{avg.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-4 text-right">{fmtNum(tR)}</td>
+                    </tr>
+                  );
+                })()}
+              </tfoot>
+            </table>
+          </div>
+          <p className="px-5 py-3 text-[11px] italic text-slate-400 border-t border-slate-100">Thesis/dissertation labels may vary by university</p>
+        </section>
+      )}
     </div>
   );
 }

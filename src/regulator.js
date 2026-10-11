@@ -175,6 +175,11 @@ export const REGULATORS = {
     repoTotal: 642800,
     completion: { completed: 67499, pending: 23520, pct: 69 },
     proposals: { total: 92754, approved: 83412, pending: 6577, failed: 2765 },
+    proposalLevels: [
+      { level: "Undergraduate Projects/Research", students: 65117, completed: 48975, records: 147333 },
+      { level: "Masters Dissertations", students: 25914, completed: 18570, records: 37609 },
+      { level: "Doctoral Theses", students: 6212, completed: 3480, records: 17100 },
+    ],
     gender: {
       male: [
         { label: "Total Active", value: 162000 },
