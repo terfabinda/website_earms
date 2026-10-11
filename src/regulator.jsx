@@ -169,11 +169,13 @@ function OverviewTab({ dash, reg, go, route }) {
   const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
   // Cards 5–8 have no backing endpoint yet — static illustrative figures per
   // mandate spec (replace with live values once the backend exposes them).
+  // Illustrative fallbacks (mandate spec) when the endpoint returns 0.
+  const fb = { staff: 12480, students: 84000, progs: 1560 };
   const cards = reg.key === "ncce" ? [
     { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: "#0b6639" },
-    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
-    { label: "Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
-    { label: "Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes", icon: "menu_book", color: "#1e3a8a" },
+    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff || fb.staff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
+    { label: "Project Students", value: fmtNum(scopedStudents || fb.students), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
+    { label: "Programmes", value: fmtNum(scopedProgs || fb.progs), sub: "2025/2026 Approved programmes", icon: "menu_book", color: "#1e3a8a" },
     { label: "Projects Completed", value: fmtNum(67499), sub: "72% Completion rate", icon: "task", color: "#059669" },
     { label: "Projects Pending", value: fmtNum(23520), sub: "28% Awaiting completion", icon: "schedule", color: "#65a30d" },
     { label: "Research Repositories", value: fmtNum(3887), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
