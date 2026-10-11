@@ -3,23 +3,26 @@
 // Shared <RegulatorDashboard regulatorKey> + thin wrappers for routing.
 import React, { useState, useEffect, useCallback } from "react";
 import { regulatorApi, REGULATORS, matchesRegulatorType, classifyOwnership } from "./regulator";
+import { authApi } from "./iam";
 
 const fmtNum = (v) => Number(v || 0).toLocaleString("en-NG");
-const PALETTE = ["#1e3a8a", "#0f766e", "#7c3aed", "#b45309", "#0e7490", "#be123c", "#4d7c0f", "#6b7280"];
+// Stitch "Nigerian Education Admin Dashboards" palette (stitched from the screens).
+const STITCH_BAR_COLORS = ["#0b6639", "#1d4ed8", "#eab308", "#0284c7", "#2563eb", "#7c3aed", "#ea580c", "#94a3b8"];
+const OWN_COLORS = { Federal: "#166534", State: "#b45309", Private: "#1e3a8a" };
+const CARD_ICON_BG = ["#0b6639", "#1d4ed8", "#b45309", "#4338ca", "#059669", "#ea580c", "#7c3aed", "#0d9488"];
 
-/* ---------- tiny primitives (match app styling) ---------- */
-function StatCard({ label, value, sub, icon, accent }) {
-  const color = accent || "#1e3a8a";
+/* ---------- Stitch metric card: icon row, colored header, big number (no prose) ---------- */
+function StitchMetricCard({ label, value, icon, color }) {
   return (
-    <div className="glass-card ambient-shadow rounded-xl p-4 border border-surface-container flex items-start justify-between">
-      <div>
-        <p className="font-label-md text-[11px] uppercase tracking-wide" style={{ color }}>{label}</p>
-        {/* descriptions hidden for now — restore by rendering `sub` here */}
-        <p className="font-headline-lg font-bold text-primary leading-none mt-1">{value}</p>
+    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between mb-2">
+        <div className="w-9 h-9 rounded-full text-white flex items-center justify-center" style={{ background: color }}>
+          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+        </div>
+        <span className="material-symbols-outlined text-[18px] text-slate-300">chevron_right</span>
       </div>
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-white" style={{ background: color }}>
-        <span className="material-symbols-outlined">{icon}</span>
-      </div>
+      <p className="text-xs font-semibold" style={{ color }}>{label}</p>
+      <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
     </div>
   );
 }
@@ -31,22 +34,6 @@ function Card({ children, className = "" }) {
 function ErrBar({ err }) {
   if (!err) return null;
   return <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>;
-}
-
-function Bars({ data, height = 190, format = (v) => fmtNum(v) }) {
-  if (!data || !data.length) return <p className="font-body-sm text-on-surface-variant text-sm">No data.</p>;
-  const max = Math.max(...data.map((d) => Number(d.value) || 0), 1);
-  return (
-    <div className="flex items-end gap-2 sm:gap-3" style={{ height }}>
-      {data.slice(0, 10).map((d, i) => (
-        <div key={d.label + i} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={`${d.label}: ${fmtNum(d.value)}`}>
-          <span className="font-label-md text-on-surface-variant text-[11px] mb-1">{format(d.value)}</span>
-          <div className="w-full max-w-[44px] rounded-t-md" style={{ height: `${Math.max((Number(d.value) / max) * 68, 3)}%`, background: d.color || PALETTE[i % PALETTE.length] }} />
-          <span className="font-label-md text-on-surface-variant text-[11px] mt-1.5 truncate w-full text-center">{d.label}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub }) {
@@ -63,7 +50,7 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub })
             const dash = frac * circ;
             const off = -(acc * circ);
             acc += frac;
-            return <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={seg.color || PALETTE[i % PALETTE.length]} strokeWidth={thickness} strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={off} />;
+            return <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={seg.color} strokeWidth={thickness} strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={off} />;
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
@@ -74,9 +61,9 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub })
       <div className="space-y-2 w-full">
         {segments.map((s, i) => (
           <div key={i} className="flex items-center gap-2 text-sm">
-            <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: s.color || PALETTE[i % PALETTE.length] }} />
-            <span className="flex-1 truncate text-on-surface">{s.label}</span>
-            <span className="font-bold text-on-surface">{fmtNum(s.value)}</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.color || STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length] }} />
+            <span className="flex-1 truncate text-slate-600 font-medium">{s.label}</span>
+            <span className="font-bold text-slate-800">{fmtNum(s.value)}</span>
           </div>
         ))}
       </div>
@@ -84,20 +71,19 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub })
   );
 }
 
-function HBar({ label, value, max, color }) {
+function HBarStitch({ label, value, max, color }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-40 sm:w-52 truncate text-[13px] text-on-surface" title={label}>{label}</span>
-      <div className="flex-1 h-2.5 rounded-full bg-surface-container-high overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${Math.max((Number(value) / Math.max(max, 1)) * 100, 2)}%`, background: color || "#1e3a8a" }} />
+      <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={label}>{label}</span>
+      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+        <div className="h-full rounded-r-full" style={{ width: `${Math.max((Number(value) / Math.max(max, 1)) * 100, 2)}%`, background: color }} />
       </div>
-      <span className="w-14 text-right text-[13px] font-bold text-on-surface">{fmtNum(value)}</span>
+      <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(value)}</span>
     </div>
   );
 }
 
-/* ---------- Overview tab (guide endpoint #1) ---------- */
-const OWN_COLORS = { Federal: "#166534", State: "#b45309", Private: "#1e3a8a" };
+/* ---------- Overview tab: Stitch 8-card metrics + 3 analytics panels, live data ---------- */
 function OverviewTab({ dash, reg, go, route }) {
   const [ownership, setOwnership] = useState(null);
   useEffect(() => {
@@ -117,53 +103,98 @@ function OverviewTab({ dash, reg, go, route }) {
   const byType = Array.isArray(dash.institutionsByType) ? dash.institutionsByType : [];
   const scopedTypes = byType.filter((t) => matchesRegulatorType(t.institutionType, reg.key));
   const scopedCount = scopedTypes.reduce((s, t) => s + (Number(t.count) || 0), 0);
-  const topStudents = (Array.isArray(dash.studentsByInstitution) ? dash.studentsByInstitution : []).slice(0, 8);
-  const topStaff = (Array.isArray(dash.staffByInstitution) ? dash.staffByInstitution : []).slice(0, 8);
-  const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 10);
+  const topStudents = (Array.isArray(dash.studentsByInstitution) ? dash.studentsByInstitution : []).slice(0, 6);
+  const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
   const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
+  const own = ownership?.counts || { Federal: 0, State: 0, Private: 0 };
+  const cards = [
+    { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedCount), icon: "account_balance", color: CARD_ICON_BG[0] },
+    { label: "Colleges", value: fmtNum(dash.totalColleges), icon: "apartment", color: CARD_ICON_BG[1] },
+    { label: "Departments", value: fmtNum(dash.totalDepartments), icon: "account_tree", color: CARD_ICON_BG[2] },
+    { label: "Approved Programmes", value: fmtNum(dash.totalProgrammes), icon: "menu_book", color: CARD_ICON_BG[3] },
+    { label: "Total Supervisors & Staff", value: fmtNum(dash.totalStaff), icon: "supervisor_account", color: CARD_ICON_BG[4] },
+    { label: "Total Projects & Students", value: fmtNum(dash.totalStudents), icon: "school", color: CARD_ICON_BG[5] },
+    { label: "Federal Institutions", value: fmtNum(own.Federal), icon: "flag", color: OWN_COLORS.Federal },
+    { label: "State Institutions", value: fmtNum(own.State), icon: "location_city", color: OWN_COLORS.State },
+  ];
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label={`${reg.short} Institutions`} value={fmtNum(scopedCount)} sub={`${reg.scope} under mandate`} icon={reg.icon} accent={reg.accent} />
-        <StatCard label="Total Supervisors & Staff" value={fmtNum(dash.totalStaff)} sub="All regulated institutions" icon="supervisor_account" accent="#0f766e" />
-        <StatCard label="Total Projects & Students" value={fmtNum(dash.totalStudents)} sub="All regulated institutions" icon="school" accent="#7c3aed" />
-        <StatCard label="Total Programmes" value={fmtNum(dash.totalProgrammes)} sub={`${fmtNum(dash.totalDepartments)} depts · ${fmtNum(dash.totalColleges)} colleges`} icon="menu_book" accent="#b45309" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c) => (
+          <StitchMetricCard key={c.label} label={c.label} value={c.value} icon={c.icon} color={c.color} />
+        ))}
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <h3 className="font-headline-sm font-semibold text-primary mb-1">Institutions by Ownership</h3>
-          <p className="font-body-sm text-on-surface-variant text-[12px] mb-4">Federal vs State vs Private under this mandate ({reg.scope}) — derived from institution names.</p>
-          {ownership ? (
-            <Donut
-              segments={["Federal", "State", "Private"].map((k) => ({ label: k, value: ownership.counts[k] || 0, color: OWN_COLORS[k] }))}
-              centerLabel={fmtNum(ownership.total)}
-              centerSub={`${reg.short} institutions`}
-            />
-          ) : <p className="font-body-sm text-on-surface-variant text-sm">Loading ownership breakdown…</p>}
-        </Card>
-        <Card className="p-5">
-          <h3 className="font-headline-sm font-semibold text-primary mb-1">Academic Staff by Specialization</h3>
-          <p className="font-body-sm text-on-surface-variant text-[12px] mb-4">Top specializations across regulated institutions.</p>
-          <div className="space-y-2.5">
-            {bySpec.length ? bySpec.map((s, i) => <HBar key={i} label={s.specialization || "—"} value={Number(s.count) || 0} max={maxSpec} color={PALETTE[i % PALETTE.length]} />) : <p className="font-body-sm text-on-surface-variant text-sm">No data.</p>}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-[18px] text-slate-700">bar_chart</span>
+            <h4 className="text-sm font-bold text-slate-800">Academic Staff by Specialization</h4>
           </div>
-        </Card>
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-headline-sm font-semibold text-primary">Top Institutions by Students</h3>
-            <button onClick={() => go(`${route}?view=institutions`)} className="text-primary text-[13px] font-label-md hover:underline">View all →</button>
+          <p className="text-[11px] text-slate-500 mb-5">Live figures across regulated institutions</p>
+          <div className="space-y-3.5 text-xs">
+            {bySpec.length ? bySpec.map((s, i) => (
+              <HBarStitch key={i} label={s.specialization || "—"} value={Number(s.count) || 0} max={maxSpec} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />
+            )) : <p className="text-xs text-slate-500">No specialization data.</p>}
           </div>
-          <Bars data={topStudents.map((s, i) => ({ label: String(s.institutionName || "").split(" ").slice(0, 2).join(" "), value: Number(s.studentCount) || 0, color: PALETTE[i % PALETTE.length] }))} />
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-headline-sm font-semibold text-primary">Top Institutions by Staff</h3>
-            <button onClick={() => go(`${route}?view=institutions`)} className="text-primary text-[13px] font-label-md hover:underline">View all →</button>
+        </section>
+        <section className="lg:col-span-3 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="material-symbols-outlined text-[18px] text-slate-700">pie_chart</span>
+              <h4 className="text-sm font-bold text-slate-800">Institutions by Ownership</h4>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-4">Federal vs State vs Private</p>
+            {ownership ? (
+              <div className="relative flex items-center justify-center my-4">
+                <Donut
+                  segments={["Federal", "State", "Private"].map((k) => ({ label: k, value: own[k] || 0, color: OWN_COLORS[k] }))}
+                  size={168} thickness={24}
+                  centerLabel={fmtNum(ownership.total)}
+                  centerSub="institutions"
+                />
+              </div>
+            ) : <p className="text-xs text-slate-500">Loading…</p>}
           </div>
-          <Bars data={topStaff.map((s, i) => ({ label: String(s.institutionName || "").split(" ").slice(0, 2).join(" "), value: Number(s.staffCount) || 0, color: PALETTE[(i + 2) % PALETTE.length] }))} />
-        </Card>
+          {ownership && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              {["Federal", "State", "Private"].map((k) => (
+                <div key={k} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ background: OWN_COLORS[k] }}></span>
+                    <span className="text-slate-600 font-medium">{k}</span>
+                  </div>
+                  <span className="font-bold text-slate-800">{fmtNum(own[k])}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="lg:col-span-4 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-slate-700">leaderboard</span>
+                <h4 className="text-sm font-bold text-slate-800">Leading Institutions by Enrolment</h4>
+              </div>
+              <button onClick={() => go(`${route}?view=institutions`)} className="text-[11px] text-emerald-700 font-semibold hover:underline">View all →</button>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-5">Top institutions by student population</p>
+            <div className="space-y-3.5 text-xs">
+              {topStudents.length ? topStudents.map((s, i) => {
+                const max = Math.max(...topStudents.map((x) => Number(x.studentCount) || 0), 1);
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={s.institutionName}>{s.institutionName}</span>
+                    <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                      <div className="bg-[#0b6639] h-full rounded-r-full" style={{ width: `${Math.max((Number(s.studentCount) / max) * 100, 3)}%` }} />
+                    </div>
+                    <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(s.studentCount)}</span>
+                  </div>
+                );
+              }) : <p className="text-xs text-slate-500">No enrolment data.</p>}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -406,13 +437,13 @@ function InstitutionDetails({ id, reg, onBack }) {
           <Card className="p-5">
             <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Staff: {fmtNum(staffStats?.totalStaff)}</h3>
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By College</h4>
-            <div className="space-y-2.5">{(staffStats?.byCollege || []).map((c, i) => <HBar key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(staffStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={PALETTE[i % PALETTE.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
+            <div className="space-y-2.5">{(staffStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(staffStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
           <Card className="p-5">
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By Specialization</h4>
-            <Bars data={(staffStats?.bySpecialization || []).slice(0, 8).map((s, i) => ({ label: String(s.specialization || "").split(" ").slice(0, 2).join(" "), value: Number(s.count) || 0, color: PALETTE[i % PALETTE.length] }))} />
+            <div className="space-y-2.5">{(staffStats?.bySpecialization || []).slice(0, 8).map((s, i) => <HBarStitch key={i} label={s.specialization} value={Number(s.count) || 0} max={Math.max(...(staffStats?.bySpecialization || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />)}</div>
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mt-5 mb-2">By Department</h4>
-            <div className="space-y-2 max-h-56 overflow-auto">{(staffStats?.byDepartment || []).map((d, i) => <HBar key={i} label={d.departmentName} value={Number(d.count) || 0} max={Math.max(...(staffStats?.byDepartment || []).map((x) => Number(x.count) || 0), 1)} color={PALETTE[(i + 3) % PALETTE.length]} />)}</div>
+            <div className="space-y-2 max-h-56 overflow-auto">{(staffStats?.byDepartment || []).map((d, i) => <HBarStitch key={i} label={d.departmentName} value={Number(d.count) || 0} max={Math.max(...(staffStats?.byDepartment || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[(i + 3) % STITCH_BAR_COLORS.length]} />)}</div>
           </Card>
         </div>
       )}
@@ -421,11 +452,11 @@ function InstitutionDetails({ id, reg, onBack }) {
           <Card className="p-5">
             <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Students: {fmtNum(studStats?.totalStudents)}</h3>
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By College</h4>
-            <div className="space-y-2.5">{(studStats?.byCollege || []).map((c, i) => <HBar key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(studStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={PALETTE[i % PALETTE.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
+            <div className="space-y-2.5">{(studStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(studStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
           <Card className="p-5">
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By Department</h4>
-            <Bars data={(studStats?.byDepartment || []).slice(0, 8).map((d, i) => ({ label: String(d.departmentName || "").split(" ").slice(0, 2).join(" "), value: Number(d.count) || 0, color: PALETTE[(i + 1) % PALETTE.length] }))} />
+            <div className="space-y-2.5">{(studStats?.byDepartment || []).slice(0, 8).map((d, i) => <HBarStitch key={i} label={d.departmentName} value={Number(d.count) || 0} max={Math.max(...(studStats?.byDepartment || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[(i + 1) % STITCH_BAR_COLORS.length]} />)}</div>
           </Card>
         </div>
       )}
@@ -451,7 +482,28 @@ function InstitutionDetails({ id, reg, onBack }) {
   );
 }
 
-/* ---------- Shell: header switcher + view routing ---------- */
+/* ---------- Stitch shell: green sidebar + topbar + footer (faithful to screens) ---------- */
+function StitchNav({ reg, route, view, go, onLogout }) {
+  const items = [
+    { label: "Overview", icon: "dashboard", nav: `${route}?view=overview`, active: view === "overview" },
+    { label: reg.sideType, icon: reg.icon === "precision_manufacturing" ? "factory" : "account_balance", nav: `${route}?view=institutions`, active: view === "institutions" || view === "institution" },
+  ];
+  return (
+    <>
+      {items.map((it) => (
+        <button key={it.label} onClick={() => go(it.nav)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors ${it.active ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
+          <span className={`material-symbols-outlined text-[18px] ${it.active ? "text-emerald-200" : ""}`}>{it.icon}</span>
+          <span>{it.label}</span>
+        </button>
+      ))}
+      <button onClick={onLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal text-xs transition-colors">
+        <span className="material-symbols-outlined text-[18px]">logout</span>
+        <span>Logout</span>
+      </button>
+    </>
+  );
+}
+
 export function RegulatorDashboard({ go, regulatorKey, query }) {
   const reg = REGULATORS[regulatorKey] || REGULATORS.nuc;
   const view = (query?.get("view") || "overview").toLowerCase();
@@ -459,49 +511,145 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
   const [dash, setDash] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadDash = useCallback(() => {
     setLoading(true); setErr("");
     regulatorApi.getDashboard()
-      .then((d) => { if (!cancelled) setDash(d); })
-      .catch((e) => { if (!cancelled) setErr(e.message || "Could not load dashboard"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((d) => setDash(d))
+      .catch((e) => setErr(e.message || "Could not load dashboard"))
+      .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { loadDash(); }, [loadDash]);
 
-  const nav = (v) => go(`${reg.route}?view=${v}`);
-  const openInstitution = (id) => go(`${reg.route}?view=institution&institutionId=${encodeURIComponent(id)}`);
+  const nav = (v) => { setMobileNav(false); go(`${reg.route}?view=${v}`); };
+  const openInstitution = (id) => { setMobileNav(false); go(`${reg.route}?view=institution&institutionId=${encodeURIComponent(id)}`); };
+  const logout = async () => { try { await authApi.logout(); } catch {} go("login"); };
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      const res = await regulatorApi.getInstitutions({ page: 1, pageSize: 100 });
+      const items = (Array.isArray(res.items) ? res.items : []).filter((it) => matchesRegulatorType(it.institutionType, reg.key));
+      const rows = [["ID", "Name", "Code", "Type", "Colleges", "Departments", "Programmes"],
+        ...items.map((it) => [it.id, it.name, it.code, it.institutionType, it.collegeCount, it.departmentCount, it.programmeCount])];
+      const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${reg.key}-institutions.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) { setErr(e.message || "Export failed"); }
+    finally { setExporting(false); }
+  };
 
   return (
-    <div className="space-y-6">
-      <Card className="p-5 flex flex-col md:flex-row md:items-center gap-3 justify-between" >
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white border border-outline-variant flex items-center justify-center shrink-0 overflow-hidden"><img alt={`${reg.short} logo`} className="w-10 h-10 object-contain" src={reg.logo} /></div>
-          <div>
-            <h2 className="font-headline-md font-bold text-primary">{reg.short} — {reg.name}</h2>
-            <p className="font-body-sm text-on-surface-variant text-sm">{reg.description}</p>
+    <div className="min-h-screen flex bg-[#f0f4f8] text-slate-800 antialiased">
+      {/* Sidebar */}
+      <aside className="w-64 bg-[#084d2a] text-white flex-shrink-0 hidden md:flex flex-col justify-between min-h-screen shadow-xl border-r border-[#063d21]">
+        <div>
+          <div className="px-5 py-6 text-center border-b border-emerald-900/60 bg-[#064223]">
+            <div className="w-24 h-24 mx-auto mb-3 bg-white p-2 rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-emerald-400/30">
+              <img alt={`${reg.short} logo`} className="max-h-full max-w-full object-contain" src={reg.logo} />
+            </div>
+            <h1 className="text-xl font-bold tracking-wider uppercase text-white">{reg.short}</h1>
+            <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase">EARMS Oversight Portal</p>
+          </div>
+          <nav className="mt-4 px-3 space-y-1">
+            <StitchNav reg={reg} route={reg.route} view={view} go={go} onLogout={logout} />
+          </nav>
+        </div>
+        <div className="px-3 pb-5 pt-2 border-t border-emerald-900/50">
+          <div className="flex items-center gap-3 px-3.5 py-2.5 text-emerald-200 text-xs">
+            <span className="material-symbols-outlined text-[18px]">help</span>
+            <span>Help Centre</span>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => nav("overview")} className={`px-4 py-2 rounded-lg text-[13px] font-label-md ${view === "overview" ? "text-white" : "border border-outline-variant hover:bg-surface-variant"}`} style={view === "overview" ? { background: reg.accent } : {}}>Overview</button>
-          <button onClick={() => nav("institutions")} className={`px-4 py-2 rounded-lg text-[13px] font-label-md ${view === "institutions" || view === "institution" ? "text-white" : "border border-outline-variant hover:bg-surface-variant"}`} style={view === "institutions" || view === "institution" ? { background: reg.accent } : {}}>Institutions</button>
+      </aside>
+
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="bg-white border-b border-slate-200/80 px-4 md:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMobileNav(true)} className="md:hidden p-2 rounded-lg border border-slate-200 text-slate-600"><span className="material-symbols-outlined">menu</span></button>
+            <div>
+              <h2 className="text-base font-bold text-slate-800 leading-tight">Welcome, Admin</h2>
+              <p className="text-xs text-slate-500">{reg.commission}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+            <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700">
+              <span className="material-symbols-outlined text-[16px] text-slate-500">calendar_month</span>
+              <span>2025/2026 Academic Session</span>
+            </div>
+            <button onClick={() => nav("institutions")} className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-emerald-600">
+              <span className="material-symbols-outlined text-[16px] text-slate-500">account_balance</span>
+              <span>{reg.scopePill}</span>
+            </button>
+            <button onClick={exportCSV} disabled={exporting} className="flex items-center gap-2 bg-[#0b6639] hover:bg-[#09542f] text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60">
+              <span className="material-symbols-outlined text-[16px]">download</span>
+              <span>{exporting ? "Exporting…" : reg.exportLabel}</span>
+            </button>
+            <button onClick={loadDash} title="Refresh" className="relative p-2 text-slate-500 hover:text-slate-700 rounded-lg border border-slate-200 bg-white">
+              <span className="material-symbols-outlined text-[18px]">notifications</span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-600 rounded-full"></span>
+            </button>
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <div className="w-8 h-8 rounded-full bg-emerald-800 text-white font-semibold flex items-center justify-center text-xs ring-2 ring-emerald-200/50">AD</div>
+            </div>
+          </div>
+        </header>
+
+        {/* Mobile drawer */}
+        {mobileNav && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setMobileNav(false)}></div>
+            <div className="relative w-64 h-full bg-[#084d2a] text-white p-4 overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-bold">{reg.short} Portal</span>
+                <button onClick={() => setMobileNav(false)} className="p-1.5 rounded hover:bg-[#0c5c34]"><span className="material-symbols-outlined">close</span></button>
+              </div>
+              <div className="space-y-1">
+                <StitchNav reg={reg} route={reg.route} view={view} go={nav} onLogout={logout} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 md:p-8 space-y-6 flex-1">
+          {view === "overview" && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-extrabold text-[#093d22] tracking-tight">{reg.dashTitle}</h1>
+                <p className="text-xs text-slate-500 font-normal mt-0.5">{reg.titleSub}</p>
+              </div>
+              <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-200/90 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-medium self-start sm:self-auto">
+                <span className="material-symbols-outlined text-[16px] text-amber-600">info</span>
+                <span>OFFICIAL OVERSIGHT • Live Figures</span>
+              </div>
+            </div>
+          )}
+          <ErrBar err={err} />
+          {loading && !dash && !err ? <p className="text-sm text-slate-500">Loading {reg.short} dashboard…</p> : (
+            <>
+              {(view === "overview") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
+              {(view === "institutions") && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
+              {(view === "institution" && institutionId) && <InstitutionDetails id={institutionId} reg={reg} onBack={() => nav("institutions")} />}
+              {(view === "institution" && !institutionId) && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
+            </>
+          )}
+          {!loading && !dash && err && (
+            <div className="bg-white rounded-xl p-6 text-sm text-slate-500 border border-slate-200">
+              Could not reach <code>/api/onboarding/regulator/dashboard</code> — {err} Ensure you are signed in with a <code>RegulatorAdmin</code> account and the onboarding proxy is configured.
+            </div>
+          )}
         </div>
-      </Card>
-      <ErrBar err={err} />
-      {loading && !dash && !err ? <p className="font-body-sm text-on-surface-variant">Loading {reg.short} dashboard…</p> : (
-        <>
-          {(view === "overview") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
-          {(view === "institutions") && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
-          {(view === "institution" && institutionId) && <InstitutionDetails id={institutionId} reg={reg} onBack={() => nav("institutions")} />}
-          {(view === "institution" && !institutionId) && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
-        </>
-      )}
-      {!loading && !dash && err && (
-        <Card className="p-6 text-sm text-on-surface-variant">
-          Could not reach <code>/api/onboarding/regulator/dashboard</code> — {err} Ensure you are signed in with a <code>RegulatorAdmin</code> account and the onboarding proxy is configured.
-        </Card>
-      )}
+
+        <footer className="bg-white border-t border-slate-200/80 px-4 md:px-8 py-3 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 mt-auto">
+          <div><span className="font-semibold text-slate-700">EARMS</span> • {reg.footerMid.replace(/^EARMS • /, "")}</div>
+          <div className="text-[11px] text-slate-400">{reg.footerRight}</div>
+        </footer>
+      </div>
     </div>
   );
 }

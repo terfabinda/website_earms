@@ -6165,17 +6165,9 @@ class RouteErrorBoundary extends React.Component {
 
 function RegulatorRoute({ go, regulatorKey }) {
   const query = useHashQuery();
-  const meta = {
-    nuc: { title: "NUC Dashboard", subtitle: "National Universities Commission — universities oversight." },
-    nbte: { title: "NBTE Dashboard", subtitle: "National Board for Technical Education — polytechnics & monotechnics oversight." },
-    ncce: { title: "NCCE Dashboard", subtitle: "National Commission for Colleges of Education — colleges oversight." },
-  }[regulatorKey] || { title: "Regulator Dashboard", subtitle: "Regulatory oversight." };
+  // Regulator pages render their own Stitch shell (sidebar/topbar/footer), not DashShell.
   const Body = regulatorKey === "nbte" ? NbteDashboard : regulatorKey === "ncce" ? NcceDashboard : NucDashboard;
-  return (
-    <DashShell go={go} active={regulatorKey} role="regulator" title={meta.title} subtitle={meta.subtitle}>
-      <Body go={go} query={query} />
-    </DashShell>
-  );
+  return <Body go={go} query={query} />;
 }
 
 function App() {
