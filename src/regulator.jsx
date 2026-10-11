@@ -136,6 +136,9 @@ function OverviewTab({ dash, reg, go, route }) {
   const scopedDepts = mandate?.complete ? mandate.depts : (dash.totalDepartments ?? 0);
   const scopedProgs = mandate?.complete ? mandate.progs : (dash.totalProgrammes ?? 0);
   const scopedInst = mandate?.complete ? mandate.total : scopedCount;
+  const topStudents = studentList.slice(0, 6);
+  const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
+  const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
   const noData = "—";
   const cards = reg.key === "ncce" ? [
     { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: CARD_ICON_BG[0] },
