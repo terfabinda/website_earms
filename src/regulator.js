@@ -174,6 +174,7 @@ export const REGULATORS = {
     ],
     repoTotal: 642800,
     completion: { completed: 67499, pending: 23520, pct: 69 },
+    proposals: { total: 92754, approved: 83412, pending: 6577, failed: 2765 },
     gender: {
       male: [
         { label: "Total Active", value: 162000 },
