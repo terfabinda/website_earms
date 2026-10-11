@@ -497,6 +497,7 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
   const [data, setData] = useState({ items: [], totalCount: 0, totalPages: 1 });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [diag, setDiag] = useState("");
   const pageSize = 20;
 
   useEffect(() => {
@@ -505,13 +506,19 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
   }, [search]);
 
   const load = useCallback(async () => {
-    setLoading(true); setErr("");
+    setLoading(true); setErr(""); setDiag("");
     try {
       // Fetch unfiltered (backend exact-match on institutionType would drop variants
       // like Monotechnic vs Polytechnic), then filter client-side to the mandate.
       const res = await regulatorApi.getInstitutions({ search: debounced || undefined, page, pageSize });
       const items = Array.isArray(res.items) ? res.items : [];
       const scoped = items.filter((it) => matchesRegulatorType(it.institutionType, reg.key));
+      try {
+        const types = [...new Set(items.map((it) => JSON.stringify(it.institutionType ?? it.InstitutionType)))].join(", ");
+        console.log(`[regulator] institutions page ${page}: ${items.length} rows, ${scoped.length} in mandate (${reg.key}); types seen: ${types || "none"}; first row:`, items[0]);
+      } catch {}
+      const seen = [...new Set(items.map((it) => String(it.institutionType ?? it.InstitutionType ?? "—")))];
+      setDiag(`Endpoint returned ${items.length} row(s) (total ${res.totalCount || 0}) · ${scoped.length} match ${reg.scope} · types seen: ${seen.join(" | ") || "none"}`);
       setData({ items: scoped, totalCount: res.totalCount || 0, totalPages: res.totalPages || 1, _global: items.length });
     } catch (e) { setErr(e.message || "Could not load institutions"); setData({ items: [], totalCount: 0, totalPages: 1 }); }
     finally { setLoading(false); }
@@ -529,6 +536,7 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
         <span className="text-[12px] text-on-surface-variant whitespace-nowrap">Mandate filter: <b>{reg.scope}</b> · page {page} of {data.totalPages || 1}</span>
       </Card>
       <ErrBar err={err} />
+      {diag && !loading && <p className="text-[12px] text-on-surface-variant">{diag}</p>}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm min-w-[720px]">
