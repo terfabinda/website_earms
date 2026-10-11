@@ -182,25 +182,6 @@ function OverviewTab({ dash, reg, go, route }) {
           <StitchMetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} color={c.color} />
         ))}
       </div>
-      {reg.proposals && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold text-slate-800">Submitted Projects / Project Proposals</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {(() => {
-              const p = reg.proposals;
-              const pct = (v) => `${((Number(v) / Number(p.total)) * 100).toFixed(1)}%`;
-              return [
-                { label: "Total", value: fmtNum(p.total), icon: "fact_check", color: "#0b6639" },
-                { label: "Approved", value: fmtNum(p.approved), sub: `${pct(p.approved)} approved`, icon: "check_circle", color: "#059669" },
-                { label: "Pending", value: fmtNum(p.pending), sub: `${pct(p.pending)} pending`, icon: "pending_actions", color: "#b45309" },
-                { label: "Failed Approvals", value: fmtNum(p.failed), sub: `${pct(p.failed)} failure`, icon: "cancel", color: "#be123c" },
-              ].map((c) => (
-                <StitchMetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} color={c.color} />
-              ));
-            })()}
-          </div>
-        </div>
-      )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {reg.fallbacks ? (
           <>
@@ -410,6 +391,25 @@ function OverviewTab({ dash, reg, go, route }) {
           </>
         )}
       </div>
+      {reg.proposals && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold text-slate-800">Submitted Projects / Project Proposals</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(() => {
+              const p = reg.proposals;
+              const pct = (v) => `${((Number(v) / Number(p.total)) * 100).toFixed(1)}%`;
+              return [
+                { label: "Total", value: fmtNum(p.total), icon: "fact_check", color: "#0b6639" },
+                { label: "Approved", value: fmtNum(p.approved), sub: `${pct(p.approved)} approved`, icon: "check_circle", color: "#059669" },
+                { label: "Pending", value: fmtNum(p.pending), sub: `${pct(p.pending)} pending`, icon: "pending_actions", color: "#b45309" },
+                { label: "Failed Approvals", value: fmtNum(p.failed), sub: `${pct(p.failed)} failure`, icon: "cancel", color: "#be123c" },
+              ].map((c) => (
+                <StitchMetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} color={c.color} />
+              ));
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
