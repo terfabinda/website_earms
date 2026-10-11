@@ -157,14 +157,14 @@ function OverviewTab({ dash, reg, go, route }) {
   const pendingPct = reg.completion ? (100 - reg.completion.pct) : 0;
   const pendingPctLabel = Number.isInteger(pendingPct) ? String(pendingPct) : pendingPct.toFixed(1);
   const cards = reg.fallbacks ? [
-    { label: reg.cardAccredited, value: fmtNum(scopedInst), sub: reg.cardAccreditedSub, icon: "account_balance", color: "#0b6639" },
-    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff || fb.staff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
-    { label: "Project Students", value: fmtNum(scopedStudents || fb.students), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
-    { label: "Programmes", value: fmtNum(scopedProgs || fb.progs), sub: "2025/2026 Approved programmes", icon: "menu_book", color: "#1e3a8a" },
-    { label: "Projects Completed", value: fmtNum(reg.completion.completed), sub: `${reg.completion.pct}% Completion rate`, icon: "task", color: "#059669" },
-    { label: "Projects Pending", value: fmtNum(reg.completion.pending), sub: `${pendingPctLabel}% Awaiting completion`, icon: "schedule", color: "#65a30d" },
+    { label: reg.cardAccredited, value: fmtNum(scopedInst || fb.inst), sub: reg.cardAccreditedSub, icon: "account_balance", color: "#0b6639" },
+    { label: reg.cardStaff, value: fmtNum(scopedStaff || fb.staff), sub: reg.cardStaffSub, icon: "supervisor_account", color: "#1d4ed8" },
+    { label: reg.cardStudents, value: fmtNum(scopedStudents || fb.students), sub: reg.cardStudentsSub, icon: "school", color: "#a16207" },
+    { label: reg.cardProgs, value: fmtNum(scopedProgs || fb.progs), sub: reg.cardProgsSub, icon: "menu_book", color: "#1e3a8a" },
+    { label: reg.cardCompleted, value: fmtNum(reg.completion.completed), sub: `${reg.completion.pct}% Completion rate`, icon: "task", color: "#059669" },
+    { label: reg.cardPending, value: fmtNum(reg.completion.pending), sub: `${pendingPctLabel}% Awaiting completion`, icon: "schedule", color: "#65a30d" },
     { label: reg.cardRepo, value: fmtNum(reg.reposTotal), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
-    { label: "Repository Records", value: fmtNum(reg.recordsTotal), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
+    { label: reg.cardRecords, value: fmtNum(reg.recordsTotal), sub: reg.cardRecordsSub, icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: reg.unitTerm, value: fmtNum(scopedColleges), sub: `${reg.unitTerm} under mandate`, icon: "apartment", color: CARD_ICON_BG[1] },
