@@ -1155,7 +1155,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-surface border-b border-outline-variant px-4 py-3 flex items-center justify-between z-40">
         <button onClick={()=>setMobileNav(!mobileNav)}><span className="material-symbols-outlined">{mobileNav ? 'close':'menu'}</span></button>
-        <span className="font-headline-md font-bold text-primary">EARMS</span>
+        <span className="font-headline-md font-bold text-primary">{role==='regulator' ? 'Welcome, Admin' : 'EARMS'}</span>
         <img src={role==='student' ? AVATAR_STUDENT : AVATAR_FACULTY} alt="avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant"/>
       </div>
       {mobileNav && (
