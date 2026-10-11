@@ -734,7 +734,7 @@ function InstitutionDetails({ id, reg, onBack }) {
       {tab === "staff" && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card className="p-5">
-            <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Staff: {fmtNum(staffStats?.totalStaff)}</h3>
+            <h3 className="font-headline-sm font-semibold text-slate-800 mb-3">Total Staff: {fmtNum(staffStats?.totalStaff)}</h3>
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By {unitSing}</h4>
             <div className="space-y-2.5">{(staffStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(staffStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
@@ -749,7 +749,7 @@ function InstitutionDetails({ id, reg, onBack }) {
       {tab === "students" && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card className="p-5">
-            <h3 className="font-headline-sm font-semibold text-primary mb-3">Total Students: {fmtNum(studStats?.totalStudents)}</h3>
+            <h3 className="font-headline-sm font-semibold text-slate-800 mb-3">Total Students: {fmtNum(studStats?.totalStudents)}</h3>
             <h4 className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">By {unitSing}</h4>
             <div className="space-y-2.5">{(studStats?.byCollege || []).map((c, i) => <HBarStitch key={i} label={c.collegeName} value={Number(c.count) || 0} max={Math.max(...(studStats?.byCollege || []).map((x) => Number(x.count) || 0), 1)} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />) || <p className="text-sm text-on-surface-variant">No data.</p>}</div>
           </Card>
