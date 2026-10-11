@@ -19,9 +19,9 @@ function StitchMetricCard({ label, value, sub, icon, color }) {
         <span className="material-symbols-outlined text-[28px]">{icon}</span>
       </div>
       <div className="min-w-0">
-        <p className="text-xs font-semibold" style={{ color }}>{label}</p>
-        <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
-        {sub && <p className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">{sub}</p>}
+        <p className="text-sm font-semibold" style={{ color }}>{label}</p>
+        <h3 className="text-3xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
+        {sub && <p className="text-xs text-slate-400 mt-1 whitespace-pre-line">{sub}</p>}
       </div>
     </div>
   );
