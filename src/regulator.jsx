@@ -905,12 +905,10 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
       {/* Sidebar */}
       <aside className="w-64 bg-[#084d2a] text-white flex-shrink-0 hidden md:flex flex-col justify-between min-h-screen shadow-xl border-r border-[#063d21]">
         <div>
-          <div className="px-5 py-6 text-center border-b border-emerald-900/60 bg-[#064223]">
-            <div className="w-24 h-24 mx-auto mb-3 bg-white p-2 rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-emerald-400/30">
-              <img alt={`${reg.short} logo`} className="max-h-full max-w-full object-contain" src={reg.logo} />
-            </div>
-            <h1 className="text-xl font-bold tracking-wider uppercase text-white">{reg.short}</h1>
-            <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase">EARMS Oversight Portal</p>
+          <div className="px-5 pt-5 pb-4 text-center border-b border-emerald-900/60 bg-[#064223] relative overflow-hidden">
+            <img alt={`${reg.short} logo`} className="w-40 h-auto mx-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)] relative z-10" src={reg.logo} />
+            <h1 className="text-xl font-bold tracking-wider uppercase text-white relative z-10 mt-1">{reg.short}</h1>
+            <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase relative z-10">EARMS Oversight Portal</p>
           </div>
           <nav className="mt-1 px-3 space-y-1">
             <StitchNav reg={reg} route={reg.route} view={view} go={go} onLogout={logout} />
