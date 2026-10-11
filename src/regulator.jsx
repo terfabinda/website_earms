@@ -11,18 +11,18 @@ const STITCH_BAR_COLORS = ["#0b6639", "#1d4ed8", "#eab308", "#0284c7", "#2563eb"
 const OWN_COLORS = { Federal: "#166534", State: "#b45309", Private: "#1e3a8a" };
 const CARD_ICON_BG = ["#0b6639", "#1d4ed8", "#b45309", "#4338ca", "#059669", "#ea580c", "#7c3aed", "#0d9488"];
 
-/* ---------- Stitch metric card: icon row, colored header, big number (no prose) ---------- */
-function StitchMetricCard({ label, value, icon, color }) {
+/* ---------- Stitch metric card: colored header, big number, large icon floated right ---------- */
+function StitchMetricCard({ label, value, sub, icon, color }) {
   return (
-    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between mb-2">
-        <div className="w-9 h-9 rounded-full text-white flex items-center justify-center" style={{ background: color }}>
-          <span className="material-symbols-outlined text-[18px]">{icon}</span>
-        </div>
-        <span className="material-symbols-outlined text-[18px] text-slate-300">chevron_right</span>
+    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold" style={{ color }}>{label}</p>
+        <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
+        {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
       </div>
-      <p className="text-xs font-semibold" style={{ color }}>{label}</p>
-      <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
+      <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0" style={{ background: color }}>
+        <span className="material-symbols-outlined text-[28px]">{icon}</span>
+      </div>
     </div>
   );
 }
@@ -109,7 +109,7 @@ function OverviewTab({ dash, reg, go, route }) {
   const own = ownership?.counts || { Federal: 0, State: 0, Private: 0 };
   const cards = [
     { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedCount), icon: "account_balance", color: CARD_ICON_BG[0] },
-    { label: "Colleges", value: fmtNum(dash.totalColleges), icon: "apartment", color: CARD_ICON_BG[1] },
+    { label: "Colleges", value: fmtNum(dash.totalColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
     { label: "Departments", value: fmtNum(dash.totalDepartments), icon: "account_tree", color: CARD_ICON_BG[2] },
     { label: "Approved Programmes", value: fmtNum(dash.totalProgrammes), icon: "menu_book", color: CARD_ICON_BG[3] },
     { label: "Total Supervisors & Staff", value: fmtNum(dash.totalStaff), icon: "supervisor_account", color: CARD_ICON_BG[4] },
@@ -121,7 +121,7 @@ function OverviewTab({ dash, reg, go, route }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (
-          <StitchMetricCard key={c.label} label={c.label} value={c.value} icon={c.icon} color={c.color} />
+          <StitchMetricCard key={c.label} label={c.label} value={c.value} sub={c.sub} icon={c.icon} color={c.color} />
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
