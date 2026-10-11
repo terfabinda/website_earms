@@ -906,7 +906,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
       <aside className="w-64 bg-[#084d2a] text-white flex-shrink-0 hidden md:flex flex-col justify-between min-h-screen shadow-xl border-r border-[#063d21]">
         <div>
           <div className="px-5 pt-5 pb-4 text-center border-b border-emerald-900/60 bg-[#064223] relative overflow-hidden">
-            <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto relative z-10 drop-shadow-[0_0_22px_rgba(255,255,255,0.65)]" src={reg.logo} />
+            <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto relative z-10 drop-shadow-[0_10px_18px_rgba(0,0,0,0.8)]" src={reg.logo} />
             <h1 className="text-xl font-bold tracking-wider uppercase text-white relative z-10 mt-1">{reg.short}</h1>
             <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase relative z-10">EARMS Oversight Portal</p>
           </div>
