@@ -36,14 +36,14 @@ function ErrBar({ err }) {
   return <div className="w-full rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>;
 }
 
-function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub }) {
+function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub, sideLegend = true }) {
   const total = segments.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
   const r = (size - thickness) / 2;
   const circ = 2 * Math.PI * r;
   let acc = 0;
   return (
     <div className="flex flex-col sm:flex-row items-center gap-6">
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div className={`relative shrink-0 ${sideLegend ? "" : "mx-auto"}`} style={{ width: size, height: size }}>
         <svg width={size} height={size} className="block -rotate-90">
           {segments.map((seg, i) => {
             const frac = (Number(seg.value) || 0) / total;
@@ -58,6 +58,7 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub })
           {centerSub && <span className="font-body-sm text-on-surface-variant text-[12px] px-3">{centerSub}</span>}
         </div>
       </div>
+      {sideLegend && (
       <div className="space-y-2 w-full">
         {segments.map((s, i) => (
           <div key={i} className="flex items-center gap-2 text-sm">
@@ -67,6 +68,7 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub })
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
@@ -235,6 +237,7 @@ function OverviewTab({ dash, reg, go, route }) {
                     size={168} thickness={24}
                     centerLabel="72%"
                     centerSub="Completion Rate"
+                    sideLegend={false}
                   />
                 </div>
               </div>
