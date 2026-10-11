@@ -166,7 +166,7 @@ function OverviewTab({ dash, reg, go, route }) {
     { label: reg.cardRepo, value: fmtNum(reg.reposTotal), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
     { label: "Repository Records", value: fmtNum(reg.recordsTotal), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
   ] : [
-    { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
+    { label: `${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: reg.unitTerm, value: fmtNum(scopedColleges), sub: `${reg.unitTerm} under mandate`, icon: "apartment", color: CARD_ICON_BG[1] },
     { label: "Departments", value: fmtNum(scopedDepts), icon: "account_tree", color: CARD_ICON_BG[2] },
     { label: "Approved Programmes", value: fmtNum(scopedProgs), icon: "menu_book", color: CARD_ICON_BG[3] },
