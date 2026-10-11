@@ -591,27 +591,12 @@ function Signup({ go }) {
         preferredCurrency: 'NGN',
         timeZone: 'Africa/Lagos',
       })
-      // Second step (institution accounts only): IAM owner alone is not enough —
-      // onboarding has no matching institution record, so every onboarding call
-      // 401s with "Institution claim missing". Auto-register it now while we
-      // have the credentials, so a fresh login works end-to-end.
-      if (Number(ownerType) === 1) {
-        try {
-          await authApi.login(userName.trim(), pwd)
-          const { onboardingApi } = await import("./onboarding")
-          const fd = new FormData()
-          fd.append("Code", institutionCode.trim())
-          fd.append("Name", ownerName.trim())
-          fd.append("Email", email.trim())
-          fd.append("InstitutionType", "University")
-          await onboardingApi.createInstitution(fd)
-          setInfo('Account and institution created. You can now sign in.')
-        } catch (secondErr) {
-          setInfo('Account created, but institution registration failed: ' + (secondErr.message || 'unknown error') + ' — sign in, then complete it under Onboarding → Institution.')
-        }
-      } else {
-        setInfo('Account created. You can now sign in.')
-      }
+      // Sign-up ends here: no second-step auto-registration (it threw for fresh
+      // accounts). The institution record is completed after sign-in under
+      // Onboarding → Institution.
+      setOwnerName(''); setInstitutionCode(''); setUserName(''); setEmail('')
+      setPwd(''); setConfirm(''); setTerms(false)
+      setInfo('Account created successfully.')
     } catch (err) {
       setError(err.message || 'Could not create account.')
     } finally {
@@ -624,7 +609,7 @@ function Signup({ go }) {
       <h1 className="font-headline-md text-headline-md text-on-surface text-center">Create Account</h1>
       <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 text-center mb-6">Register a new institution or personal account for EARMS.</p>
       {error && <div className="w-full bg-error-container text-on-error-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{error}</div>}
-      {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{info}</div>}
+      {info && <div className="w-full bg-primary-container text-on-primary-container text-body-sm font-body-sm px-3 py-2 rounded-lg mb-4">{info} <button type="button" onClick={()=>go('login')} className="font-label-md underline hover:text-primary-fixed-dim">Sign In →</button></div>}
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1">
           <label className="font-label-md text-label-md text-on-surface block" htmlFor="suType">Account Type</label>
@@ -967,6 +952,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   const hashSection = (hashQuery.get('section') || '').toLowerCase()
   const hashTab = (hashQuery.get('tab') || '').toLowerCase()
   const hashView = (hashQuery.get('view') || 'overview').toLowerCase()
+  // Institution logo for the sidebar brand block — queried once for admin users
+  // who have an uploaded university logo on their institution record.
+  const [instLogo, setInstLogo] = useState("")
+  useEffect(() => {
+    if (role !== 'admin') return
+    let cancelled = false
+    loadInstitutionDetails()
+      .then(({ record }) => { if (!cancelled && record.logoUrl) setInstLogo(record.logoUrl) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [role])
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
@@ -1010,7 +1006,11 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
       <nav className="hidden md:flex flex-col bg-surface-container-low border-r border-outline-variant shadow-sm w-64 h-screen fixed left-0 top-0 p-4 z-40">
         <div className="flex items-center gap-2 mb-6">
           {role==='admin' ? (
-            <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">school</span></div>
+            instLogo ? (
+              <img alt="Institution logo" className="w-10 h-10 rounded-lg object-cover shrink-0 border border-outline-variant bg-white" src={instLogo} />
+            ) : (
+              <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">school</span></div>
+            )
           ) : role==='regulator' ? (
             <img alt={`${REGULATORS[active]?.short || "Regulator"} logo`} className="w-10 h-10 object-contain shrink-0 rounded-lg bg-white border border-outline-variant" src={REGULATORS[active]?.logo} />
           ) : role==='faculty' ? (
