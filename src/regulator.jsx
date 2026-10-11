@@ -979,7 +979,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
                 <p className="text-xs text-slate-500 font-normal mt-0.5">{reg.titleSub}</p>
               </div>
               <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-200/90 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-medium self-start sm:self-auto">
-                <span className="material-symbols-outlined text-[16px] text-amber-600">info</span>
+                <span className="material-symbols-outlined text-[16px] text-amber-600">workspace_premium</span>
                 <span>OFFICIAL OVERSIGHT • Live Figures</span>
               </div>
             </div>
