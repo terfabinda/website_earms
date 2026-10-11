@@ -29,7 +29,7 @@ function StitchMetricCard({ label, value, sub, icon, color }) {
 }
 
 function Card({ children, className = "" }) {
-  return <div className={"glass-card ambient-shadow rounded-xl border border-surface-container bg-surface-container-lowest " + className}>{children}</div>;
+  return <div className={"bg-white rounded-xl border border-slate-200/80 shadow-xs " + className}>{children}</div>;
 }
 
 function ErrBar({ err }) {
@@ -557,11 +557,11 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
                     <p className="font-medium text-on-surface">{it.name ?? it.Name}</p>
                     <p className="text-[12px] text-on-surface-variant">{it.code ?? it.Code}{it.address ?? it.Address ? ` · ${it.address ?? it.Address}` : ""}</p>
                   </td>
-                  <td className="py-3 px-4"><span className="px-2.5 py-1 rounded-full text-[11px] font-label-md text-white" style={{ background: reg.accent }}>{it.institutionType ?? it.InstitutionType ?? "—"}</span></td>
+                  <td className="py-3 px-4"><span className="px-2.5 py-1 rounded-full text-[11px] font-label-md text-white" style={{ background: "#0b6639" }}>{it.institutionType ?? it.InstitutionType ?? "—"}</span></td>
                   <td className="py-3 px-4 text-right">{fmtNum(it.collegeCount ?? 0)}</td>
                   <td className="py-3 px-4 text-right">{fmtNum(it.departmentCount ?? 0)}</td>
                   <td className="py-3 px-4 text-right">{fmtNum(it.programmeCount ?? 0)}</td>
-                  <td className="py-3 px-4 text-right"><button onClick={() => onOpen(it.id ?? it.Id)} className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[13px] font-label-md hover:opacity-90">Open</button></td>
+                  <td className="py-3 px-4 text-right"><button onClick={() => onOpen(it.id ?? it.Id)} className="px-3 py-1.5 rounded-lg bg-[#65a30d] text-white text-[13px] font-label-md hover:opacity-90">Open</button></td>
                 </tr>
               ))}
             </tbody>
@@ -628,7 +628,7 @@ function InstitutionDetails({ id, reg, onBack }) {
   };
 
   if (loading) return <p className="font-body-sm text-on-surface-variant">Loading institution…</p>;
-  if (err) return (<div className="space-y-3"><ErrBar err={err} /><button onClick={onBack} className="text-primary text-sm hover:underline">← Back to list</button></div>);
+  if (err) return (<div className="space-y-3"><ErrBar err={err} /><button onClick={onBack} className="text-emerald-700 text-sm hover:underline">← Back to list</button></div>);
   if (!detail) return null;
 
   const tabs = [
@@ -649,13 +649,13 @@ function InstitutionDetails({ id, reg, onBack }) {
 
   return (
     <div className="space-y-5">
-      <button onClick={onBack} className="text-primary text-sm hover:underline">← Back to institutions</button>
+      <button onClick={onBack} className="text-emerald-700 text-sm hover:underline">← Back to institutions</button>
       <Card className="p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-headline-md font-bold text-primary">{detail.name}</h2>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-label-md text-white" style={{ background: reg.accent }}>{detail.institutionType}</span>
+              <h2 className="font-headline-md font-bold text-slate-800">{detail.name}</h2>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-label-md text-white" style={{ background: "#0b6639" }}>{detail.institutionType}</span>
             </div>
             <p className="font-body-sm text-on-surface-variant text-sm mt-1">{detail.code}{detail.address ? ` · ${detail.address}` : ""}</p>
             <p className="font-body-sm text-on-surface-variant text-[12px]">{detail.email || ""}{detail.phoneNo ? ` · ${detail.phoneNo}` : ""}</p>
@@ -663,7 +663,7 @@ function InstitutionDetails({ id, reg, onBack }) {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
           {[[unitTerm, detail.collegeCount, "account_balance"], ["Departments", detail.departmentCount, "account_tree"], ["Programmes", detail.programmeCount, "menu_book"], ["Staff", detail.staffCount, "supervisor_account"], ["Students", detail.studentCount, "school"]].map(([l, v, ic]) => (
-            <div key={l} className="rounded-lg bg-surface-container-low p-3 text-center">
+            <div key={l} className="rounded-lg bg-slate-50 border border-slate-100 p-3 text-center">
               <p className="text-[11px] uppercase tracking-wide text-on-surface-variant font-label-md">{l}</p>
               <p className="font-headline-sm font-bold text-on-surface">{fmtNum(v)}</p>
             </div>
@@ -672,7 +672,7 @@ function InstitutionDetails({ id, reg, onBack }) {
       </Card>
       <div className="flex flex-wrap gap-2">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-md text-[13px] ${tab === t.key ? "text-white" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant"}`} style={tab === t.key ? { background: reg.accent } : {}}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-md text-[13px] ${tab === t.key ? "text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-600"}`} style={tab === t.key ? { background: reg.accent } : {}}>
             <span className="material-symbols-outlined text-[18px]">{t.icon}</span>{t.label}
           </button>
         ))}
@@ -722,7 +722,7 @@ function InstitutionDetails({ id, reg, onBack }) {
                     <td className="py-2.5 px-4 font-medium text-on-surface">{p.name}</td>
                     <td className="py-2.5 px-4 text-on-surface-variant">{p.departmentName}</td>
                     <td className="py-2.5 px-4 text-on-surface-variant">{p.collegeName}</td>
-                    <td className="py-2.5 px-4 text-right"><button onClick={() => openProgramme(p.id)} className="text-primary text-[13px] hover:underline">Details</button></td>
+                    <td className="py-2.5 px-4 text-right"><button onClick={() => openProgramme(p.id)} className="text-emerald-700 text-[13px] hover:underline">Details</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -764,7 +764,7 @@ function InstitutionDetails({ id, reg, onBack }) {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setProgDetail(null)}></div>
           <div className="relative w-full max-w-md bg-surface-container-lowest rounded-xl shadow-elevated border border-outline-variant p-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-headline-sm font-bold text-primary">Programme Details</h3>
+              <h3 className="font-headline-sm font-bold text-slate-800">Programme Details</h3>
               <button onClick={() => setProgDetail(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined">close</span></button>
             </div>
             {progDetail.error
