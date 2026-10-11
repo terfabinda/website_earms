@@ -459,14 +459,6 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
 
   return (
     <div className="space-y-6">
-      {/* cross-regulator switcher */}
-      <div className="flex flex-wrap gap-2">
-        {Object.values(REGULATORS).map((r) => (
-          <button key={r.key} onClick={() => go(`${r.route}?view=overview`)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-md text-[13px] border ${r.key === reg.key ? "text-white border-transparent" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:bg-surface-variant"}`} style={r.key === reg.key ? { background: r.accent } : {}}>
-            <span className="material-symbols-outlined text-[18px]">{r.icon}</span>{r.short} · {r.scope}
-          </button>
-        ))}
-      </div>
       <Card className="p-5 flex flex-col md:flex-row md:items-center gap-3 justify-between" >
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0" style={{ background: reg.accent }}><span className="material-symbols-outlined text-[26px]">{reg.icon}</span></div>

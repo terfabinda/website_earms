@@ -996,11 +996,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Overview', icon: 'dashboard', nav: `${regulatorRoute}?view=overview`},
     {label: 'Institutions', icon: 'account_balance', nav: `${regulatorRoute}?view=institutions`},
   ]
-  const regulatorSwitchItems = [
-    {label: 'NUC · Universities', icon: 'account_balance', nav: 'nuc?view=overview', key: 'nuc'},
-    {label: 'NBTE · Poly/Mono', icon: 'precision_manufacturing', nav: 'nbte?view=overview', key: 'nbte'},
-    {label: 'NCCE · Colleges', icon: 'school', nav: 'ncce?view=overview', key: 'ncce'},
-  ]
   // map active to highlight
   const isActive = (k) => {
     if (active==='student' && k==='student') return true
@@ -1096,10 +1091,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 const isCur = (it.label === 'Overview' && (hashView === '' || hashView === 'overview')) || (it.label === 'Institutions' && (hashView === 'institutions' || hashView === 'institution'));
                 return <li key={it.label}><button onClick={() => go(it.nav)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${isCur ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>;
               })}
-              <li className="pt-3"><p className="px-3 pb-1 font-label-md text-[11px] uppercase tracking-wider text-on-surface-variant">Switch regulator</p></li>
-              {regulatorSwitchItems.map(it => (
-                <li key={it.key}><button onClick={() => go(it.nav)} type="button" className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left ${active === it.key ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
-              ))}
             </>
           ) : role==='faculty' ? (
             <>
@@ -1206,8 +1197,8 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 </>
               )}
             </nav>
-            <div className="flex items-center gap-2 md:gap-3">
-              {role!=='student' && <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>}
+              <div className="flex items-center gap-2 md:gap-3">
+                {role!=='student' && role!=='regulator' && <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>}
               <button className="p-1 hover:bg-surface-variant rounded-full"><span className="material-symbols-outlined text-[20px]">notifications</span></button>
               <button className="p-1 hover:bg-surface-variant rounded-full hidden md:block"><span className="material-symbols-outlined text-[20px]">apps</span></button>
               <img alt="avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant" src={role==='student' ? AVATAR_STUDENT : AVATAR_FACULTY}/>
@@ -6169,10 +6160,10 @@ class RouteErrorBoundary extends React.Component {
 function RegulatorRoute({ go, regulatorKey }) {
   const query = useHashQuery();
   const meta = {
-    nuc: { title: "NUC Dashboard", subtitle: "National Universities Commission — universities oversight." },
-    nbte: { title: "NBTE Dashboard", subtitle: "National Board for Technical Education — polytechnics & monotechnics oversight." },
-    ncce: { title: "NCCE Dashboard", subtitle: "National Commission for Colleges of Education — colleges oversight." },
-  }[regulatorKey] || { title: "Regulator Dashboard", subtitle: "Regulatory oversight." };
+    nuc: { title: "Welcome, Admin", subtitle: "National Universities Commission — universities oversight." },
+    nbte: { title: "Welcome, Admin", subtitle: "National Board for Technical Education — polytechnics & monotechnics oversight." },
+    ncce: { title: "Welcome, Admin", subtitle: "National Commission for Colleges of Education — colleges oversight." },
+  }[regulatorKey] || { title: "Welcome, Admin", subtitle: "Regulatory oversight." };
   const Body = regulatorKey === "nbte" ? NbteDashboard : regulatorKey === "ncce" ? NcceDashboard : NucDashboard;
   return (
     <DashShell go={go} active={regulatorKey} role="regulator" title={meta.title} subtitle={meta.subtitle}>
