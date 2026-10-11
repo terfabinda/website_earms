@@ -74,8 +74,17 @@ function Donut({ segments, size = 168, thickness = 26, centerLabel, centerSub, s
   );
 }
 
-function HBarStitch({ label, value, max, color }) {
+function AxisScale({ max }) {
+  const step = Math.ceil(max / 4 / 5000) * 5000 || 5000;
+  const ticks = [0, step, step * 2, step * 3, step * 4];
   return (
+    <div className="border-t border-slate-100 pt-3 mt-4 flex justify-between text-[10px] text-slate-400 pl-32 pr-2">
+      {ticks.map((t) => (<span key={t}>{fmtNum(t)}</span>))}
+    </div>
+  );
+}
+
+function HBarStitch({ label, value, max, color }) {  return (
     <div className="flex items-center gap-3">
       <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={label}>{label}</span>
       <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
@@ -85,32 +94,6 @@ function HBarStitch({ label, value, max, color }) {
     </div>
   );
 }
-
-/* ---------- NCCE panel datasets (mandate spec; no backing endpoint yet) ---------- */
-const NCCE_REPO_CATS = [
-  { label: "Science", value: 42650 },
-  { label: "Social Sciences", value: 32150 },
-  { label: "Education", value: 54000 },
-  { label: "Humanities", value: 24133 },
-  { label: "Technology", value: 18007 },
-  { label: "AI", value: 6450 },
-  { label: "Law", value: 4765 },
-  { label: "Others", value: 4245 },
-];
-const NCCE_COMPLETED = 67499;
-const NCCE_PENDING = 23520;
-const NCCE_GENDER = {
-  male: [
-    { label: "In Progress", value: 16840 },
-    { label: "Completed", value: 32150 },
-    { label: "Pending", value: 11920 },
-  ],
-  female: [
-    { label: "In Progress", value: 14230 },
-    { label: "Completed", value: 27460 },
-    { label: "Pending", value: 10150 },
-  ],
-};
 
 /* ---------- Overview tab: Stitch 8-card metrics + 3 analytics panels, live data ---------- */
 function OverviewTab({ dash, reg, go, route }) {
@@ -168,19 +151,20 @@ function OverviewTab({ dash, reg, go, route }) {
   const topStudents = studentList.slice(0, 6);
   const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
   const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
-  // Cards 5–8 have no backing endpoint yet — static illustrative figures per
-  // mandate spec (replace with live values once the backend exposes them).
-  // Illustrative fallbacks (mandate spec) when the endpoint returns 0.
-  const fb = { staff: 12480, students: 84000, progs: 1560 };
-  const cards = reg.key === "ncce" ? [
-    { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: "#0b6639" },
+  // Illustrative fallbacks (mandate spec): live-first, mock figures when the
+  // endpoint returns 0; cards 5–8 + repo/gender panels have no backing endpoint.
+  const fb = reg.fallbacks || {};
+  const pendingPct = reg.completion ? (100 - reg.completion.pct) : 0;
+  const pendingPctLabel = Number.isInteger(pendingPct) ? String(pendingPct) : pendingPct.toFixed(1);
+  const cards = reg.fallbacks ? [
+    { label: reg.cardAccredited, value: fmtNum(scopedInst), sub: reg.cardAccreditedSub, icon: "account_balance", color: "#0b6639" },
     { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff || fb.staff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
     { label: "Project Students", value: fmtNum(scopedStudents || fb.students), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
     { label: "Programmes", value: fmtNum(scopedProgs || fb.progs), sub: "2025/2026 Approved programmes", icon: "menu_book", color: "#1e3a8a" },
-    { label: "Projects Completed", value: fmtNum(67499), sub: "72% Completion rate", icon: "task", color: "#059669" },
-    { label: "Projects Pending", value: fmtNum(23520), sub: "28% Awaiting completion", icon: "schedule", color: "#65a30d" },
-    { label: "Research Repositories", value: fmtNum(3887), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
-    { label: "Repository Records", value: fmtNum(5160), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
+    { label: "Projects Completed", value: fmtNum(reg.completion.completed), sub: `${reg.completion.pct}% Completion rate`, icon: "task", color: "#059669" },
+    { label: "Projects Pending", value: fmtNum(reg.completion.pending), sub: `${pendingPctLabel}% Awaiting completion`, icon: "schedule", color: "#65a30d" },
+    { label: reg.cardRepo, value: fmtNum(reg.reposTotal), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
+    { label: "Repository Records", value: fmtNum(reg.recordsTotal), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: "Colleges", value: fmtNum(scopedColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
@@ -199,7 +183,7 @@ function OverviewTab({ dash, reg, go, route }) {
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {reg.key === "ncce" ? (
+        {reg.repoCats ? (
           <>
             <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
               <div>
@@ -207,22 +191,20 @@ function OverviewTab({ dash, reg, go, route }) {
                   <span className="material-symbols-outlined text-[18px] text-slate-700">bar_chart</span>
                   <h4 className="text-sm font-bold text-slate-800">Research Repository by Category</h4>
                 </div>
-                <p className="text-[11px] text-slate-500 mb-5">All sessions - 186,400</p>
+                <p className="text-[11px] text-slate-500 mb-5">All sessions - {fmtNum(reg.repoTotal)}</p>
                 <div className="space-y-3.5 text-xs">
-                  {NCCE_REPO_CATS.map((c, i) => (
+                  {reg.repoCats.map((c, i) => (
                     <div key={c.label} className="flex items-center gap-3">
                       <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={c.label}>{c.label}</span>
                       <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
-                        <div className="h-full rounded-r-full" style={{ width: `${Math.max((c.value / 54000) * 100, 2)}%`, background: STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length] }} />
+                        <div className="h-full rounded-r-full" style={{ width: `${Math.max((c.value / Math.max(...reg.repoCats.map((x) => x.value), 1)) * 100, 2)}%`, background: STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length] }} />
                       </div>
                       <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(c.value)}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="border-t border-slate-100 pt-3 mt-4 flex justify-between text-[10px] text-slate-400 pl-32 pr-2">
-                <span>0</span><span>15,000</span><span>30,000</span><span>45,000</span><span>60,000</span>
-              </div>
+              <AxisScale max={Math.max(...reg.repoCats.map((x) => x.value), 1)} />
             </section>
             <section className="lg:col-span-3 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
               <div>
@@ -234,11 +216,11 @@ function OverviewTab({ dash, reg, go, route }) {
                 <div className="relative flex items-center justify-center my-4">
                   <Donut
                     segments={[
-                      { label: "Completed", value: 72, color: "#0b6639" },
-                      { label: "Pending", value: 28, color: "#cbd5e1" },
+                      { label: "Completed", value: reg.completion.pct, color: "#0b6639" },
+                      { label: "Pending", value: 100 - reg.completion.pct, color: "#cbd5e1" },
                     ]}
                     size={168} thickness={24}
-                    centerLabel="72%"
+                    centerLabel={`${reg.completion.pct}%`}
                     centerSub="Completion Rate"
                     sideLegend={false}
                   />
@@ -250,14 +232,14 @@ function OverviewTab({ dash, reg, go, route }) {
                     <span className="w-3 h-3 rounded-full bg-[#0b6639]"></span>
                     <span className="text-slate-600 font-medium">Completed</span>
                   </div>
-                  <span className="font-bold text-slate-800">{fmtNum(NCCE_COMPLETED)}</span>
+                  <span className="font-bold text-slate-800">{fmtNum(reg.completion.completed)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-slate-300"></span>
                     <span className="text-slate-600 font-medium">Pending</span>
                   </div>
-                  <span className="font-bold text-slate-800">{fmtNum(NCCE_PENDING)}</span>
+                  <span className="font-bold text-slate-800">{fmtNum(reg.completion.pending)}</span>
                 </div>
               </div>
             </section>
@@ -273,7 +255,7 @@ function OverviewTab({ dash, reg, go, route }) {
                     { key: "male", title: "Male", color: "#2563eb", soft: "bg-blue-50", text: "text-blue-900", iconColor: "text-blue-600" },
                     { key: "female", title: "Female", color: "#f59e0b", soft: "bg-amber-50", text: "text-amber-900", iconColor: "text-amber-600" },
                   ].map((col) => {
-                    const rows = NCCE_GENDER[col.key];
+                    const rows = reg.gender[col.key];
                     const max = Math.max(...rows.map((r) => r.value), 1);
                     return (
                       <div key={col.key} className={`space-y-3 ${col.key === "female" ? "pl-4" : "pr-2"}`}>
@@ -777,9 +759,9 @@ function ProgrammesView({ reg }) {
   );
 }
 
-/* ---------- Repositories (mandate spec figures for NCCE; API exposes none) ---------- */
+/* ---------- Repositories (mandate spec figures; API exposes none) ---------- */
 function RepositoriesView({ reg }) {
-  if (reg.key !== "ncce") {
+  if (!reg.repoCats) {
     return (
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-8 text-center">
         <span className="material-symbols-outlined text-3xl text-slate-300">dns</span>
@@ -788,23 +770,23 @@ function RepositoriesView({ reg }) {
       </div>
     );
   }
-  const total = NCCE_REPO_CATS.reduce((s, c) => s + c.value, 0);
+  const total = reg.repoCats.reduce((s, c) => s + c.value, 0);
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3">
           <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0 bg-[#7c3aed]"><span className="material-symbols-outlined text-[28px]">dns</span></div>
-          <div><p className="text-xs font-semibold text-[#7c3aed]">Research Repositories</p><p className="text-3xl font-bold text-slate-900">3,887</p></div>
+          <div><p className="text-xs font-semibold text-[#7c3aed]">{reg.cardRepo}</p><p className="text-3xl font-bold text-slate-900">{fmtNum(reg.reposTotal)}</p></div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3">
           <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0 bg-[#be185d]"><span className="material-symbols-outlined text-[28px]">inventory_2</span></div>
-          <div><p className="text-xs font-semibold text-[#be185d]">Repository Records</p><p className="text-3xl font-bold text-slate-900">5,160</p></div>
+          <div><p className="text-xs font-semibold text-[#be185d]">Repository Records</p><p className="text-3xl font-bold text-slate-900">{fmtNum(reg.recordsTotal)}</p></div>
         </div>
       </div>
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100"><h3 className="text-sm font-bold text-slate-800">Records by Category — All sessions (186,400)</h3></div>
+        <div className="p-5 border-b border-slate-100"><h3 className="text-sm font-bold text-slate-800">Records by Category — All sessions ({fmtNum(reg.repoTotal)})</h3></div>
         <ul className="divide-y divide-slate-100">
-          {NCCE_REPO_CATS.map((c) => (
+          {reg.repoCats.map((c) => (
             <li key={c.label} className="flex items-center gap-3 px-5 py-3">
               <span className="flex-1 text-sm font-medium text-slate-800">{c.label}</span>
               <span className="text-sm font-bold text-slate-800">{fmtNum(c.value)}</span>
