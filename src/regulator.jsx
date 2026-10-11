@@ -14,14 +14,14 @@ const CARD_ICON_BG = ["#0b6639", "#1d4ed8", "#b45309", "#4338ca", "#059669", "#e
 /* ---------- Stitch metric card: colored header, big number, large icon floated right ---------- */
 function StitchMetricCard({ label, value, sub, icon, color }) {
   return (
-    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex items-center justify-between gap-3">
+    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex items-center gap-3">
+      <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0" style={{ background: color }}>
+        <span className="material-symbols-outlined text-[28px]">{icon}</span>
+      </div>
       <div className="min-w-0">
         <p className="text-xs font-semibold" style={{ color }}>{label}</p>
         <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
         {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
-      </div>
-      <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0" style={{ background: color }}>
-        <span className="material-symbols-outlined text-[28px]">{icon}</span>
       </div>
     </div>
   );
