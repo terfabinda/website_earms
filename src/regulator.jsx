@@ -674,16 +674,27 @@ function InstitutionDetails({ id, reg, onBack }) {
 }
 
 /* ---------- Stitch shell: green sidebar + topbar + footer (faithful to screens) ---------- */
+const SIDE_ITEMS = [
+  { view: "overview", label: "Overview", icon: "dashboard" },
+  { view: "institutions", label: null, icon: null },
+  { view: "staff", label: "Supervisors/Lecturers", icon: "supervisor_account" },
+  { view: "students", label: "Project Students", icon: "school" },
+  { view: "programmes", label: "Programmes", icon: "menu_book" },
+  { view: "repositories", label: "Research Repositories", icon: "dns" },
+  { view: "analytics", label: "Analytics", icon: "insights" },
+  { view: "reports", label: "Reports", icon: "description" },
+  { view: "settings", label: "Settings", icon: "settings" },
+];
 function StitchNav({ reg, route, view, go, onLogout }) {
-  const items = [
-    { label: "Overview", icon: "dashboard", nav: `${route}?view=overview`, active: view === "overview" },
-    { label: reg.sideType, icon: reg.icon === "precision_manufacturing" ? "factory" : "account_balance", nav: `${route}?view=institutions`, active: view === "institutions" || view === "institution" },
-  ];
+  const cur = (v) => view === v || (v === "institutions" && view === "institution");
+  const items = SIDE_ITEMS.map((it) => it.view === "institutions"
+    ? { ...it, label: reg.sideType, icon: reg.icon === "precision_manufacturing" ? "factory" : "account_balance" }
+    : it);
   return (
     <>
       {items.map((it) => (
-        <button key={it.label} onClick={() => go(it.nav)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors ${it.active ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
-          <span className={`material-symbols-outlined text-[18px] ${it.active ? "text-emerald-200" : ""}`}>{it.icon}</span>
+        <button key={it.view} onClick={() => go(`${route}?view=${it.view}`)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors ${cur(it.view) ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
+          <span className={`material-symbols-outlined text-[18px] ${cur(it.view) ? "text-emerald-200" : ""}`}>{it.icon}</span>
           <span>{it.label}</span>
         </button>
       ))}
@@ -692,6 +703,154 @@ function StitchNav({ reg, route, view, go, onLogout }) {
         <span>Logout</span>
       </button>
     </>
+  );
+}
+
+/* ---------- Ranked people tables (live dashboard aggregates) ---------- */
+function PeopleView({ title, icon, rows, valueLabel }) {
+  const max = Math.max(...rows.map((r) => r.value), 1);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center gap-2">
+        <span className="material-symbols-outlined text-[18px] text-slate-700">{icon}</span>
+        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      </div>
+      {rows.length ? (
+        <ul className="divide-y divide-slate-100">
+          {rows.map((r, i) => (
+            <li key={i} className="flex items-center gap-3 px-5 py-3">
+              <span className="w-6 h-6 rounded-full bg-emerald-800 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+              <span className="flex-1 truncate text-sm font-medium text-slate-800" title={r.name}>{r.name}</span>
+              <span className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden shrink-0">
+                <span className="block h-full bg-[#0b6639] rounded-r-full" style={{ width: `${Math.max((r.value / max) * 100, 3)}%` }}></span>
+              </span>
+              <span className="w-20 text-right text-sm font-bold text-slate-800">{fmtNum(r.value)} <span className="font-normal text-slate-400 text-[11px]">{valueLabel}</span></span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="p-6 text-sm text-slate-500">No data.</p>}
+    </div>
+  );
+}
+
+/* ---------- Programmes per institution (live institutions list) ---------- */
+function ProgrammesView({ reg }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    regulatorApi.getInstitutions({ page: 1, pageSize: 100 }).then((res) => {
+      if (cancelled) return;
+      setRows((Array.isArray(res.items) ? res.items : []).filter((it) => matchesRegulatorType(it.institutionType, reg.key)));
+    }).catch(() => { if (!cancelled) setRows([]); });
+    return () => { cancelled = true; };
+  }, [reg.key]);
+  const total = (rows || []).reduce((s, r) => s + (Number(r.programmeCount) || 0), 0);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px] text-slate-700">menu_book</span>
+          <h3 className="text-sm font-bold text-slate-800">Programmes by Institution</h3>
+        </div>
+        {rows && <span className="text-xs font-bold text-slate-800">{fmtNum(total)} programmes</span>}
+      </div>
+      {!rows ? <p className="p-6 text-sm text-slate-500">Loading…</p> : rows.length ? (
+        <ul className="divide-y divide-slate-100">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 px-5 py-3">
+              <span className="flex-1 truncate text-sm font-medium text-slate-800" title={r.name}>{r.name}</span>
+              <span className="text-[11px] text-slate-400">{fmtNum(r.departmentCount)} depts</span>
+              <span className="w-16 text-right text-sm font-bold text-slate-800">{fmtNum(r.programmeCount)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="p-6 text-sm text-slate-500">No data.</p>}
+    </div>
+  );
+}
+
+/* ---------- Repositories (mandate spec figures for NCCE; API exposes none) ---------- */
+function RepositoriesView({ reg }) {
+  if (reg.key !== "ncce") {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-8 text-center">
+        <span className="material-symbols-outlined text-3xl text-slate-300">dns</span>
+        <p className="text-sm font-bold text-slate-800 mt-2">Research Repositories</p>
+        <p className="text-xs text-slate-500 mt-1">Repository data is not exposed by the current API for this mandate.</p>
+      </div>
+    );
+  }
+  const total = NCCE_REPO_CATS.reduce((s, c) => s + c.value, 0);
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0 bg-[#7c3aed]"><span className="material-symbols-outlined text-[28px]">dns</span></div>
+          <div><p className="text-xs font-semibold text-[#7c3aed]">Research Repositories</p><p className="text-3xl font-bold text-slate-900">3,887</p></div>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3">
+          <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0 bg-[#be185d]"><span className="material-symbols-outlined text-[28px]">inventory_2</span></div>
+          <div><p className="text-xs font-semibold text-[#be185d]">Repository Records</p><p className="text-3xl font-bold text-slate-900">5,160</p></div>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100"><h3 className="text-sm font-bold text-slate-800">Records by Category — All sessions (186,400)</h3></div>
+        <ul className="divide-y divide-slate-100">
+          {NCCE_REPO_CATS.map((c) => (
+            <li key={c.label} className="flex items-center gap-3 px-5 py-3">
+              <span className="flex-1 text-sm font-medium text-slate-800">{c.label}</span>
+              <span className="text-sm font-bold text-slate-800">{fmtNum(c.value)}</span>
+            </li>
+          ))}
+          <li className="flex items-center gap-3 px-5 py-3 bg-slate-50">
+            <span className="flex-1 text-sm font-bold text-slate-800">Total</span>
+            <span className="text-sm font-bold text-slate-800">{fmtNum(total)}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Reports: exports ---------- */
+function ReportsView({ reg, onExport, exporting }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-[18px] text-slate-700">description</span>
+        <h3 className="text-sm font-bold text-slate-800">Reports</h3>
+      </div>
+      <p className="text-[11px] text-slate-500 mb-4">Download the mandate register as CSV.</p>
+      <button onClick={onExport} disabled={exporting} className="flex items-center gap-2 bg-[#0b6639] hover:bg-[#09542f] text-white px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-60">
+        <span className="material-symbols-outlined text-[16px]">download</span>
+        <span>{exporting ? "Exporting…" : `Export ${reg.short} institutions CSV`}</span>
+      </button>
+    </div>
+  );
+}
+
+/* ---------- Settings: read-only context ---------- */
+function SettingsView({ reg, onLogout }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-3 max-w-xl">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-[18px] text-slate-700">settings</span>
+        <h3 className="text-sm font-bold text-slate-800">Settings</h3>
+      </div>
+      {[
+        ["Academic Session", "2025/2026 Academic Session"],
+        ["Scope", `${reg.name} — ${reg.scope}`],
+        ["Signed in as", "Admin"],
+      ].map(([k, v]) => (
+        <div key={k} className="flex items-center justify-between text-sm border-b border-slate-100 pb-2">
+          <span className="text-slate-500">{k}</span>
+          <span className="font-semibold text-slate-800">{v}</span>
+        </div>
+      ))}
+      <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant">
+        <span className="material-symbols-outlined text-[18px]">logout</span> Logout
+      </button>
+    </div>
   );
 }
 
@@ -808,7 +967,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
         )}
 
         <div className="p-4 md:p-8 space-y-6 flex-1">
-          {view === "overview" && (
+          {(view === "overview" || view === "analytics") && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h1 className="text-3xl font-extrabold text-[#093d22] tracking-tight">{reg.dashTitle}</h1>
@@ -823,10 +982,16 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
           <ErrBar err={err} />
           {loading && !dash && !err ? <p className="text-sm text-slate-500">Loading {reg.short} dashboard…</p> : (
             <>
-              {(view === "overview") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
+              {(view === "overview" || view === "analytics") && <OverviewTab dash={dash} reg={reg} go={go} route={reg.route} />}
               {(view === "institutions") && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
               {(view === "institution" && institutionId) && <InstitutionDetails id={institutionId} reg={reg} onBack={() => nav("institutions")} />}
               {(view === "institution" && !institutionId) && <InstitutionsTab reg={reg} route={reg.route} go={go} onOpen={openInstitution} />}
+              {(view === "staff") && <PeopleView title="Supervisors / Lecturers by Institution" icon="supervisor_account" valueLabel="staff" rows={(Array.isArray(dash?.staffByInstitution) ? dash.staffByInstitution : []).map((s) => ({ name: s.institutionName, value: Number(s.staffCount) || 0 }))} />}
+              {(view === "students") && <PeopleView title="Project Students by Institution" icon="school" valueLabel="students" rows={(Array.isArray(dash?.studentsByInstitution) ? dash.studentsByInstitution : []).map((s) => ({ name: s.institutionName, value: Number(s.studentCount) || 0 }))} />}
+              {(view === "programmes") && <ProgrammesView reg={reg} />}
+              {(view === "repositories") && <RepositoriesView reg={reg} />}
+              {(view === "reports") && <ReportsView reg={reg} onExport={exportCSV} exporting={exporting} />}
+              {(view === "settings") && <SettingsView reg={reg} onLogout={logout} />}
             </>
           )}
           {!loading && !dash && err && (
