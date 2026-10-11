@@ -14,7 +14,7 @@ const CARD_ICON_BG = ["#0b6639", "#1d4ed8", "#b45309", "#4338ca", "#059669", "#e
 /* ---------- Stitch metric card: colored header, big number, large icon floated right ---------- */
 function StitchMetricCard({ label, value, sub, icon, color }) {
   return (
-    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex items-center gap-3">
+    <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex items-start gap-3">
       <div className="w-14 h-14 rounded-full text-white flex items-center justify-center shrink-0" style={{ background: color }}>
         <span className="material-symbols-outlined text-[28px]">{icon}</span>
       </div>
@@ -139,16 +139,17 @@ function OverviewTab({ dash, reg, go, route }) {
   const topStudents = studentList.slice(0, 6);
   const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
   const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
-  const noData = "—";
+  // Cards 5–8 have no backing endpoint yet — static illustrative figures per
+  // mandate spec (replace with live values once the backend exposes them).
   const cards = reg.key === "ncce" ? [
-    { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: CARD_ICON_BG[0] },
-    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: CARD_ICON_BG[4] },
-    { label: "Total Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: CARD_ICON_BG[5] },
-    { label: "Total Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes\nacross", icon: "menu_book", color: CARD_ICON_BG[3] },
-    { label: "Total Projects Completed", value: noData, sub: "72% Completion rate", icon: "task", color: CARD_ICON_BG[4] },
-    { label: "Total Projects Pending", value: noData, sub: "28% Awaiting completion", icon: "schedule", color: CARD_ICON_BG[5] },
-    { label: "All Colleges Research Repositories", value: noData, sub: "Institutional repositories", icon: "dns", color: CARD_ICON_BG[6] },
-    { label: "Total Repository Records", value: noData, sub: "All academic sessions", icon: "inventory_2", color: CARD_ICON_BG[7] },
+    { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: "#0b6639" },
+    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
+    { label: "Total Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
+    { label: "Total Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes\nacross", icon: "menu_book", color: "#1e3a8a" },
+    { label: "Total Projects Completed", value: fmtNum(67499), sub: "72% Completion rate", icon: "task", color: "#059669" },
+    { label: "Total Projects Pending", value: fmtNum(23520), sub: "28% Awaiting completion", icon: "schedule", color: "#65a30d" },
+    { label: "All Colleges Research Repositories", value: fmtNum(3887), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
+    { label: "Total Repository Records", value: fmtNum(5160), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: "Colleges", value: fmtNum(scopedColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
