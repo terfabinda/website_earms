@@ -21,7 +21,7 @@ function StitchMetricCard({ label, value, sub, icon, color }) {
       <div className="min-w-0">
         <p className="text-xs font-semibold" style={{ color }}>{label}</p>
         <h3 className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">{value}</h3>
-        {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
+        {sub && <p className="text-[11px] text-slate-400 mt-1 whitespace-pre-line">{sub}</p>}
       </div>
     </div>
   );
@@ -85,35 +85,74 @@ function HBarStitch({ label, value, max, color }) {
 
 /* ---------- Overview tab: Stitch 8-card metrics + 3 analytics panels, live data ---------- */
 function OverviewTab({ dash, reg, go, route }) {
-  const [ownership, setOwnership] = useState(null);
+  const [mandate, setMandate] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    // Ownership (Federal/State/Private) is name-derived — classify the
-    // mandate-filtered institutions list (first 100).
-    regulatorApi.getInstitutions({ page: 1, pageSize: 100 }).then((res) => {
-      if (cancelled) return;
-      const items = (Array.isArray(res.items) ? res.items : []).filter((it) => matchesRegulatorType(it.institutionType, reg.key));
-      const counts = { Federal: 0, State: 0, Private: 0 };
-      items.forEach((it) => { counts[classifyOwnership(it.name)]++; });
-      setOwnership({ counts, total: items.length });
-    }).catch(() => { if (!cancelled) setOwnership(null); });
+    (async () => {
+      try {
+        // Page through the institutions list (max 100/page, cap 5 pages) so the
+        // mandate slice + ownership split are complete, not first-page-only.
+        let page = 1, fetched = 0, total = Infinity, pages = 0;
+        const all = [];
+        while (fetched < total && pages < 5) {
+          const res = await regulatorApi.getInstitutions({ page, pageSize: 100 });
+          const items = Array.isArray(res.items) ? res.items : [];
+          total = res.totalCount || items.length;
+          fetched += items.length;
+          pages++;
+          all.push(...items.filter((it) => matchesRegulatorType(it.institutionType, reg.key)));
+          if (!items.length) break;
+        }
+        if (cancelled) return;
+        const counts = { Federal: 0, State: 0, Private: 0 };
+        const ids = new Set();
+        let colleges = 0, depts = 0, progs = 0;
+        all.forEach((it) => {
+          counts[classifyOwnership(it.name)]++;
+          ids.add(String(it.id));
+          colleges += Number(it.collegeCount) || 0;
+          depts += Number(it.departmentCount) || 0;
+          progs += Number(it.programmeCount) || 0;
+        });
+        setMandate({ counts, total: all.length, ids, colleges, depts, progs, complete: fetched >= total });
+      } catch { if (!cancelled) setMandate(null); }
+    })();
     return () => { cancelled = true; };
   }, [reg.key]);
   if (!dash) return null;
   const byType = Array.isArray(dash.institutionsByType) ? dash.institutionsByType : [];
   const scopedTypes = byType.filter((t) => matchesRegulatorType(t.institutionType, reg.key));
   const scopedCount = scopedTypes.reduce((s, t) => s + (Number(t.count) || 0), 0);
-  const topStudents = (Array.isArray(dash.studentsByInstitution) ? dash.studentsByInstitution : []).slice(0, 6);
-  const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
-  const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
-  const own = ownership?.counts || { Federal: 0, State: 0, Private: 0 };
-  const cards = [
-    { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedCount), icon: "account_balance", color: CARD_ICON_BG[0] },
-    { label: "Colleges", value: fmtNum(dash.totalColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
-    { label: "Departments", value: fmtNum(dash.totalDepartments), icon: "account_tree", color: CARD_ICON_BG[2] },
-    { label: "Approved Programmes", value: fmtNum(dash.totalProgrammes), icon: "menu_book", color: CARD_ICON_BG[3] },
-    { label: "Total Supervisors & Staff", value: fmtNum(dash.totalStaff), icon: "supervisor_account", color: CARD_ICON_BG[4] },
-    { label: "Total Projects & Students", value: fmtNum(dash.totalStudents), icon: "school", color: CARD_ICON_BG[5] },
+  const own = mandate?.counts || { Federal: 0, State: 0, Private: 0 };
+  // Per-institution top-lists scoped to this mandate via the id set (only when
+  // the mandate fetch completed; otherwise fall back to global aggregates).
+  const inMandate = (id) => mandate?.complete && mandate.ids.has(String(id));
+  const sumFor = (list, key) => (list || []).filter((r) => inMandate(r.institutionId)).reduce((s, r) => s + (Number(r[key]) || 0), 0);
+  const staffList = Array.isArray(dash.staffByInstitution) ? dash.staffByInstitution : [];
+  const studentList = Array.isArray(dash.studentsByInstitution) ? dash.studentsByInstitution : [];
+  const scopedStaff = mandate?.complete ? sumFor(staffList, "staffCount") : (dash.totalStaff ?? 0);
+  const scopedStudents = mandate?.complete ? sumFor(studentList, "studentCount") : (dash.totalStudents ?? 0);
+  const scopedColleges = mandate?.complete ? mandate.colleges : (dash.totalColleges ?? 0);
+  const scopedDepts = mandate?.complete ? mandate.depts : (dash.totalDepartments ?? 0);
+  const scopedProgs = mandate?.complete ? mandate.progs : (dash.totalProgrammes ?? 0);
+  const scopedInst = mandate?.complete ? mandate.total : scopedCount;
+  const noData = "—";
+  const cards = reg.key === "ncce" ? [
+    { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: CARD_ICON_BG[0] },
+    { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: CARD_ICON_BG[4] },
+    { label: "Total Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: CARD_ICON_BG[5] },
+    { label: "Total Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes\nacross", icon: "menu_book", color: CARD_ICON_BG[3] },
+    { label: "Total Projects Completed", value: noData, sub: "72% Completion rate", icon: "task", color: CARD_ICON_BG[4] },
+    { label: "Total Projects Pending", value: noData, sub: "28% Awaiting completion", icon: "schedule", color: CARD_ICON_BG[5] },
+    { label: "All Colleges Research Repositories", value: noData, sub: "Institutional repositories", icon: "dns", color: CARD_ICON_BG[6] },
+    { label: "Total Repository Records", value: noData, sub: "All academic sessions", icon: "inventory_2", color: CARD_ICON_BG[7] },
+  ] : [
+    { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
+    { label: "Colleges", value: fmtNum(scopedColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
+    { label: "Departments", value: fmtNum(scopedDepts), icon: "account_tree", color: CARD_ICON_BG[2] },
+    { label: "Approved Programmes", value: fmtNum(scopedProgs), icon: "menu_book", color: CARD_ICON_BG[3] },
+    { label: "Total Supervisors & Staff", value: fmtNum(scopedStaff), icon: "supervisor_account", color: CARD_ICON_BG[4] },
+    { label: "Total Projects & Students", value: fmtNum(scopedStudents), icon: "school", color: CARD_ICON_BG[5] },
     { label: "Federal Institutions", value: fmtNum(own.Federal), icon: "flag", color: OWN_COLORS.Federal },
     { label: "State Institutions", value: fmtNum(own.State), icon: "location_city", color: OWN_COLORS.State },
   ];
@@ -144,18 +183,18 @@ function OverviewTab({ dash, reg, go, route }) {
               <h4 className="text-sm font-bold text-slate-800">Institutions by Ownership</h4>
             </div>
             <p className="text-[11px] text-slate-500 mb-4">Federal vs State vs Private</p>
-            {ownership ? (
+            {mandate ? (
               <div className="relative flex items-center justify-center my-4">
                 <Donut
                   segments={["Federal", "State", "Private"].map((k) => ({ label: k, value: own[k] || 0, color: OWN_COLORS[k] }))}
                   size={168} thickness={24}
-                  centerLabel={fmtNum(ownership.total)}
+                  centerLabel={fmtNum(mandate.total)}
                   centerSub="institutions"
                 />
               </div>
             ) : <p className="text-xs text-slate-500">Loading…</p>}
           </div>
-          {ownership && (
+          {mandate && (
             <div className="space-y-2 border-t border-slate-100 pt-3">
               {["Federal", "State", "Private"].map((k) => (
                 <div key={k} className="flex items-center justify-between text-xs">
