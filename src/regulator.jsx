@@ -687,18 +687,25 @@ const SIDE_ITEMS = [
 ];
 function StitchNav({ reg, route, view, go, onLogout }) {
   const cur = (v) => view === v || (v === "institutions" && view === "institution");
-  const items = SIDE_ITEMS.map((it) => it.view === "institutions"
+  const others = SIDE_ITEMS.filter((it) => it.view !== "overview").map((it) => it.view === "institutions"
     ? { ...it, label: reg.sideType, icon: reg.icon === "precision_manufacturing" ? "factory" : "account_balance" }
     : it);
+  const btn = (it) => (
+    <button key={it.view} onClick={() => go(`${route}?view=${it.view}`)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors uppercase tracking-wide ${cur(it.view) ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
+      <span className={`material-symbols-outlined text-[18px] ${cur(it.view) ? "text-emerald-200" : ""}`}>{it.icon}</span>
+      <span>{it.label}</span>
+    </button>
+  );
   return (
     <>
-      {items.map((it) => (
-        <button key={it.view} onClick={() => go(`${route}?view=${it.view}`)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors ${cur(it.view) ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
-          <span className={`material-symbols-outlined text-[18px] ${cur(it.view) ? "text-emerald-200" : ""}`}>{it.icon}</span>
-          <span>{it.label}</span>
-        </button>
-      ))}
-      <button onClick={onLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal text-xs transition-colors">
+      <button onClick={() => go(`${route}?view=overview`)} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs transition-colors uppercase tracking-wide ${cur("overview") ? "bg-[#0e6d3d] text-white font-medium shadow-sm border-l-4 border-emerald-300" : "text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal"}`}>
+        <span className={`material-symbols-outlined text-[18px] ${cur("overview") ? "text-emerald-200" : ""}`}>dashboard</span>
+        <span>Overview</span>
+      </button>
+      <div className="my-2 border-t border-emerald-100/20"></div>
+      {others.map(btn)}
+      <div className="my-2 border-t border-emerald-100/20"></div>
+      <button onClick={onLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-emerald-100/80 hover:bg-[#0c5c34] hover:text-white font-normal text-xs transition-colors uppercase tracking-wide">
         <span className="material-symbols-outlined text-[18px]">logout</span>
         <span>Logout</span>
       </button>
