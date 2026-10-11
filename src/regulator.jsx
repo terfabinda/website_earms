@@ -124,8 +124,8 @@ function OverviewTab({ dash, reg, go, route }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label={`${reg.short} Institutions`} value={fmtNum(scopedCount)} sub={`${reg.scope} under mandate`} icon={reg.icon} accent={reg.accent} />
-        <StatCard label="Total Staff" value={fmtNum(dash.totalStaff)} sub="All regulated institutions" icon="supervisor_account" accent="#0f766e" />
-        <StatCard label="Total Students" value={fmtNum(dash.totalStudents)} sub="All regulated institutions" icon="school" accent="#7c3aed" />
+        <StatCard label="Total Supervisors & Staff" value={fmtNum(dash.totalStaff)} sub="All regulated institutions" icon="supervisor_account" accent="#0f766e" />
+        <StatCard label="Total Projects & Students" value={fmtNum(dash.totalStudents)} sub="All regulated institutions" icon="school" accent="#7c3aed" />
         <StatCard label="Total Programmes" value={fmtNum(dash.totalProgrammes)} sub={`${fmtNum(dash.totalDepartments)} depts · ${fmtNum(dash.totalColleges)} colleges`} icon="menu_book" accent="#b45309" />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
