@@ -161,7 +161,7 @@ export const REGULATORS = {
     route: "nbte",
     short: "NBTE",
     name: "National Board for Technical Education",
-    scope: "Polytechnics & Monotechnics",
+    scope: "Polytechnics",
     description: "Regulatory oversight of polytechnics, monotechnics and technical institutions.",
     icon: "precision_manufacturing",
     accent: "#0f766e",
@@ -179,7 +179,7 @@ export const REGULATORS = {
     // Mandated spec mirroring NCCE (live-first; mock figures when endpoint is 0/absent).
     fallbacks: { staff: 19450, students: 142500, progs: 2310 },
     cardAccredited: "Accredited Polytechnics",
-    cardAccreditedSub: "Polytechnics & Monotechnics\nunder this mandate",
+    cardAccreditedSub: "Polytechnics\nunder this mandate",
     cardRepo: "TVET Research Repositories",
     repoCats: [
       { label: "Engineering Tech", value: 68000 },
