@@ -870,6 +870,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
   const [loading, setLoading] = useState(true);
   const [mobileNav, setMobileNav] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [invertLogo, setInvertLogo] = useState(false);
 
   const loadDash = useCallback(() => {
     setLoading(true); setErr("");
@@ -906,7 +907,10 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
       <aside className="w-64 bg-[#084d2a] text-white flex-shrink-0 hidden md:flex flex-col justify-between min-h-screen shadow-xl border-r border-[#063d21]">
         <div>
           <div className="px-5 pt-5 pb-4 text-center border-b border-emerald-900/60 bg-[#064223] relative overflow-hidden">
-            <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)] relative z-10" src={reg.logo} />
+            <button onClick={() => setInvertLogo((v) => !v)} title={invertLogo ? "Restore logo colors" : "Invert logo colors"} className="absolute top-2 right-2 p-1.5 rounded-lg text-emerald-200/70 hover:text-white hover:bg-white/10 transition-colors">
+              <span className="material-symbols-outlined text-[16px]">contrast</span>
+            </button>
+            <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.45)] relative z-10 transition-[filter]" style={invertLogo ? { filter: "invert(1)" } : {}} src={reg.logo} />
             <h1 className="text-xl font-bold tracking-wider uppercase text-white relative z-10 mt-1">{reg.short}</h1>
             <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase relative z-10">EARMS Oversight Portal</p>
           </div>
