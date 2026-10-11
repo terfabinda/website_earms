@@ -178,9 +178,9 @@ export const REGULATORS = {
     footerRight: "National Board for Technical Education Oversight",
     // Mandated spec mirroring NCCE (live-first; mock figures when endpoint is 0/absent).
     fallbacks: { staff: 19450, students: 142500, progs: 2310 },
-    cardAccredited: "Accredited Polytechnics",
+    cardAccredited: "Polytechnics",
     cardAccreditedSub: "Polytechnics\nunder this mandate",
-    cardRepo: "TVET Research Repositories",
+    cardRepo: "TVET Research Repos",
     repoCats: [
       { label: "Engineering Tech", value: 68000 },
       { label: "Applied Sciences", value: 66000 },
