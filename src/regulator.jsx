@@ -170,12 +170,12 @@ function OverviewTab({ dash, reg, go, route }) {
   const cards = reg.key === "ncce" ? [
     { label: "Accredited Colleges", value: fmtNum(scopedInst), sub: "Colleges of Education\nunder this mandate", icon: "account_balance", color: "#0b6639" },
     { label: "Supervisors/Lecturers", value: fmtNum(scopedStaff), sub: "Academic supervisors\nand lecturers", icon: "supervisor_account", color: "#1d4ed8" },
-    { label: "Total Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
-    { label: "Total Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes\nacross", icon: "menu_book", color: "#1e3a8a" },
-    { label: "Total Projects Completed", value: fmtNum(67499), sub: "72% Completion rate", icon: "task", color: "#059669" },
-    { label: "Total Projects Pending", value: fmtNum(23520), sub: "28% Awaiting completion", icon: "schedule", color: "#65a30d" },
-    { label: "All Colleges Research Repositories", value: fmtNum(3887), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
-    { label: "Total Repository Records", value: fmtNum(5160), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
+    { label: "Project Students", value: fmtNum(scopedStudents), sub: "2025/2026 Session", icon: "school", color: "#a16207" },
+    { label: "Programmes", value: fmtNum(scopedProgs), sub: "2025/2026 Approved programmes", icon: "menu_book", color: "#1e3a8a" },
+    { label: "Projects Completed", value: fmtNum(67499), sub: "72% Completion rate", icon: "task", color: "#059669" },
+    { label: "Projects Pending", value: fmtNum(23520), sub: "28% Awaiting completion", icon: "schedule", color: "#65a30d" },
+    { label: "Research Repositories", value: fmtNum(3887), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
+    { label: "Repository Records", value: fmtNum(5160), sub: "All academic sessions", icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `Accredited ${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: "Colleges", value: fmtNum(scopedColleges), sub: "Colleges of Education under mandate", icon: "apartment", color: CARD_ICON_BG[1] },
