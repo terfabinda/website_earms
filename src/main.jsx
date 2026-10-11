@@ -1177,7 +1177,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         {/* TopBar for faculty/student - keep simple header */}
         {role !== 'admin' ? (
           <header className="bg-surface border-b border-outline-variant px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 md:top-0 z-20 mt-12 md:mt-0">
-            <h2 className="hidden md:block font-headline-md font-bold text-primary truncate">{title}</h2>
+            <h2 className="hidden md:block font-headline-md font-bold text-primary truncate">{role==='regulator' ? 'Welcome, Admin' : title}</h2>
             <div className="flex md:hidden items-center gap-2"><span className="font-headline-sm font-bold">{title}</span></div>
             <nav className="hidden md:flex gap-6 items-center">
               {role==='student' ? (
