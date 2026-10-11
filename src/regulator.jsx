@@ -83,6 +83,32 @@ function HBarStitch({ label, value, max, color }) {
   );
 }
 
+/* ---------- NCCE panel datasets (mandate spec; no backing endpoint yet) ---------- */
+const NCCE_REPO_CATS = [
+  { label: "Science", value: 42650 },
+  { label: "Social Sciences", value: 32150 },
+  { label: "Education", value: 54000 },
+  { label: "Humanities", value: 24133 },
+  { label: "Technology", value: 18007 },
+  { label: "AI", value: 6450 },
+  { label: "Law", value: 4765 },
+  { label: "Others", value: 4245 },
+];
+const NCCE_COMPLETED = 67499;
+const NCCE_PENDING = 23520;
+const NCCE_GENDER = {
+  male: [
+    { label: "In Progress", value: 16840 },
+    { label: "Completed", value: 32150 },
+    { label: "Pending", value: 11920 },
+  ],
+  female: [
+    { label: "In Progress", value: 14230 },
+    { label: "Completed", value: 27460 },
+    { label: "Pending", value: 10150 },
+  ],
+};
+
 /* ---------- Overview tab: Stitch 8-card metrics + 3 analytics panels, live data ---------- */
 function OverviewTab({ dash, reg, go, route }) {
   const [mandate, setMandate] = useState(null);
@@ -168,6 +194,121 @@ function OverviewTab({ dash, reg, go, route }) {
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {reg.key === "ncce" ? (
+          <>
+            <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-[18px] text-slate-700">bar_chart</span>
+                  <h4 className="text-sm font-bold text-slate-800">Research Repository by Category</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-5">All sessions - 186,400</p>
+                <div className="space-y-3.5 text-xs">
+                  {NCCE_REPO_CATS.map((c, i) => (
+                    <div key={c.label} className="flex items-center gap-3">
+                      <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={c.label}>{c.label}</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                        <div className="h-full rounded-r-full" style={{ width: `${Math.max((c.value / 54000) * 100, 2)}%`, background: STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length] }} />
+                      </div>
+                      <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(c.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="border-t border-slate-100 pt-3 mt-4 flex justify-between text-[10px] text-slate-400 pl-32 pr-2">
+                <span>0</span><span>15,000</span><span>30,000</span><span>45,000</span><span>60,000</span>
+              </div>
+            </section>
+            <section className="lg:col-span-3 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-[18px] text-slate-700">pie_chart</span>
+                  <h4 className="text-sm font-bold text-slate-800">Project Completion</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-4">Project Completion Rate</p>
+                <div className="relative flex items-center justify-center my-4">
+                  <Donut
+                    segments={[
+                      { label: "Completed", value: 72, color: "#0b6639" },
+                      { label: "Pending", value: 28, color: "#cbd5e1" },
+                    ]}
+                    size={168} thickness={24}
+                    centerLabel="72%"
+                    centerSub="Completion Rate"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-[#0b6639]"></span>
+                    <span className="text-slate-600 font-medium">Completed</span>
+                  </div>
+                  <span className="font-bold text-slate-800">{fmtNum(NCCE_COMPLETED)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-slate-300"></span>
+                    <span className="text-slate-600 font-medium">Pending</span>
+                  </div>
+                  <span className="font-bold text-slate-800">{fmtNum(NCCE_PENDING)}</span>
+                </div>
+              </div>
+            </section>
+            <section className="lg:col-span-4 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-[18px] text-slate-700">group</span>
+                  <h4 className="text-sm font-bold text-slate-800">Project Numbers by Student Gender</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-5">Illustrative split</p>
+                <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
+                  {[
+                    { key: "male", title: "Male", color: "#2563eb", soft: "bg-blue-50", text: "text-blue-900", iconColor: "text-blue-600" },
+                    { key: "female", title: "Female", color: "#f59e0b", soft: "bg-amber-50", text: "text-amber-900", iconColor: "text-amber-600" },
+                  ].map((col) => {
+                    const rows = NCCE_GENDER[col.key];
+                    const max = Math.max(...rows.map((r) => r.value), 1);
+                    return (
+                      <div key={col.key} className={`space-y-3 ${col.key === "female" ? "pl-4" : "pr-2"}`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-full ${col.soft} flex items-center justify-center`}>
+                            <span className={`material-symbols-outlined text-[16px] ${col.iconColor}`}>person</span>
+                          </div>
+                          <span className={`font-bold text-xs ${col.text}`}>{col.title}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {rows.map((r) => (
+                            <div key={r.label}>
+                              <div className="flex justify-between text-[11px] text-slate-500 mb-0.5">
+                                <span>{r.label}</span>
+                                <span className="font-bold text-slate-800">{fmtNum(r.value)}</span>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2">
+                                <div className="h-2 rounded-full" style={{ width: `${Math.max((r.value / max) * 100, 3)}%`, background: col.color }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="border-t border-slate-100 pt-3 mt-4 flex items-center justify-center gap-6 text-xs text-slate-600">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#2563eb]"></span>
+                  <span>Male</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
+                  <span>Female</span>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
         <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-[18px] text-slate-700">bar_chart</span>
@@ -238,6 +379,8 @@ function OverviewTab({ dash, reg, go, route }) {
             </div>
           </div>
         </section>
+          </>
+        )}
       </div>
     </div>
   );
