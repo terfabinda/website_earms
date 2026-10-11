@@ -158,8 +158,10 @@ export const REGULATORS = {
     cardCompleted: "Projects Completed",
     cardPending: "Projects Pending",
     cardRepo: "Research Repositories",
-    cardRecords: "Repository Records",
+    cardRecords: "All Repository Records",
     cardRecordsSub: "All academic sessions",
+    recordsTotal: 5160,
+    reposTotal: 3887,
     completion: { completed: 67499, pending: 23520, pct: 69 },
     // institutionType values that belong to NUC
     types: ["university", "universities"],

@@ -183,17 +183,17 @@ function OverviewTab({ dash, reg, go, route }) {
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {reg.repoCats ? (
+        {reg.fallbacks ? (
           <>
             <section className="lg:col-span-5 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="material-symbols-outlined text-[18px] text-slate-700">bar_chart</span>
-                  <h4 className="text-sm font-bold text-slate-800">Research Repository by Category</h4>
+                  <h4 className="text-sm font-bold text-slate-800">{reg.repoCats ? "Research Repository by Category" : "Academic Staff by Specialization"}</h4>
                 </div>
-                <p className="text-[11px] text-slate-500 mb-5">All sessions - {fmtNum(reg.repoTotal)}</p>
+                <p className="text-[11px] text-slate-500 mb-5">{reg.repoCats ? `All sessions - ${fmtNum(reg.repoTotal)}` : "Live figures across regulated institutions"}</p>
                 <div className="space-y-3.5 text-xs">
-                  {reg.repoCats.map((c, i) => (
+                  {(reg.repoCats || []).length ? reg.repoCats.map((c, i) => (
                     <div key={c.label} className="flex items-center gap-3">
                       <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={c.label}>{c.label}</span>
                       <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
@@ -201,10 +201,12 @@ function OverviewTab({ dash, reg, go, route }) {
                       </div>
                       <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(c.value)}</span>
                     </div>
-                  ))}
+                  )) : (bySpec.length ? bySpec.map((s, i) => (
+                    <HBarStitch key={i} label={s.specialization || "—"} value={Number(s.count) || 0} max={maxSpec} color={STITCH_BAR_COLORS[i % STITCH_BAR_COLORS.length]} />
+                  )) : <p className="text-xs text-slate-500">No specialization data.</p>)}
                 </div>
               </div>
-              <AxisScale max={Math.max(...reg.repoCats.map((x) => x.value), 1)} />
+              {(reg.repoCats || []).length ? <AxisScale max={Math.max(...reg.repoCats.map((x) => x.value), 1)} /> : null}
             </section>
             <section className="lg:col-span-3 bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
               <div>
@@ -247,9 +249,10 @@ function OverviewTab({ dash, reg, go, route }) {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="material-symbols-outlined text-[18px] text-slate-700">group</span>
-                  <h4 className="text-sm font-bold text-slate-800">Project Numbers by Student Gender</h4>
+                  <h4 className="text-sm font-bold text-slate-800">{reg.gender ? "Project Numbers by Student Gender" : "Leading Institutions by Enrolment"}</h4>
                 </div>
-                <p className="text-[11px] text-slate-500 mb-5">Illustrative split</p>
+                <p className="text-[11px] text-slate-500 mb-5">{reg.gender ? "Illustrative split" : "Top institutions by student population"}</p>
+                {reg.gender ? (
                 <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
                   {[
                     { key: "male", title: "Male", color: "#2563eb", soft: "bg-blue-50", text: "text-blue-900", iconColor: "text-blue-600" },
@@ -282,7 +285,24 @@ function OverviewTab({ dash, reg, go, route }) {
                     );
                   })}
                 </div>
+                ) : (
+                <div className="space-y-3.5 text-xs">
+                  {topStudents.length ? topStudents.map((s, i) => {
+                    const max = Math.max(...topStudents.map((x) => Number(x.studentCount) || 0), 1);
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="w-32 text-right text-slate-500 text-[11px] truncate" title={s.institutionName}>{s.institutionName}</span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                          <div className="bg-[#0b6639] h-full rounded-r-full" style={{ width: `${Math.max((Number(s.studentCount) / max) * 100, 3)}%` }} />
+                        </div>
+                        <span className="w-14 text-slate-800 font-semibold text-[11px] text-right">{fmtNum(s.studentCount)}</span>
+                      </div>
+                    );
+                  }) : <p className="text-xs text-slate-500">No enrolment data.</p>}
+                </div>
+                )}
               </div>
+              {reg.gender && (
               <div className="border-t border-slate-100 pt-3 mt-4 flex items-center justify-center gap-6 text-xs text-slate-600">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#2563eb]"></span>
@@ -293,6 +313,7 @@ function OverviewTab({ dash, reg, go, route }) {
                   <span>Female</span>
                 </div>
               </div>
+              )}
             </section>
           </>
         ) : (
