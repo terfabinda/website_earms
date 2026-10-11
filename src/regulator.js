@@ -164,8 +164,7 @@ export const REGULATORS = {
   },
 };
 
-export function matchesRegulatorType(institutionType, regulatorKey) {
-  const reg = REGULATORS[regulatorKey];
+export function matchesRegulatorType(institutionType, regulatorKey) {  const reg = REGULATORS[regulatorKey];
   if (!reg) return true;
   const t = String(institutionType ?? "").toLowerCase().trim();
   if (!t) return false;
@@ -183,4 +182,26 @@ export function matchesRegulatorType(institutionType, regulatorKey) {
     return reg.types.some((x) => t.includes(x));
   }
   return reg.types.some((x) => t.includes(x));
+}
+
+// Ownership breakdown (Federal / State / Private). The API exposes no ownership
+// field, so this is derived from naming: "Federal …" prefix, well-known federal
+// institutions, or a "State" marker — anything else counts as Private.
+const KNOWN_FEDERAL = [
+  "university of ibadan", "university of nigeria", "obafemi awolowo university",
+  "university of lagos", "ahmadu bello university", "university of benin",
+  "university of calabar", "university of ilorin", "university of jos",
+  "university of maiduguri", "bayero university", "usmanu danfodiyo university",
+  "nnamdi azikiwe university", "university of port harcourt", "university of uyo",
+  "university of abuja", "michael okpara university", "yaba college of technology",
+  "kaduna polytechnic", "auchi polytechnic", "alvan ikoku",
+];
+
+export function classifyOwnership(name) {
+  const t = String(name ?? "").toLowerCase().trim();
+  if (!t) return "Private";
+  if (t.includes("federal")) return "Federal";
+  if (/\bstate\b/.test(t)) return "State";
+  if (KNOWN_FEDERAL.some((f) => t.includes(f))) return "Federal";
+  return "Private";
 }

@@ -2,7 +2,7 @@
 // Read-only aggregation over /api/onboarding/regulator (see regulator-api-guide.md, git-ignored).
 // Shared <RegulatorDashboard regulatorKey> + thin wrappers for routing.
 import React, { useState, useEffect, useCallback } from "react";
-import { regulatorApi, REGULATORS, matchesRegulatorType } from "./regulator";
+import { regulatorApi, REGULATORS, matchesRegulatorType, classifyOwnership } from "./regulator";
 
 const fmtNum = (v) => Number(v || 0).toLocaleString("en-NG");
 const PALETTE = ["#1e3a8a", "#0f766e", "#7c3aed", "#b45309", "#0e7490", "#be123c", "#4d7c0f", "#6b7280"];
@@ -96,7 +96,22 @@ function HBar({ label, value, max, color }) {
 }
 
 /* ---------- Overview tab (guide endpoint #1) ---------- */
+const OWN_COLORS = { Federal: "#166534", State: "#b45309", Private: "#1e3a8a" };
 function OverviewTab({ dash, reg, go, route }) {
+  const [ownership, setOwnership] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    // Ownership (Federal/State/Private) is name-derived — classify the
+    // mandate-filtered institutions list (first 100).
+    regulatorApi.getInstitutions({ page: 1, pageSize: 100 }).then((res) => {
+      if (cancelled) return;
+      const items = (Array.isArray(res.items) ? res.items : []).filter((it) => matchesRegulatorType(it.institutionType, reg.key));
+      const counts = { Federal: 0, State: 0, Private: 0 };
+      items.forEach((it) => { counts[classifyOwnership(it.name)]++; });
+      setOwnership({ counts, total: items.length });
+    }).catch(() => { if (!cancelled) setOwnership(null); });
+    return () => { cancelled = true; };
+  }, [reg.key]);
   if (!dash) return null;
   const byType = Array.isArray(dash.institutionsByType) ? dash.institutionsByType : [];
   const scopedTypes = byType.filter((t) => matchesRegulatorType(t.institutionType, reg.key));
@@ -115,18 +130,18 @@ function OverviewTab({ dash, reg, go, route }) {
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="p-5">
-          <h3 className="font-headline-sm font-semibold text-primary mb-1">Institutions by Type</h3>
-          <p className="font-body-sm text-on-surface-variant text-[12px] mb-4">Highlighted slice is this regulator's mandate ({reg.scope}).</p>
-          {byType.length ? (
+          <h3 className="font-headline-sm font-semibold text-primary mb-1">Institutions by Ownership</h3>
+          <p className="font-body-sm text-on-surface-variant text-[12px] mb-4">Federal vs State vs Private under this mandate ({reg.scope}) — derived from institution names.</p>
+          {ownership ? (
             <Donut
-              segments={byType.map((t, i) => ({ label: t.institutionType, value: Number(t.count) || 0, color: matchesRegulatorType(t.institutionType, reg.key) ? reg.accent : "#d1d5db" }))}
-              centerLabel={fmtNum(scopedCount)}
-              centerSub={`${reg.short} mandate`}
+              segments={["Federal", "State", "Private"].map((k) => ({ label: k, value: ownership.counts[k] || 0, color: OWN_COLORS[k] }))}
+              centerLabel={fmtNum(ownership.total)}
+              centerSub={`${reg.short} institutions`}
             />
-          ) : <p className="font-body-sm text-on-surface-variant text-sm">No data.</p>}
+          ) : <p className="font-body-sm text-on-surface-variant text-sm">Loading ownership breakdown…</p>}
         </Card>
         <Card className="p-5">
-          <h3 className="font-headline-sm font-semibold text-primary mb-1">Staff by Specialization</h3>
+          <h3 className="font-headline-sm font-semibold text-primary mb-1">Academic Staff by Specialization</h3>
           <p className="font-body-sm text-on-surface-variant text-[12px] mb-4">Top specializations across regulated institutions.</p>
           <div className="space-y-2.5">
             {bySpec.length ? bySpec.map((s, i) => <HBar key={i} label={s.specialization || "—"} value={Number(s.count) || 0} max={maxSpec} color={PALETTE[i % PALETTE.length]} />) : <p className="font-body-sm text-on-surface-variant text-sm">No data.</p>}
