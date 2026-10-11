@@ -476,7 +476,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
     <div className="space-y-6">
       <Card className="p-5 flex flex-col md:flex-row md:items-center gap-3 justify-between" >
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0" style={{ background: reg.accent }}><span className="material-symbols-outlined text-[26px]">{reg.icon}</span></div>
+          <div className="w-12 h-12 rounded-xl bg-white border border-outline-variant flex items-center justify-center shrink-0 overflow-hidden"><img alt={`${reg.short} logo`} className="w-10 h-10 object-contain" src={reg.logo} /></div>
           <div>
             <h2 className="font-headline-md font-bold text-primary">{reg.short} — {reg.name}</h2>
             <p className="font-body-sm text-on-surface-variant text-sm">{reg.description}</p>

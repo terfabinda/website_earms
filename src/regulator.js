@@ -134,6 +134,7 @@ export const REGULATORS = {
     description: "Regulatory oversight of Nigerian universities — enrolment, staffing and programme spread.",
     icon: "account_balance",
     accent: "#1e3a8a",
+    logo: "/regulators/nuc-logo.png",
     // institutionType values that belong to NUC
     types: ["university", "universities"],
     primaryType: "University",
@@ -147,6 +148,7 @@ export const REGULATORS = {
     description: "Regulatory oversight of polytechnics, monotechnics and technical institutions.",
     icon: "precision_manufacturing",
     accent: "#0f766e",
+    logo: "/regulators/nbte-logo.png",
     types: ["polytechnic", "monotechnic", "monotechnics", "polytechnics", "technical"],
     primaryType: "Polytechnic",
   },
@@ -159,6 +161,7 @@ export const REGULATORS = {
     description: "Regulatory oversight of colleges of education — teacher-training capacity nationwide.",
     icon: "school",
     accent: "#7c3aed",
+    logo: "/regulators/ncce-logo.png",
     types: ["college", "colleges", "college of education", "colleges of education", "coe"],
     primaryType: "College",
   },

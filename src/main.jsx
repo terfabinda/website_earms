@@ -7,6 +7,7 @@ import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
+import { REGULATORS } from './regulator'
 import { billingApi } from './billing'
 import { projectApi, ProjectStatusLabel, ChapterStatusLabel, TopicStatusLabel, VersionStatusLabel } from './project'
 import { TipTapEditor } from './tiptap-editor.jsx'
@@ -1011,14 +1012,14 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
           {role==='admin' ? (
             <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">school</span></div>
           ) : role==='regulator' ? (
-            <div className="w-10 h-10 rounded bg-primary flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">verified</span></div>
+            <img alt={`${REGULATORS[active]?.short || "Regulator"} logo`} className="w-10 h-10 object-contain shrink-0 rounded-lg bg-white border border-outline-variant" src={REGULATORS[active]?.logo} />
           ) : role==='faculty' ? (
             <img alt="EARMS Logo" className="h-10 w-auto object-contain shrink-0" src={LOGO_EARMS}/>
           ) : (
             <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">EA</div>
           )}
           <div>
-            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='regulator' ? 'Regulator' : role==='faculty' ? 'EARMS' : 'Project Portfolio'}</h1>
+            <h1 className="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">{role==='admin' ? 'EARMS Admin' : role==='regulator' ? `${REGULATORS[active]?.short || "Regulator"} Dashboard` : role==='faculty' ? 'EARMS' : 'Project Portfolio'}</h1>
             {role==='admin' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Control Panel</p>}
             {role==='regulator' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Oversight Portal</p>}
             {role==='faculty' && <p className="font-label-md text-label-md text-on-surface-variant text-[11px] uppercase tracking-wider">Supervision Portal</p>}
@@ -1210,9 +1211,14 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         )}
         <div className="p-4 md:p-6 lg:p-8 flex-1 max-w-[1600px] w-full mx-auto">
           <header className="mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
-            <div>
-              <h2 className="font-display-lg text-display-lg md:text-[36px] text-primary leading-tight">{title}</h2>
-              <p className="font-body-lg text-on-surface-variant mt-1">{subtitle}</p>
+            <div className="flex items-center gap-4">
+              {role==='regulator' && REGULATORS[active]?.logo && (
+                <img alt={`${REGULATORS[active]?.short || "Regulator"} logo`} className="w-16 h-16 md:w-20 md:h-20 object-contain shrink-0 rounded-xl bg-white border border-outline-variant shadow-sm p-1" src={REGULATORS[active]?.logo} />
+              )}
+              <div>
+                <h2 className="font-display-lg text-display-lg md:text-[36px] text-primary leading-tight">{title}</h2>
+                <p className="font-body-lg text-on-surface-variant mt-1">{subtitle}</p>
+              </div>
             </div>
             {role==='student' && <div className="hidden lg:block text-right"><p className="font-label-md text-outline">Current Focus</p><p className="font-headline-sm text-secondary-container">Chapter 2: Literature Review</p></div>}
             {role==='admin' && <div className="flex items-center gap-2"><div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-1.5 rounded-full border border-outline-variant ambient-shadow"><span className="w-2 h-2 rounded-full bg-green-500"></span><span className="font-label-md text-label-md">System Optimal</span></div><button className="p-2 rounded-full bg-surface-container-lowest border border-outline-variant hover:bg-surface-container-low ambient-shadow"><span className="material-symbols-outlined text-[20px]">refresh</span></button></div>}
