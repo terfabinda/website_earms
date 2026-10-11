@@ -945,9 +945,12 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
               <span className="material-symbols-outlined text-[16px]">download</span>
               <span>{exporting ? "Exporting…" : reg.exportLabel}</span>
             </button>
-            <button onClick={loadDash} title="Refresh" className="relative p-2 text-slate-500 hover:text-slate-700 rounded-lg border border-slate-200 bg-white">
-              <span className="material-symbols-outlined text-[18px]">notifications</span>
+            <button onClick={loadDash} title="Refresh" className="relative p-2 text-slate-500 hover:text-slate-700">
+              <span className="material-symbols-outlined text-[22px]">notifications</span>
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-600 rounded-full"></span>
+            </button>
+            <button title="Apps" className="p-2 text-slate-500 hover:text-slate-700">
+              <span className="material-symbols-outlined text-[22px]">apps</span>
             </button>
             <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
               <div className="w-8 h-8 rounded-full bg-emerald-800 text-white font-semibold flex items-center justify-center text-xs ring-2 ring-emerald-200/50">AD</div>
