@@ -541,7 +541,7 @@ function InstitutionsTab({ reg, route, go, onOpen }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm min-w-[720px]">
             <thead>
-              <tr className="text-on-surface-variant border-b border-outline-variant text-[12px] uppercase tracking-wide">
+              <tr className="text-[#0b6639] bg-emerald-50/60 border-b border-emerald-100 text-[12px] uppercase tracking-wide font-semibold">
                 <th className="py-2.5 px-4">Institution</th>
                 <th className="py-2.5 px-4">Type</th>
                 <th className="py-2.5 px-4 text-right">{reg.unitTerm}</th>
@@ -715,7 +715,7 @@ function InstitutionDetails({ id, reg, onBack }) {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[640px]">
-              <thead><tr className="text-on-surface-variant border-b border-outline-variant text-[12px] uppercase tracking-wide"><th className="py-2.5 px-4">Programme</th><th className="py-2.5 px-4">Department</th><th className="py-2.5 px-4">{unitSing}</th><th className="py-2.5 px-4"></th></tr></thead>
+              <thead><tr className="text-[#0b6639] bg-emerald-50/60 border-b border-emerald-100 text-[12px] uppercase tracking-wide font-semibold"><th className="py-2.5 px-4">Programme</th><th className="py-2.5 px-4">Department</th><th className="py-2.5 px-4">{unitSing}</th><th className="py-2.5 px-4"></th></tr></thead>
               <tbody className="divide-y divide-surface-container">
                 {filteredProgs.map((p) => (
                   <tr key={p.id} className="hover:bg-surface-container-low">
