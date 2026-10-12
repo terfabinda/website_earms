@@ -467,6 +467,17 @@ export function getSeniorFacultyRole(roles) {
   return null;
 }
 
+// Database ids arrive as numbers, numeric strings, or absent. 0 / "" /
+// null / undefined all mean "absent" (e.g. staff rows with DepartmentId 0) —
+// normalise to "" so callers never query endpoints with a bogus "0".
+export function validId(v) {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  if (s === "") return "";
+  if (/^-?\d+$/.test(s) && Number(s) <= 0) return "";
+  return s;
+}
+
 export function routeForRole(role) {
   if (!role) return "dashboard";
   const r = String(role).toLowerCase();

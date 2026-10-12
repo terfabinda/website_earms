@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles, prettyRole, getAllRolesFromToken, hasAnyRole, getSeniorFacultyRole } from './iam'
+import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles, prettyRole, getAllRolesFromToken, hasAnyRole, getSeniorFacultyRole, validId } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
@@ -1125,7 +1125,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 </button>
                 {openGroups['Research Template'] !== false && (
                   <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
-                    <li><button onClick={()=>go('faculty?view=chapter-template')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='chapter-template' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Chapter Template</button></li>
+                    <li><button onClick={()=>go('faculty?view=chapter-template')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='chapter-template' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Project Template</button></li>
                     <li><button onClick={()=>go('faculty?view=cover-template')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='cover-template' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Cover Template</button></li>
                   </ul>
                 )}
@@ -5678,7 +5678,7 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
                 <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Start</span><input type="date" value={cpForm.startDate} onChange={cpSet("startDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">End</span><input type="date" value={cpForm.endDate} onChange={cpSet("endDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Template</span>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Project Template</span>
               <select value={cpForm.chapterTemplateId} onChange={cpSet("chapterTemplateId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
                 <option value="">Default</option>
                 {cpTemplates.map(t=>(<option key={t.id ?? t.Id} value={String(t.id ?? t.Id)}>{t.templateName ?? t.TemplateName ?? `Template ${t.id ?? t.Id}`}</option>))}
@@ -5747,13 +5747,16 @@ function RoleDenied({ go, task }) {
   )
 }
 
-/* ---------- Chapter Template page (coordinator function) ----------
+/* ---------- Project Template page (coordinator function) ----------
    POST /api/Project/create-chapter-template { templateName, institutionId,
    departmentId, programId, isDefault, chapters:[{chapterNumber,title}] }. */
 function ChapterTemplatePage({ go, instId, deptId }) {
   const [progs, setProgs] = useState([])
   const [progsLoading, setProgsLoading] = useState(false)
   const [programId, setProgramId] = useState("")
+  const [manualProgId, setManualProgId] = useState("")
+  const [manualProgName, setManualProgName] = useState("")
+  const [verifyBusy, setVerifyBusy] = useState(false)
   const [templateType, setTemplateType] = useState("Undergraduate")
   const [templateName, setTemplateName] = useState("")
   const [chapNo, setChapNo] = useState("1")
@@ -5793,13 +5796,30 @@ function ChapterTemplatePage({ go, instId, deptId }) {
     setChapters(list => [...list, { chapterNumber: no, title }].sort((a,b)=>a.chapterNumber-b.chapterNumber))
     setChapTitle("")
   }
+  // Manual fallback: department programme listings are currently returning
+  // empty backend-side, so verify a Programme ID directly (GET programs/{id}).
+  const verifyProgram = async () => {
+    const v = validId(manualProgId)
+    if (!v) { setErr("Enter a Programme ID to verify."); return }
+    setVerifyBusy(true); setErr(""); setMsg("")
+    try {
+      const { onboardingApi } = await import("./onboarding")
+      const rec = await onboardingApi.getProgram(String(v))
+      const row = Array.isArray(rec) ? rec[0] : rec
+      const pid = validId(row?.Id ?? row?.id)
+      if (!row || !pid) throw new Error("not found")
+      setProgramId(pid)
+      setManualProgName(String(row?.Name ?? row?.name ?? ""))
+    } catch { setErr(`Programme ID ${v} could not be verified — check the ID and try again.`) }
+    finally { setVerifyBusy(false) }
+  }
   const submit = async (e) => {
     e.preventDefault()
     setMsg(""); setErr("")
     const name = String(templateName || "").trim()
     if (!instId) { setErr("No institution on your login — re-login."); return }
     if (!deptId) { setErr("No department resolved for your account — re-login."); return }
-    if (!programId) { setErr("Select a programme."); return }
+    if (!validId(programId)) { setErr("Select a programme, or enter + Verify a Programme ID."); return }
     if (!name) { setErr("Template name is required."); return }
     if (!chapters.length) { setErr("Add at least one chapter (number + title)."); return }
     setBusy(true)
@@ -5813,7 +5833,7 @@ function ChapterTemplatePage({ go, instId, deptId }) {
         chapters: chapters.map(c => ({ chapterNumber: Number(c.chapterNumber), title: c.title })),
       })
       setMsg(`Template "${name}" created with ${chapters.length} ${chapters.length===1?"chapter":"chapters"}.`)
-      setTemplateName(""); setChapters([]); setChapNo("1"); setChapTitle("")
+      setTemplateName(""); setChapters([]); setChapNo("1"); setChapTitle(""); setProgramId(""); setManualProgId(""); setManualProgName("")
     } catch (err2) { setErr(err2.message || "Template creation failed") }
     finally { setBusy(false) }
   }
@@ -5823,19 +5843,32 @@ function ChapterTemplatePage({ go, instId, deptId }) {
         <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Projects
       </button>
       <div>
-        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">library_books</span> Chapter Template</h2>
-        <p className="font-body-sm text-on-surface-variant">Coordinator function — define a chapter template per programme (POST /api/Project/create-chapter-template).</p>
+        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">library_books</span> Project Template</h2>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — define a project template per programme (POST /api/Project/create-chapter-template).</p>
       </div>
       <form onSubmit={submit} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-4 max-w-2xl">
         {err && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
         {msg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{msg}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
+          <div className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
+            {progsLoading ? (
+              <p className="mt-1 text-sm text-on-surface-variant">Loading programmes…</p>
+            ) : progs.length ? (
             <select value={programId} onChange={e=>setProgramId(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-              <option value="">{progsLoading ? "Loading…" : "Select programme"}</option>
+              <option value="">Select programme</option>
               {progs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name ?? `Programme ${p.Id ?? p.id}`}</option>))}
             </select>
-          </label>
+            ) : (
+            <div className="mt-1 space-y-2">
+              <p className="text-xs text-on-surface-variant">No programmes returned for your department — enter the Programme ID and Verify it directly.</p>
+              <div className="flex gap-2">
+                <input value={manualProgId} onChange={e=>{setManualProgId(e.target.value); setManualProgName("")}} placeholder="e.g. 12" inputMode="numeric" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
+                <button type="button" onClick={verifyProgram} disabled={verifyBusy} className="px-4 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-variant disabled:opacity-40">{verifyBusy ? "Verifying…" : "Verify"}</button>
+              </div>
+              {manualProgName && <p className="text-xs font-semibold text-green-800">Verified: {manualProgName} (ID {programId})</p>}
+            </div>
+            )}
+          </div>
           <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Template Type *</span>
             <select value={templateType} onChange={e=>setTemplateType(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
               <option value="Undergraduate">Undergraduate</option>
@@ -5919,8 +5952,8 @@ function FacultyDashboard({ go }) {
   // Coordinator department: token claim first, live staff profile second. The
   // create-project page + coordinator stats use this so coordinators whose
   // tokens carry no departmentId still resolve via their staff record.
-  const profileDeptId = staffProfile?.DepartmentId ?? staffProfile?.departmentId ?? staffProfile?.DeptId ?? staffProfile?.deptId ?? ""
-  const deptId = tokenDeptId || (profileDeptId !== undefined && profileDeptId !== null ? String(profileDeptId) : "")
+  const profileDeptId = validId(staffProfile?.DepartmentId ?? staffProfile?.departmentId ?? staffProfile?.DeptId ?? staffProfile?.deptId)
+  const deptId = validId(tokenDeptId) || profileDeptId
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -6099,13 +6132,13 @@ function FacultyDashboard({ go }) {
   if (facView === "chapter-template") {
     if (!isCoord) {
       return (
-        <DashShell go={go} active="faculty" role="faculty" title="Chapter Template" subtitle="Coordinator function — define chapter templates per programme.">
-          <RoleDenied go={go} task="Managing chapter templates" />
+        <DashShell go={go} active="faculty" role="faculty" title="Project Template" subtitle="Coordinator function — define project templates per programme.">
+          <RoleDenied go={go} task="Managing project templates" />
         </DashShell>
       )
     }
     return (
-      <DashShell go={go} active="faculty" role="faculty" title="Chapter Template" subtitle="Coordinator function — define chapter templates per programme.">
+      <DashShell go={go} active="faculty" role="faculty" title="Project Template" subtitle="Coordinator function — define project templates per programme.">
         <ChapterTemplatePage go={go} instId={instId} deptId={deptId} />
       </DashShell>
     )
