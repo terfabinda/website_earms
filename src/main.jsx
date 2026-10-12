@@ -5754,9 +5754,6 @@ function ChapterTemplatePage({ go, instId, deptId }) {
   const [progs, setProgs] = useState([])
   const [progsLoading, setProgsLoading] = useState(false)
   const [programId, setProgramId] = useState("")
-  const [manualProgId, setManualProgId] = useState("")
-  const [manualProgName, setManualProgName] = useState("")
-  const [verifyBusy, setVerifyBusy] = useState(false)
   const [templateType, setTemplateType] = useState("Undergraduate")
   const [templateName, setTemplateName] = useState("")
   const [chapNo, setChapNo] = useState("1")
@@ -5796,30 +5793,13 @@ function ChapterTemplatePage({ go, instId, deptId }) {
     setChapters(list => [...list, { chapterNumber: no, title }].sort((a,b)=>a.chapterNumber-b.chapterNumber))
     setChapTitle("")
   }
-  // Manual fallback: department programme listings are currently returning
-  // empty backend-side, so verify a Programme ID directly (GET programs/{id}).
-  const verifyProgram = async () => {
-    const v = validId(manualProgId)
-    if (!v) { setErr("Enter a Programme ID to verify."); return }
-    setVerifyBusy(true); setErr(""); setMsg("")
-    try {
-      const { onboardingApi } = await import("./onboarding")
-      const rec = await onboardingApi.getProgram(String(v))
-      const row = Array.isArray(rec) ? rec[0] : rec
-      const pid = validId(row?.Id ?? row?.id)
-      if (!row || !pid) throw new Error("not found")
-      setProgramId(pid)
-      setManualProgName(String(row?.Name ?? row?.name ?? ""))
-    } catch { setErr(`Programme ID ${v} could not be verified — check the ID and try again.`) }
-    finally { setVerifyBusy(false) }
-  }
   const submit = async (e) => {
     e.preventDefault()
     setMsg(""); setErr("")
     const name = String(templateName || "").trim()
     if (!instId) { setErr("No institution on your login — re-login."); return }
     if (!deptId) { setErr("No department resolved for your account — re-login."); return }
-    if (!validId(programId)) { setErr("Select a programme, or enter + Verify a Programme ID."); return }
+    if (!validId(programId)) { setErr("Select a programme."); return }
     if (!name) { setErr("Template name is required."); return }
     if (!chapters.length) { setErr("Add at least one chapter (number + title)."); return }
     setBusy(true)
@@ -5833,7 +5813,7 @@ function ChapterTemplatePage({ go, instId, deptId }) {
         chapters: chapters.map(c => ({ chapterNumber: Number(c.chapterNumber), title: c.title })),
       })
       setMsg(`Template "${name}" created with ${chapters.length} ${chapters.length===1?"chapter":"chapters"}.`)
-      setTemplateName(""); setChapters([]); setChapNo("1"); setChapTitle(""); setProgramId(""); setManualProgId(""); setManualProgName("")
+      setTemplateName(""); setChapters([]); setChapNo("1"); setChapTitle(""); setProgramId("")
     } catch (err2) { setErr(err2.message || "Template creation failed") }
     finally { setBusy(false) }
   }
@@ -5851,23 +5831,10 @@ function ChapterTemplatePage({ go, instId, deptId }) {
         {msg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{msg}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
-            {progsLoading ? (
-              <p className="mt-1 text-sm text-on-surface-variant">Loading programmes…</p>
-            ) : progs.length ? (
             <select value={programId} onChange={e=>setProgramId(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-              <option value="">Select programme</option>
+              <option value="">{progsLoading ? "Loading…" : (progs.length ? "Select programme" : "No programmes found for this department")}</option>
               {progs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name ?? `Programme ${p.Id ?? p.id}`}</option>))}
             </select>
-            ) : (
-            <div className="mt-1 space-y-2">
-              <p className="text-xs text-on-surface-variant">No programmes returned for your department — enter the Programme ID and Verify it directly.</p>
-              <div className="flex gap-2">
-                <input value={manualProgId} onChange={e=>{setManualProgId(e.target.value); setManualProgName("")}} placeholder="e.g. 12" inputMode="numeric" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
-                <button type="button" onClick={verifyProgram} disabled={verifyBusy} className="px-4 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-variant disabled:opacity-40">{verifyBusy ? "Verifying…" : "Verify"}</button>
-              </div>
-              {manualProgName && <p className="text-xs font-semibold text-green-800">Verified: {manualProgName} (ID {programId})</p>}
-            </div>
-            )}
           </div>
           <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Template Type *</span>
             <select value={templateType} onChange={e=>setTemplateType(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
