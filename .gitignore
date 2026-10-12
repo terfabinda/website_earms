@@ -20,6 +20,9 @@ dist/stitch/
 IMPLEMENTATION_REPORT.md
 IMPLEMENTATION-REPORT-*.md
 
+# Session handoff (local reference, not committed)
+SESSION_HANDOFF.md
+
 # Regulator API guide (internal reference, not shipped)
 regulator-api-guide.md
 # Regulator Analytics API guide (internal reference, not shipped)
