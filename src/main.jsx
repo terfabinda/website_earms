@@ -5024,7 +5024,8 @@ function StudentDashboard({ go }) {
             {dash?.projectStatus !== undefined && <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-label-md text-[12px]">{ProjectStatusLabel[dash.projectStatus] ?? `Status ${dash.projectStatus}`}</span>}
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+        {/* Hidden for now: Department / Programme / Phone / Area of Interest widgets */}
+        {false && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
           <div className="bg-surface-container-low rounded-xl p-3 border border-outline-variant">
             <div className="flex items-center gap-1.5 text-primary"><span className="material-symbols-outlined text-[16px]">account_tree</span><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span></div>
             <p className="font-body-sm text-on-surface mt-1">{student?.DepartmentName ?? student?.departmentName ?? deptProg?.deptName ?? "—"}</p>
@@ -5042,6 +5043,7 @@ function StudentDashboard({ go }) {
             <p className="font-body-sm text-on-surface mt-1 truncate">{showVal(student?.AreaOfInterest, student?.areaOfInterest)}</p>
           </div>
         </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
