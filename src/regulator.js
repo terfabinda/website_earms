@@ -125,6 +125,53 @@ export const regulatorApi = {
 // Matching is case-insensitive + substring-tolerant because deployed data uses
 // variants ("University", "Polytechnic", "Monotechnic", "College", "College of Education").
 export const REGULATORS = {
+  fme: {
+    key: "fme",
+    route: "fme",
+    short: "FME",
+    name: "Federal Ministry of Education",
+    scope: "All Institutions",
+    description: "Federal oversight of all Nigerian tertiary institutions.",
+    icon: "account_balance",
+    accent: "#0b6639",
+    logo: "/regulators/fme-logo.png",
+    dashTitle: "FME Research & Innovation Dashboard",
+    commission: "Federal Ministry of Education",
+    titleSub: "Federal Ministry of Education • Federal Republic of Nigeria",
+    typePlural: "Universities",
+    unitTerm: "Colleges",
+    sideType: "Institutions",
+    scopePill: "All Institutions (Federal, State, Private)",
+    exportLabel: "Export National Report",
+    footerMid: "EARMS • Electronic Academic Research Management System • Federal Ministry of Education",
+    footerRight: "Federal Ministry of Education Oversight • Federal Republic of Nigeria",
+    // Duplicated from the NUC dashboard; to be modified later.
+    fallbacks: { inst: 245, staff: 12480, students: 84000, progs: 1560 },
+    cardAccredited: "Universities",
+    cardAccreditedSub: "Colleges of Education\nunder this mandate",
+    cardStaff: "Supervisors/Lecturers",
+    cardStaffSub: "Academic supervisors\nand lecturers",
+    cardStudents: "Total Research Students",
+    cardStudentsSub: "2025/2026 Session",
+    cardProgs: "Total Programmes",
+    cardProgsSub: "2025/2026 Programmes\nacross universities",
+    cardCompleted: "Total Projects Completed",
+    cardPending: "Total Projects Pending",
+    cardRepo: "Research Repositories",
+    cardRecords: "All Repository Records",
+    cardRecordsSub: "All academic sessions",
+    recordsTotal: 5160,
+    reposTotal: 3887,
+    completion: { completed: 67499, pending: 23520, pct: 69 },
+    proposals: { total: 92754, approved: 83412, pending: 6577, failed: 2765 },
+    proposalLevels: [
+      { level: "Undergraduate Projects/Research", students: 65117, completed: 48975, records: 147333 },
+      { level: "Masters Dissertations", students: 25914, completed: 18570, records: 37609 },
+      { level: "Doctoral Theses", students: 6212, completed: 3480, records: 17100 },
+    ],
+    types: ["university", "universities", "polytechnic", "monotechnic", "college", "colleges"],
+    primaryType: "University",
+  },
   nuc: {
     key: "nuc",
     route: "nuc",
@@ -325,11 +372,13 @@ export const REGULATORS = {
     primaryType: "College",
   },
 };
-
-export function matchesRegulatorType(institutionType, regulatorKey) {  const reg = REGULATORS[regulatorKey];
+export function matchesRegulatorType(institutionType, regulatorKey) {
+  const reg = REGULATORS[regulatorKey];
   if (!reg) return true;
   const t = String(institutionType ?? "").toLowerCase().trim();
   if (!t) return false;
+  // FME oversees every institution type.
+  if (reg.key === "fme") return true;
   // NBTE and NCCE scopes overlap on the word "college"/"technical" — disambiguate:
   // NCCE owns anything mentioning education/coe; NBTE owns poly/mono/technical.
   if (reg.key === "ncce") {

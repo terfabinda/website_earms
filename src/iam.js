@@ -408,7 +408,7 @@ export function getRoleFromToken(token) {  const p = decodeToken(token);
   // Tokens can carry several roles (e.g. ["staff","projectcoordinator"]) and the
   // generic one is often first — blindly taking [0] lands such users on the blank
   // generic dashboard. Prefer the most specific routable role instead.
-  const priority = ["system", "regulator", "nuc", "nbte", "ncce", "institution", "admin", "faculty", "supervisor", "coordinator", "examin", "officer", "student", "staff"];
+  const priority = ["system", "regulator", "fme", "ministry", "nuc", "nbte", "ncce", "institution", "admin", "faculty", "supervisor", "coordinator", "examin", "officer", "student", "staff"];
   const rank = (r) => {
     const s = String(r ?? "").toLowerCase();
     const i = priority.findIndex((k) => s.includes(k));
@@ -423,6 +423,7 @@ export function routeForRole(role) {
   // systemadmin contains "admin" so check system first
   if (r.includes("system")) return "system";
   // regulators (must precede generic "admin" check: RegulatorAdmin contains "admin")
+  if (r.includes("fme") || r.includes("ministry")) return "fme";
   if (r.includes("nuc")) return "nuc";
   if (r.includes("nbte")) return "nbte";
   if (r.includes("ncce")) return "ncce";

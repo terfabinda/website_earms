@@ -27,6 +27,7 @@ const pages = {
   admin: { label: 'Admin' },
   system: { label: 'System Admin' },
   nuc: { label: 'NUC' },
+  fme: { label: 'FME' },
   nbte: { label: 'NBTE' },
   ncce: { label: 'NCCE' },
 }
@@ -988,7 +989,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     {label: 'Settings', icon: 'settings'},
   ]
   // Regulator sidebar route: active is one of 'nuc' | 'nbte' | 'ncce'
-  const regulatorRoute = ['nuc','nbte','ncce'].includes(active) ? active : 'nuc'
+  const regulatorRoute = ['nuc','nbte','ncce','fme'].includes(active) ? active : 'nuc'
   const regulatorNavItems = [
     {label: 'Overview', icon: 'dashboard', nav: `${regulatorRoute}?view=overview`},
     {label: 'Institutions', icon: 'account_balance', nav: `${regulatorRoute}?view=institutions`},
@@ -1012,7 +1013,11 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
               <div className="w-10 h-10 rounded bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">school</span></div>
             )
           ) : role==='regulator' ? (
-            <img alt={`${REGULATORS[active]?.short || "Regulator"} logo`} className="w-10 h-10 object-contain shrink-0 rounded-lg bg-white border border-outline-variant" src={REGULATORS[active]?.logo} />
+            REGULATORS[active]?.logo ? (
+              <img alt={`${REGULATORS[active]?.short || "Regulator"} logo`} className="w-10 h-10 object-contain shrink-0 rounded-lg bg-white border border-outline-variant" src={REGULATORS[active]?.logo} />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary">{REGULATORS[active]?.icon || "verified"}</span></div>
+            )
           ) : role==='faculty' ? (
             <img alt="EARMS Logo" className="h-10 w-auto object-contain shrink-0" src={LOGO_EARMS}/>
           ) : (
@@ -6181,7 +6186,7 @@ function App() {
   useEffect(()=>{ window.EARMS_GO = go },[go])
   // protect authenticated routes: bounce to login when there is no token
   useEffect(() => {
-    if (['dashboard','student','faculty','admin','system','nuc','nbte','ncce'].includes(page) && !tokenService.isAuthenticated()) {
+    if (['dashboard','student','faculty','admin','system','nuc','nbte','ncce','fme'].includes(page) && !tokenService.isAuthenticated()) {
       go('login')
     }
   }, [page])
@@ -6207,6 +6212,7 @@ function App() {
       {page==='nuc' && <RegulatorRoute go={go} regulatorKey="nuc" />}
       {page==='nbte' && <RegulatorRoute go={go} regulatorKey="nbte" />}
       {page==='ncce' && <RegulatorRoute go={go} regulatorKey="ncce" />}
+      {page==='fme' && <RegulatorRoute go={go} regulatorKey="fme" />}
     </div>
     </RouteErrorBoundary>
   )
