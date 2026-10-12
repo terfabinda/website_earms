@@ -5291,7 +5291,7 @@ function StudentDashboard({ go }) {
             </form>
             {topicErr2 && <div className="mb-3 rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{topicErr2}</div>}
             {topicMsg && <div className="mb-3 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{topicMsg}</div>}
-            <p className="text-[11px] text-outline">POST /api/Project/create-topic — requires auth. Document limit: max 3 topics per project.</p>
+            <p className="text-[11px] text-outline">You may propose up to 3 topics for your project.</p>
 
             <div className="mt-6 space-y-3">
               {topicsLoading ? <div className="py-8 text-center text-on-surface-variant">Loading topics…</div> : topics.length===0 ? (
@@ -5345,7 +5345,7 @@ function StudentDashboard({ go }) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
               <h3 className="font-headline-md font-bold text-on-surface">Chapters</h3>
-              <p className="font-body-sm text-on-surface-variant mb-4">Chapters are sequential — previous chapter must be Approved before the next can be created. Upload via FormData to <span className="font-mono text-xs bg-surface-container px-1 py-0.5 rounded">POST /api/Project/{'{projectId}'}/chapters</span></p>
+              <p className="font-body-sm text-on-surface-variant mb-4">Chapters are sequential — the previous chapter must be Approved before the next can be created. Upload your document below.</p>
 
               {chaptersLoading ? <div className="py-8 text-center text-on-surface-variant">Loading chapters…</div> : (
                 <div className="space-y-2">
@@ -5379,7 +5379,7 @@ function StudentDashboard({ go }) {
                       )
                     })
                   )}
-                  {chapters.length>0 && <p className="text-[11px] text-outline mt-2">GET /api/Project/{'{projectId}'}/chapters • PUT /api/Project/chapters/{'{chapterId}'} {"{chapterStatus}"}</p>}
+                  {chapters.length>0 && <p className="text-[11px] text-outline mt-2">Chapter documents and statuses update as your supervisor reviews them.</p>}
                 </div>
               )}
             </div>
@@ -5438,7 +5438,7 @@ function StudentDashboard({ go }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-headline-md font-bold text-on-surface">Research Workspace — Collaborative Word Editor</h3>
-              <p className="font-body-sm text-on-surface-variant">TipTap-based collaborative editing. Auto-saves locally; submit as chapter version to supervisor via Project Flow API. Production sync via Yjs/Hocuspocus.</p>
+              <p className="font-body-sm text-on-surface-variant">Write and format your chapters here. Your work auto-saves on this device — submit it as a version when ready for your supervisor to review.</p>
             </div>
             <div className="flex items-center gap-2">
               <label className="font-label-md text-xs uppercase tracking-wide text-outline">Chapter</label>
@@ -5459,7 +5459,7 @@ function StudentDashboard({ go }) {
 
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4">
             <h4 className="font-headline-sm font-bold text-on-surface">Submit Workspace Draft as Chapter Version</h4>
-            <p className="text-xs text-on-surface-variant mb-3">This will create / update <span className="font-mono bg-surface-container px-1 rounded">POST {"{projectId}"}/chapters</span> or <span className="font-mono bg-surface-container px-1 rounded">POST /chapters/{"{chapterId}"}/versions</span> with the editor HTML. Submission appears in supervisor's awaiting-action queue.</p>
+            <p className="text-xs text-on-surface-variant mb-3">Sends the draft above to your supervisor as a new version. It appears in their review queue.</p>
             <div className="flex flex-col md:flex-row gap-3">
               <input value={versionNote} onChange={e=>setVersionNote(e.target.value)} placeholder="Supervisor note (e.g. Revised per feedback, added citations)" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface" />
               <button onClick={()=>handleWorkspaceSave({ html: localStorage.getItem(workspaceStorageKey) ?? "", text: "" })} disabled={workspaceSaving || !projectId} className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40 flex items-center justify-center gap-2">
@@ -5468,7 +5468,6 @@ function StudentDashboard({ go }) {
             </div>
             {workspaceErr && <div className="mt-3 rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{workspaceErr}</div>}
             {workspaceMsg && <div className="mt-3 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{workspaceMsg}</div>}
-            <p className="text-[11px] text-outline mt-2">Stored locally under <span className="font-mono">{workspaceStorageKey}</span> • Supervisor flow: <span className="font-mono">GET /awaiting-action?StaffNo</span> → <span className="font-mono">POST /version-review</span></p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -5516,14 +5515,14 @@ function StudentDashboard({ go }) {
         <div className="space-y-4">
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
             <h3 className="font-headline-md font-bold text-on-surface">Current Chapter Review</h3>
-            <p className="font-body-sm text-on-surface-variant">GET /api/Project/get-current-chapter-review?ProjectId={projectId ?? "—"} — latest version, reviewer comments, correction files.</p>
+            <p className="font-body-sm text-on-surface-variant">Latest version, reviewer comments and correction files.</p>
             {!projectId ? (
               <div className="mt-4 p-4 rounded-lg bg-error-container text-on-error-container text-sm">No project linked — cannot fetch reviews. Supervisor must create project first.</div>
             ) : !currentReview ? (
               <div className="mt-4 py-10 text-center border-2 border-dashed border-outline-variant rounded-xl">
                 <span className="material-symbols-outlined text-4xl text-outline">rate_review</span>
                 <p className="text-sm text-on-surface-variant mt-2">No reviews yet</p>
-                <p className="text-xs text-outline">Reviews appear after supervisor acts on your chapter versions via POST /version-review.</p>
+                <p className="text-xs text-outline">Reviews appear here after your supervisor reviews your submitted chapters.</p>
                 <button onClick={async()=>{ try{ const r = await projectApi.getCurrentChapterReview(projectId); setCurrentReview(r)} catch{}}} className="mt-3 px-4 py-2 rounded-lg bg-surface border border-outline-variant text-sm">Retry</button>
               </div>
             ) : (
@@ -5547,7 +5546,8 @@ function StudentDashboard({ go }) {
                       <span className="px-2.5 py-1 rounded-full bg-surface border border-outline-variant text-xs">Chapter {currentReview.chapterId ?? currentReview.ChapterId}</span>
                       <span className="px-2.5 py-1 rounded-full bg-surface border border-outline-variant text-xs">Version #{currentReview.currentVersion ?? currentReview.CurrentVersion ?? "—"}</span>
                     </div>
-                    <pre className="mt-3 text-[11px] bg-surface-container-lowest border border-outline-variant rounded p-2 overflow-auto max-h-[160px]">{JSON.stringify(currentReview, null, 2)}</pre>
+                    {/* Hidden for now: raw review payload (endpoint query aid) */}
+                    {false && (<pre className="mt-3 text-[11px] bg-surface-container-lowest border border-outline-variant rounded p-2 overflow-auto max-h-[160px]">{JSON.stringify(currentReview, null, 2)}</pre>)}
                   </div>
                 </div>
               </div>
