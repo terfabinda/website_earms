@@ -408,13 +408,63 @@ export function getRoleFromToken(token) {  const p = decodeToken(token);
   // Tokens can carry several roles (e.g. ["staff","projectcoordinator"]) and the
   // generic one is often first — blindly taking [0] lands such users on the blank
   // generic dashboard. Prefer the most specific routable role instead.
-  const priority = ["system", "regulator", "fme", "ministry", "nuc", "nbte", "ncce", "institution", "admin", "faculty", "supervisor", "coordinator", "examin", "officer", "student", "staff"];
+  // Coordinators outrank supervisors: a Research/Project Coordinator who also
+  // supervises must resolve (and display) as coordinator first.
+  const priority = ["system", "regulator", "fme", "ministry", "nuc", "nbte", "ncce", "institution", "admin", "faculty", "coordinator", "supervisor", "examin", "officer", "student", "staff"];
   const rank = (r) => {
     const s = String(r ?? "").toLowerCase();
     const i = priority.findIndex((k) => s.includes(k));
     return i === -1 ? priority.length : i;
   };
   return [...list].sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
+// ---- Faculty role seniority + segmentation (frontend-defined) ----
+// The backend/IAM docs define roles as a FLAT list (assign-roles attaches an
+// array of names; no hierarchy metadata exists). Within the faculty track the
+// working rung is: Research Coordinator > Project Coordinator > Project
+// Supervisor > examiners/officers > generic staff. Use these helpers to show
+// the most senior identity and to segment tasks per held role.
+const FACULTY_SENIORITY = [
+  "researchcoordinator",
+  "projectcoordinator",
+  "coordinator",
+  "projectsupervisor",
+  "supervisor",
+  "internalexaminer",
+  "externalexaminer",
+  "examinationofficer",
+  "examin",
+  "officer",
+  "faculty",
+  "staff",
+];
+
+// Full role list from the access token (empty array when unauthenticated).
+export function getAllRolesFromToken(token) {
+  const p = decodeToken(token);
+  if (!p) return [];
+  const raw = p[ROLE_CLAIM] || p.role;
+  const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  return list.map((r) => String(r ?? "")).filter(Boolean);
+}
+
+// Substring match against held roles ("coordinator" matches research +
+// project coordinators; "supervisor" matches projectsupervisor, etc.).
+export function hasAnyRole(roles, ...needles) {
+  const held = (Array.isArray(roles) ? roles : []).map((r) => String(r ?? "").toLowerCase());
+  const wants = needles.map((n) => String(n ?? "").toLowerCase()).filter(Boolean);
+  return wants.some((w) => held.some((h) => h.includes(w)));
+}
+
+// Most senior faculty-track role held, or null (used for dashboard identity).
+export function getSeniorFacultyRole(roles) {
+  const held = (Array.isArray(roles) ? roles : []).map((r) => String(r ?? ""));
+  for (const key of FACULTY_SENIORITY) {
+    const hit = held.find((h) => h.toLowerCase().includes(key));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export function routeForRole(role) {

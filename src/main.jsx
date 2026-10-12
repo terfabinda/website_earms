@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles, prettyRole } from './iam'
+import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRole, decodeToken, roleApi, filterAssignableRoles, prettyRole, getAllRolesFromToken, hasAnyRole, getSeniorFacultyRole } from './iam'
 import { AdminOnboarding } from './onboarding.jsx'
 import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
@@ -1001,6 +1001,12 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
     if (active==='admin' && k==='team') return false // admin highlights System Topology, handle separately
     return false
   }
+  // Faculty task segmentation (frontend-defined rung: coordinator > supervisor >
+  // examiner/officer > staff — no hierarchy exists backend-side). Coordinator
+  // tasks (Create Project, Research Template) hide unless a coordinator role
+  // is held; supervisor tasks hide unless a supervisor/examiner role is held.
+  const facultyRoles = role==='faculty' ? getAllRolesFromToken() : []
+  const facultyIsCoord = hasAnyRole(facultyRoles, "coordinator")
   return (
     <div className="min-h-screen flex bg-background">
       {/* SideNav - desktop */}
@@ -1108,10 +1114,11 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 {openGroups['Projects'] !== false && (
                   <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
                     <li><button onClick={()=>go('faculty?view=dashboard')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${(hashView===''||hashView==='dashboard') ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Overview</button></li>
-                    <li><button onClick={()=>go('faculty?view=create')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='create' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Create Project</button></li>
+                    {facultyIsCoord && <li><button onClick={()=>go('faculty?view=create')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='create' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Create Project</button></li>}
                   </ul>
                 )}
               </li>
+              {facultyIsCoord && (
               <li>
                 <button onClick={()=>toggleGroup('Research Template')} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
                   <span className="material-symbols-outlined text-[20px] shrink-0">library_books</span> <span className="flex-1 text-left whitespace-nowrap">Research Template</span> <span className="material-symbols-outlined text-[18px]">{openGroups['Research Template'] === false ? 'expand_more' : 'expand_less'}</span>
@@ -1123,6 +1130,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                   </ul>
                 )}
               </li>
+              )}
               {navItems.slice(2).map(it=>(
                 <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
@@ -5723,6 +5731,22 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
   )
 }
 
+/* ---------- Role gate notice (faculty task segmentation) ----------
+   Shown when a faculty view needs a role the login does not hold. */
+function RoleDenied({ go, task }) {
+  return (
+    <div className="space-y-6">
+      <button onClick={()=>go('faculty?view=dashboard')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Projects
+      </button>
+      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 max-w-2xl">
+        <h2 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">lock</span> Not available for your roles</h2>
+        <p className="font-body-sm text-on-surface-variant mt-2">{task} requires a coordinator role (Research Coordinator or Project Coordinator). Your login does not hold one — contact your institution admin if this is wrong.</p>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Chapter Template page (coordinator function) ----------
    POST /api/Project/create-chapter-template { templateName, institutionId,
    departmentId, programId, isDefault, chapters:[{chapterNumber,title}] }. */
@@ -5934,7 +5958,13 @@ function FacultyDashboard({ go }) {
   const userEmail = staffProfile?.Email ?? staffProfile?.email ?? tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] ?? tok?.email ?? tok?.Email ?? ""
   const instName = instProfile?.Name ?? instProfile?.name ?? tok?.institutionName ?? tok?.InstitutionName ?? ""
   const instCode = instProfile?.Code ?? instProfile?.code ?? tok?.institutionCode ?? tok?.InstitutionCode ?? ""
-  const roleLabel = prettyRole(getRoleFromToken()) || "Faculty"
+  // Faculty task segmentation: identity = most senior held role (Research
+  // Coordinator first); coordinator tasks vs supervisor/examiner tasks below.
+  const allRoles = getAllRolesFromToken()
+  const isCoord = hasAnyRole(allRoles, "coordinator")
+  const isSupervising = hasAnyRole(allRoles, "supervisor", "examin", "officer")
+  const seniorRole = getSeniorFacultyRole(allRoles)
+  const roleLabel = prettyRole(seniorRole || getRoleFromToken()) || "Faculty"
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsErr, setStatsErr] = useState("")
@@ -5991,7 +6021,7 @@ function FacultyDashboard({ go }) {
     try { const c = await projectApi.getCoordinatorDashboard({ departmentId: deptId, institutionId: instId }); setCoordStats(c) } catch {}
   }, [deptId, instId])
 
-  useEffect(()=>{ fetchStats(); fetchPending(); fetchProjects(); fetchCoord() }, [fetchStats, fetchPending, fetchProjects, fetchCoord])
+  useEffect(()=>{ if (isSupervising) { fetchStats(); fetchPending(); fetchProjects() } if (isCoord) fetchCoord() }, [fetchStats, fetchPending, fetchProjects, fetchCoord, isSupervising, isCoord])
 
   const handleReview = useCallback(async (e)=>{
     e.preventDefault()
@@ -6053,6 +6083,13 @@ function FacultyDashboard({ go }) {
   const facQuery = useHashQuery()
   const facView = (facQuery.get("view") || "dashboard").toLowerCase()
   if (facView === "create") {
+    if (!isCoord) {
+      return (
+        <DashShell go={go} active="faculty" role="faculty" title="Create Project" subtitle="Coordinator function — new project or bulk auto-create.">
+          <RoleDenied go={go} task="Creating projects" />
+        </DashShell>
+      )
+    }
     return (
       <DashShell go={go} active="faculty" role="faculty" title="Create Project" subtitle="Coordinator function — new project or bulk auto-create.">
         <CreateProjectPage go={go} staffNo={staffNo} instId={instId} deptId={deptId} onChanged={fetchProjects} />
@@ -6060,6 +6097,13 @@ function FacultyDashboard({ go }) {
     )
   }
   if (facView === "chapter-template") {
+    if (!isCoord) {
+      return (
+        <DashShell go={go} active="faculty" role="faculty" title="Chapter Template" subtitle="Coordinator function — define chapter templates per programme.">
+          <RoleDenied go={go} task="Managing chapter templates" />
+        </DashShell>
+      )
+    }
     return (
       <DashShell go={go} active="faculty" role="faculty" title="Chapter Template" subtitle="Coordinator function — define chapter templates per programme.">
         <ChapterTemplatePage go={go} instId={instId} deptId={deptId} />
@@ -6067,6 +6111,13 @@ function FacultyDashboard({ go }) {
     )
   }
   if (facView === "cover-template") {
+    if (!isCoord) {
+      return (
+        <DashShell go={go} active="faculty" role="faculty" title="Cover Template" subtitle="Coordinator function — cover page templates.">
+          <RoleDenied go={go} task="Managing cover templates" />
+        </DashShell>
+      )
+    }
     return (
       <DashShell go={go} active="faculty" role="faculty" title="Cover Template" subtitle="Coordinator function — cover page templates.">
         <CoverTemplatePage go={go} />
@@ -6084,7 +6135,8 @@ function FacultyDashboard({ go }) {
           </div>
           <span className="ml-auto px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-md text-[12px] whitespace-nowrap">{roleLabel}</span>
         </div>
-        {/* Stats */}
+        {/* Supervisor tasks — hidden without a supervisor/examiner role */}
+        {isSupervising && (<>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="glass-card ambient-shadow rounded-xl p-4 flex items-start justify-between border border-surface-container">
             <div><p className="font-label-md text-on-surface-variant mb-1">Total Students</p><p className="font-headline-lg text-primary font-bold">{statsLoading ? "…" : (stats?.totalStudents ?? stats?.TotalStudents ?? "—")}</p><p className="text-xs text-outline truncate">{statsErr ? statsErr.slice(0,30) : (coordStats ? `${coordStats.totalStudents ?? coordStats.TotalStudents ?? ""} dept total` : "Supervisor stats")}</p></div>
@@ -6281,8 +6333,15 @@ function FacultyDashboard({ go }) {
             {reviewMsg && <div className="md:col-span-4 rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{reviewMsg}</div>}
           </form>
         </div>
+        </>)}
 
-        {coordStats && (
+        {(!isCoord && !isSupervising) && (
+          <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
+            <p className="text-sm text-on-surface-variant">No faculty tasks are assigned to your roles. Coordinator tasks need a Research Coordinator or Project Coordinator role; supervision tasks need a supervisor or examiner role.</p>
+          </div>
+        )}
+
+        {(isCoord && coordStats) && (
           <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-4">
             <h4 className="font-headline-sm font-bold text-on-surface">Coordinator Overview — Dept {deptId}</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
