@@ -5064,8 +5064,6 @@ function StudentDashboard({ go }) {
           <p className="text-[11px] text-outline mt-1">{dash?.completedChapters ?? 0} completed • Ch {dash?.ongoingChapter ?? "—"} ongoing {dash?.pendingCorrection ? `• ${dash.pendingCorrection} needs correction` : ""}</p>
         </div>
       </div>
-      {dashErr && <p className="text-[11px] text-error mb-4">{dashErr}</p>}
-
       <div className="flex flex-wrap gap-1.5 mb-4 p-1 bg-surface-container-low rounded-xl border border-outline-variant w-fit">
         {[
           {id:'overview', label:'Overview', icon:'dashboard'},
