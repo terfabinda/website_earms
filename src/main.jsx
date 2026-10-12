@@ -4869,7 +4869,16 @@ function StudentDashboard({ go }) {
         ])
         if (tRes.status==='fulfilled') {
           const arr = Array.isArray(tRes.value) ? tRes.value : (tRes.value?.topics ?? tRes.value?.Topics ?? [])
-          setTopics(Array.isArray(arr) ? arr : [])
+          // Merge, never replace: the list endpoint currently misses pending
+          // topics, so keep submitted rows already shown (dedupe by id/topic).
+          if (Array.isArray(arr) && arr.length) {
+            setTopics(prev => {
+              const base = Array.isArray(prev) ? prev : []
+              const ids = new Set(base.map(t => String(t.id ?? t.Id ?? t.topic ?? t.Topic)))
+              const fresh = arr.filter(t => !ids.has(String(t.id ?? t.Id ?? t.topic ?? t.Topic)))
+              return fresh.length ? [...base, ...fresh] : base
+            })
+          }
         }
         if (cRes.status==='fulfilled') {
           const arr = Array.isArray(cRes.value) ? cRes.value : (cRes.value?.chapters ?? [])
@@ -4958,9 +4967,16 @@ function StudentDashboard({ go }) {
     if (topics.length >= 3) { setTopicErr2("Maximum 3 topics per project"); return }
     setTopicBusy(true); setTopicErr2(""); setTopicMsg("")
     try {
-      await projectApi.createTopic({ matricNo, topic: newTopic.trim() })
+      const created = await projectApi.createTopic({ matricNo, topic: newTopic.trim() })
       setTopicMsg("Topic submitted successfully")
       setNewTopic("")
+      // The list endpoint currently misses pending topics backend-side, so
+      // show the created record returned by the POST at once (dedupe by id).
+      const row = created?.topic ? created : (created?.data ?? null)
+      if (row && (row.id ?? row.Id)) {
+        const rid = String(row.id ?? row.Id)
+        setTopics(prev => (Array.isArray(prev) && prev.some(t => String(t.id ?? t.Id) === rid)) ? prev : [...(Array.isArray(prev) ? prev : []), row])
+      }
       await refreshTopics()
       await fetchProjectFlow()
     } catch (err) { setTopicErr2(err.message || "Could not create topic") }
