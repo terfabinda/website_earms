@@ -5643,15 +5643,9 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
           <h4 className="font-label-md font-bold text-on-surface">Single project</h4>
           {cpErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{cpErr}</div>}
           {cpMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{cpMsg}</div>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No *</span><input value={cpForm.matricNo} onChange={cpSet("matricNo")} placeholder="CSC/2024/001" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span>
-                  <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpDepts.find(d => String(d.Id ?? d.id) === String(cpForm.departmentId))?.Name ?? cpDepts.find(d => String(d.Id ?? d.id) === String(cpForm.departmentId))?.name ?? (cpForm.departmentId ? `Dept ${cpForm.departmentId}` : "Resolving…")}</div>
-                </label>
-                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span>
-                  <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpProgs.find(p => String(p.Id ?? p.id) === String(cpForm.programId))?.Name ?? cpProgs.find(p => String(p.Id ?? p.id) === String(cpForm.programId))?.name ?? (cpForm.programId ? `Prog ${cpForm.programId}` : "Resolving…")}</div>
-                </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No *</span><input value={cpForm.matricNo} onChange={cpSet("matricNo")} placeholder="CSC/2024/001" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
+                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Start</span><input type="date" value={cpForm.startDate} onChange={cpSet("startDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">End</span><input type="date" value={cpForm.endDate} onChange={cpSet("endDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Template</span>
@@ -5698,12 +5692,6 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
           <p className="text-xs text-on-surface-variant">Creates projects for unassigned students in a programme.</p>
           {acErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{acErr}</div>}
           {acMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{acMsg}</div>}
-              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span>
-                <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpDepts.find(d => String(d.Id ?? d.id) === String(acForm.departmentId))?.Name ?? cpDepts.find(d => String(d.Id ?? d.id) === String(acForm.departmentId))?.name ?? (acForm.departmentId ? `Dept ${acForm.departmentId}` : "Resolving…")}</div>
-              </label>
-              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span>
-                <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{acProgs.find(p => String(p.Id ?? p.id) === String(acForm.programId))?.Name ?? acProgs.find(p => String(p.Id ?? p.id) === String(acForm.programId))?.name ?? (acForm.programId ? `Prog ${acForm.programId}` : "Resolving…")}</div>
-              </label>
           <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={acForm.session} onChange={e=>setAcForm(f=>({...f, session: e.target.value}))} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={acForm.useSpecialization} onChange={e=>setAcForm(f=>({...f, useSpecialization: e.target.checked}))} className="w-4 h-4 accent-primary" /> Match by specialization</label>
           <button type="submit" disabled={acBusy} className="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{acBusy ? "Working…" : "Auto-create Projects"}</button>
