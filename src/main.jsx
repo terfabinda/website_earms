@@ -1112,6 +1112,17 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                   </ul>
                 )}
               </li>
+              <li>
+                <button onClick={()=>toggleGroup('Research Template')} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
+                  <span className="material-symbols-outlined text-[20px]">library_books</span> <span className="flex-1 text-left">Research Template</span> <span className="material-symbols-outlined text-[18px]">{openGroups['Research Template'] === false ? 'expand_more' : 'expand_less'}</span>
+                </button>
+                {openGroups['Research Template'] !== false && (
+                  <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
+                    <li><button onClick={()=>go('faculty?view=chapter-template')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='chapter-template' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Chapter Template</button></li>
+                    <li><button onClick={()=>go('faculty?view=cover-template')} type="button" className={`w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded text-left ${hashView==='cover-template' ? 'bg-primary-container text-on-primary-container font-bold' : 'text-on-surface-variant hover:bg-surface-container-high'}`}><span className="material-symbols-outlined text-[14px]">chevron_right</span> Cover Template</button></li>
+                  </ul>
+                )}
+              </li>
               {navItems.slice(2).map(it=>(
                 <li key={it.key}><button type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined">{it.icon}</span> {it.label}</button></li>
               ))}
@@ -5713,6 +5724,158 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
   )
 }
 
+/* ---------- Chapter Template page (coordinator function) ----------
+   POST /api/Project/create-chapter-template { templateName, institutionId,
+   departmentId, programId, isDefault, chapters:[{chapterNumber,title}] }. */
+function ChapterTemplatePage({ go, instId, deptId }) {
+  const [progs, setProgs] = useState([])
+  const [progsLoading, setProgsLoading] = useState(false)
+  const [programId, setProgramId] = useState("")
+  const [templateType, setTemplateType] = useState("Undergraduate")
+  const [templateName, setTemplateName] = useState("")
+  const [chapNo, setChapNo] = useState("1")
+  const [chapTitle, setChapTitle] = useState("")
+  const [chapters, setChapters] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState("")
+  const [err, setErr] = useState("")
+  useEffect(()=>{
+    let cancelled = false
+    ;(async ()=>{
+      if (!instId || !deptId) return
+      setProgsLoading(true)
+      try {
+        const { onboardingApi, resolveInstitutionId } = await import("./onboarding")
+        let effInst = String(instId || "").trim()
+        try {
+          const resolved = await resolveInstitutionId().catch(()=> "")
+          if (resolved) effInst = String(resolved)
+        } catch {}
+        const list = await onboardingApi.getPrograms(String(effInst), String(deptId)).catch(()=>[])
+        if (!cancelled && Array.isArray(list)) {
+          setProgs(list)
+          if (list.length === 1) setProgramId(s => s || String(list[0].Id ?? list[0].id))
+        }
+      } catch {} finally { if (!cancelled) setProgsLoading(false) }
+    })()
+    return ()=>{ cancelled = true }
+  }, [instId, deptId])
+  const addChapter = () => {
+    const title = String(chapTitle || "").trim()
+    const no = Number(chapNo)
+    if (!no || no < 1 || no > 5) { setErr("Pick a chapter number between 1 and 5."); return }
+    if (!title) { setErr("Enter a chapter title."); return }
+    if (chapters.some(c => Number(c.chapterNumber) === no)) { setErr(`Chapter ${no} is already added — pick another number or remove it first.`); return }
+    setErr("")
+    setChapters(list => [...list, { chapterNumber: no, title }].sort((a,b)=>a.chapterNumber-b.chapterNumber))
+    setChapTitle("")
+  }
+  const submit = async (e) => {
+    e.preventDefault()
+    setMsg(""); setErr("")
+    const name = String(templateName || "").trim()
+    if (!instId) { setErr("No institution on your login — re-login."); return }
+    if (!deptId) { setErr("No department resolved for your account — re-login."); return }
+    if (!programId) { setErr("Select a programme."); return }
+    if (!name) { setErr("Template name is required."); return }
+    if (!chapters.length) { setErr("Add at least one chapter (number + title)."); return }
+    setBusy(true)
+    try {
+      await projectApi.createChapterTemplate({
+        templateName: name,
+        institutionId: Number(instId),
+        departmentId: Number(deptId),
+        programId: Number(programId),
+        isDefault: false,
+        chapters: chapters.map(c => ({ chapterNumber: Number(c.chapterNumber), title: c.title })),
+      })
+      setMsg(`Template "${name}" created with ${chapters.length} ${chapters.length===1?"chapter":"chapters"}.`)
+      setTemplateName(""); setChapters([]); setChapNo("1"); setChapTitle("")
+    } catch (err2) { setErr(err2.message || "Template creation failed") }
+    finally { setBusy(false) }
+  }
+  return (
+    <div className="space-y-6">
+      <button onClick={()=>go('faculty?view=dashboard')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Projects
+      </button>
+      <div>
+        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">library_books</span> Chapter Template</h2>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — define a chapter template per programme (POST /api/Project/create-chapter-template).</p>
+      </div>
+      <form onSubmit={submit} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-4 max-w-2xl">
+        {err && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
+        {msg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{msg}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
+            <select value={programId} onChange={e=>setProgramId(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+              <option value="">{progsLoading ? "Loading…" : "Select programme"}</option>
+              {progs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name ?? `Programme ${p.Id ?? p.id}`}</option>))}
+            </select>
+          </label>
+          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Template Type *</span>
+            <select value={templateType} onChange={e=>setTemplateType(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+              <option value="Undergraduate">Undergraduate</option>
+              <option value="Postgraduate">Postgraduate</option>
+            </select>
+          </label>
+        </div>
+        <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Template Name *</span>
+          <input value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder={`e.g. ${templateType} Five Chapter`} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
+        </label>
+        <div className="rounded-xl border border-outline-variant p-4 space-y-3 bg-surface-container-lowest">
+          <h4 className="font-label-md font-bold text-on-surface">Chapters</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr_auto] gap-2 items-end">
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Number *</span>
+              <select value={chapNo} onChange={e=>setChapNo(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
+                {[1,2,3,4,5].map(n=>(<option key={n} value={String(n)}>{n}</option>))}
+              </select>
+            </label>
+            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Title *</span>
+              <input value={chapTitle} onChange={e=>setChapTitle(e.target.value)} placeholder="e.g. Introduction" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
+            </label>
+            <button type="button" onClick={addChapter} className="px-3 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-variant">Add</button>
+          </div>
+          {chapters.length > 0 ? (
+            <ul className="space-y-1">
+              {chapters.map(c=>(
+                <li key={c.chapterNumber} className="flex items-center gap-2 text-sm bg-surface border border-outline-variant rounded-lg px-3 py-1.5">
+                  <span className="font-bold">Chapter {c.chapterNumber}</span>
+                  <span className="truncate">{c.title}</span>
+                  <button type="button" onClick={()=>setChapters(list=>list.filter(x=>Number(x.chapterNumber)!==Number(c.chapterNumber)))} className="ml-auto text-error text-xs hover:underline">Remove</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-outline">No chapters added yet — pick a number 1–5, enter a title, then Add.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy} className="flex-1 bg-primary text-on-primary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{busy ? "Creating…" : "Create Template"}</button>
+          <button type="button" onClick={()=>go('faculty?view=dashboard')} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md text-sm hover:bg-surface-variant">Cancel</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function CoverTemplatePage({ go }) {
+  return (
+    <div className="space-y-6">
+      <button onClick={()=>go('faculty?view=dashboard')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Projects
+      </button>
+      <div>
+        <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">book</span> Cover Template</h2>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — cover page templates.</p>
+      </div>
+      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 max-w-2xl">
+        <p className="text-sm text-on-surface-variant">Cover templates are not available yet — check back soon.</p>
+      </div>
+    </div>
+  )
+}
+
 function FacultyDashboard({ go }) {
   const tok = decodeToken()
   // StaffNo: prefer explicit claims + username claims; numeric `sub` (user id)
@@ -5894,6 +6057,20 @@ function FacultyDashboard({ go }) {
     return (
       <DashShell go={go} active="faculty" role="faculty" title="Create Project" subtitle="Coordinator function — new project or bulk auto-create.">
         <CreateProjectPage go={go} staffNo={staffNo} instId={instId} deptId={deptId} onChanged={fetchProjects} />
+      </DashShell>
+    )
+  }
+  if (facView === "chapter-template") {
+    return (
+      <DashShell go={go} active="faculty" role="faculty" title="Chapter Template" subtitle="Coordinator function — define chapter templates per programme.">
+        <ChapterTemplatePage go={go} instId={instId} deptId={deptId} />
+      </DashShell>
+    )
+  }
+  if (facView === "cover-template") {
+    return (
+      <DashShell go={go} active="faculty" role="faculty" title="Cover Template" subtitle="Coordinator function — cover page templates.">
+        <CoverTemplatePage go={go} />
       </DashShell>
     )
   }
