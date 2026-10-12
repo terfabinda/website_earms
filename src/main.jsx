@@ -5526,40 +5526,52 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
   const [acMsg, setAcMsg] = useState("")
   const [acErr, setAcErr] = useState("")
   // Department + programme are auto-detected from the coordinator's profile
-  // (staff record → DepartmentId/ProgramId), falling back to token department,
-  // then first available. No dropdowns — resolved values render as read-only.
+  // (robust staff record → DepartmentId/ProgramId), falling back to token
+  // department, then first available. No dropdowns — values stay hidden and
+  // no preload error banner is shown; submit-time validation reports gaps.
   const initCreateContext = useCallback(async ()=>{
-    if (!instId) return
     try {
-      const { onboardingApi } = await import("./onboarding")
-      const [depts, profile] = await Promise.all([
-        onboardingApi.getDepartmentsRobust(String(instId)).catch(()=>[]),
-        (staffNo ? onboardingApi.getStaff(String(staffNo), String(instId)).catch(()=>null) : null),
-      ])
+      const { onboardingApi, resolveInstitutionId, getStaffRobust } = await import("./onboarding")
+      // Token ownerId is NOT the institution id (owner/institution split-brain),
+      // so prefer the institutionCode-resolved id with the token value as fallback.
+      let effInst = String(instId || "").trim()
+      try {
+        const resolved = await resolveInstitutionId().catch(()=> "")
+        if (resolved) effInst = String(resolved)
+      } catch {}
+      if (!effInst) return
+      const depts = await onboardingApi.getDepartmentsRobust(String(effInst)).catch(()=>[])
       const deptArr = Array.isArray(depts) ? depts : []
       setCpDepts(deptArr)
-      if (!deptArr.length) setCpErr("Could not load your department — check connection and reload.");
-      const inList = (id) => deptArr.some(d => String(d.Id ?? d.id) === String(id)) ? String(id) : ""
-      const profDept = profile?.DepartmentId ?? profile?.departmentId ?? ""
-      const dept = inList(deptId) || inList(profDept) || (deptArr.length ? String(deptArr[0].Id ?? deptArr[0].id) : "")
+      const rawProfile = staffNo ? await getStaffRobust(String(staffNo), String(effInst), deptArr).catch(()=>null) : null
+      const profile = Array.isArray(rawProfile) ? (rawProfile[0] || null) : rawProfile
+      const inList = (id) => (id !== undefined && id !== null && String(id) !== "" && deptArr.some(d => String(d.Id ?? d.id) === String(id))) ? String(id) : ""
+      const profDept = profile?.DepartmentId ?? profile?.departmentId ?? profile?.DeptId ?? profile?.deptId ?? ""
+      const profProg = profile?.ProgramId ?? profile?.programId ?? profile?.ProgId ?? profile?.progId ?? ""
+      // Accept the profile/token department even when the department list comes
+      // back empty (backend get-depts gap) so creation can still proceed.
+      const dept = inList(deptId) || inList(profDept)
+        || (profDept !== undefined && profDept !== null && String(profDept) !== "" ? String(profDept) : "")
+        || (deptId !== undefined && deptId !== null && String(deptId) !== "" ? String(deptId) : "")
+        || (deptArr.length ? String(deptArr[0].Id ?? deptArr[0].id) : "")
       if (dept) {
         setCpForm(f => ({ ...f, departmentId: f.departmentId || dept }))
         setAcForm(f => ({ ...f, departmentId: f.departmentId || dept }))
       }
       if (!dept) { setCpStaff([]); setCpTemplates([]); setCpProgs([]); setAcProgs([]); return }
       const [progs, staff, tmpl] = await Promise.all([
-        onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[]),
-        onboardingApi.getAcademicStaff({ departmentId: String(dept), institutionId: String(instId) }).catch(()=>[]),
-        projectApi.getTemplates({ institutionId: instId, departmentId: dept }).catch(()=>[]),
+        onboardingApi.getPrograms(String(effInst), String(dept)).catch(()=>[]),
+        onboardingApi.getAcademicStaff({ departmentId: String(dept), institutionId: String(effInst) }).catch(()=>[]),
+        projectApi.getTemplates({ institutionId: effInst, departmentId: dept }).catch(()=>[]),
       ])
       const progArr = Array.isArray(progs) ? progs : []
       setCpProgs(progArr)
       setAcProgs(progArr)
       setCpStaff(Array.isArray(staff) ? staff : [])
       setCpTemplates(Array.isArray(tmpl) ? tmpl : [])
-      const profProg = profile?.ProgramId ?? profile?.programId ?? ""
-      const progInList = profProg && progArr.some(p => String(p.Id ?? p.id) === String(profProg)) ? String(profProg)
-        : progArr.length ? String(progArr[0].Id ?? progArr[0].id) : ""
+      const progInList = (profProg !== undefined && profProg !== null && String(profProg) !== "" && progArr.some(p => String(p.Id ?? p.id) === String(profProg))) ? String(profProg)
+        : (profProg !== undefined && profProg !== null && String(profProg) !== "" ? String(profProg) : "")
+          || (progArr.length ? String(progArr[0].Id ?? progArr[0].id) : "")
       if (progInList) {
         setCpForm(f => ({ ...f, programId: f.programId || progInList }))
         setAcForm(f => ({ ...f, programId: f.programId || progInList }))
@@ -5709,33 +5721,48 @@ function FacultyDashboard({ go }) {
     ?? tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"]
     ?? tok?.unique_name ?? tok?.preferred_username ?? tok?.preferredUsername
     ?? tok?.sub ?? tok?.email ?? ""
-  const instId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? ""
-  const deptId = tok?.departmentId ?? tok?.DepartmentId ?? ""
+  const tokenInstId = tok?.institutionId ?? tok?.InstitutionId ?? tok?.ownerId ?? ""
+  const tokenDeptId = tok?.departmentId ?? tok?.DepartmentId ?? ""
+  // ownerId is NOT the institution id (owner/institution split-brain) — resolve
+  // via institutionCode with the token value as fallback.
+  const [resolvedInstId, setResolvedInstId] = useState("")
+  const instId = resolvedInstId || tokenInstId
   // Personalization — resolved from live records below, token values are fallback.
   const [staffProfile, setStaffProfile] = useState(null)
   const [instProfile, setInstProfile] = useState(null)
+  // Coordinator department: token claim first, live staff profile second. The
+  // create-project page + coordinator stats use this so coordinators whose
+  // tokens carry no departmentId still resolve via their staff record.
+  const profileDeptId = staffProfile?.DepartmentId ?? staffProfile?.departmentId ?? staffProfile?.DeptId ?? staffProfile?.deptId ?? ""
+  const deptId = tokenDeptId || (profileDeptId !== undefined && profileDeptId !== null ? String(profileDeptId) : "")
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const { onboardingApi } = await import("./onboarding")
-        if (staffNo && instId) {
-          const rec = await onboardingApi.getStaff(String(staffNo), String(instId)).catch(() => null)
-          if (!cancelled && rec && (rec.FirstName ?? rec.firstName ?? rec.LastName ?? rec.lastName)) setStaffProfile(rec)
+        const { onboardingApi, resolveInstitutionId, getStaffRobust } = await import("./onboarding")
+        try {
+          const resolved = await resolveInstitutionId().catch(()=> "")
+          if (!cancelled && resolved) setResolvedInstId(String(resolved))
+        } catch {}
+        const effInst = (resolvedInstId || tokenInstId) ? String(resolvedInstId || tokenInstId) : ""
+        if (staffNo && effInst) {
+          const rec = await getStaffRobust(String(staffNo), String(effInst)).catch(() => null)
+          const row = Array.isArray(rec) ? (rec[0] || null) : rec
+          if (!cancelled && row && (row.FirstName ?? row.firstName ?? row.LastName ?? row.lastName ?? row.DepartmentId ?? row.departmentId ?? row.Email ?? row.email)) setStaffProfile(row)
         }
-        if (instId) {
-          let inst = await onboardingApi.getMinInstitution(String(instId)).catch(() => null)
+        if (effInst) {
+          let inst = await onboardingApi.getMinInstitution(String(effInst)).catch(() => null)
           if (!inst) {
             const list = await onboardingApi.getInstitutions().catch(() => [])
             const arr = Array.isArray(list) ? list : []
-            inst = arr.find(r => String(r.Id ?? r.id) === String(instId)) || null
+            inst = arr.find(r => String(r.Id ?? r.id) === String(effInst)) || null
           } else if (Array.isArray(inst)) inst = inst[0] || null
           if (!cancelled && inst) setInstProfile(inst)
         }
       } catch {}
     })()
     return () => { cancelled = true }
-  }, [staffNo, instId])
+  }, [staffNo, tokenInstId, resolvedInstId])
   const firstName = staffProfile?.FirstName ?? staffProfile?.firstName ?? ""
   const fullName = [staffProfile?.Title ?? staffProfile?.title, staffProfile?.FirstName ?? staffProfile?.firstName, staffProfile?.LastName ?? staffProfile?.lastName].filter(Boolean).join(" ")
   const displayName = fullName || tok?.name || staffNo || "Faculty"

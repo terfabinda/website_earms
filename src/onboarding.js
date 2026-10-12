@@ -450,6 +450,87 @@ export const STAFF_CATEGORIES = [
   { value: 3, label: "Admin" },
 ];
 
+// Robust staff/coordinator profile fetch. The direct GET staff/{id}/{inst} route
+// is finicky (slash IDs, string-vs-numeric ids, wrong institution scoping,
+// incomplete staff records upstream), so fall back through IAM lookup +
+// academic-staff scan + per-department stafflist scan. Returns the first
+// record that looks like a staff profile, or null when nothing resolves.
+// Never throws — callers treat null as "profile unavailable" and fall back
+// to token claims / department list.
+export async function getStaffRobust(staffNo, institutionId, departments) {
+  const id = String(staffNo ?? "").trim();
+  const inst = String(institutionId ?? "").trim();
+  if (!id) return null;
+  const looksFull = (r) =>
+    r && (r.StaffId ?? r.staffId ?? r.FirstName ?? r.firstName ?? r.LastName ??
+      r.lastName ?? r.Email ?? r.email ?? r.DepartmentId ?? r.departmentId);
+  const matchRow = (x) => {
+    if (!x || typeof x !== "object") return false;
+    const sid = String(x.StaffId ?? x.staffId ?? "").trim().toLowerCase();
+    if (sid && sid === id.toLowerCase()) return true;
+    // numeric Id match (caller may pass a numeric user id as staffNo fallback)
+    if (/^\d+$/.test(id) && String(x.Id ?? x.id ?? "") === id) return true;
+    return false;
+  };
+  // 1) Direct record (double-encoded slash IDs handled in getStaff).
+  if (inst) {
+    try {
+      const r = await onboardingApi.getStaff(id, inst);
+      if (looksFull(r)) return r;
+    } catch {}
+  }
+  // 2) IAM lookup — needs no institution id.
+  try {
+    const r = await onboardingApi.getStaffIam(id);
+    if (looksFull(r)) return r;
+  } catch {}
+  // 3) Academic-staff aggregates (institution-wide, then department-scoped).
+  const scanLists = [];
+  if (inst) {
+    try {
+      const all = await onboardingApi.getAcademicStaff({ institutionId: inst });
+      if (Array.isArray(all)) scanLists.push(all);
+    } catch {}
+  }
+  let depts = Array.isArray(departments) ? departments : null;
+  if (!depts && inst) {
+    try {
+      depts = await onboardingApi.getDepartmentsRobust(inst);
+    } catch { depts = null; }
+  }
+  if (inst && Array.isArray(depts) && depts.length) {
+    try {
+      const perDept = await Promise.all(
+        depts.map((d) =>
+          onboardingApi
+            .getAcademicStaff({ departmentId: String(d.Id ?? d.id), institutionId: inst })
+            .catch(() => [])
+        )
+      );
+      for (const l of perDept) if (Array.isArray(l)) scanLists.push(l);
+    } catch {}
+  }
+  for (const list of scanLists) {
+    const hit = (Array.isArray(list) ? list : []).find(matchRow);
+    if (hit) return hit;
+  }
+  // 4) Full stafflist scan per department (full StaffDto rows carry DepartmentId).
+  if (inst && Array.isArray(depts) && depts.length) {
+    try {
+      const scans = await Promise.all(
+        depts.map((d) =>
+          onboardingApi.getStaffList(String(d.Id ?? d.id), inst).catch(() => [])
+        )
+      );
+      for (const list of scans) {
+        const hit = (Array.isArray(list) ? list : []).find(matchRow);
+        if (hit) return hit;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 export const STUDENT_CATEGORIES = [
   { value: 1, label: "Non-Degree" },
   { value: 2, label: "Undergraduate" },
