@@ -5308,6 +5308,10 @@ function StudentDashboard({ go }) {
             <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
               <h4 className="font-headline-sm font-bold text-on-surface mb-2">Project snapshot</h4>
               <pre className="text-xs bg-surface-container-low border border-outline-variant rounded-lg p-3 overflow-auto max-h-[220px]">{JSON.stringify(project, null, 2)}</pre>
+              {tmplRow && (<>
+                <p className="font-label-md font-bold text-on-surface mt-3 mb-1">Template — GET /api/Project/get-template (matched by chapterTemplateId)</p>
+                <pre className="text-xs bg-surface-container-low border border-outline-variant rounded-lg p-3 overflow-auto max-h-[220px]">{JSON.stringify(tmplRow, null, 2)}</pre>
+              </>)}
               <p className="text-[11px] text-outline mt-2">GET /api/Project/get-project-by-matric?MatricNo={matricNo} • GET /api/Project/GetTopicsByProjectId/{'{projectId}'}</p>
             </div>
           )}
