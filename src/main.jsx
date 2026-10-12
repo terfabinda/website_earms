@@ -5309,7 +5309,8 @@ function StudentDashboard({ go }) {
             </div>
           </div>
 
-          {project && (
+          {/* Hidden for now: project/template snapshot windows (endpoint query aids) */}
+          {false && project && (
             <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
               <h4 className="font-headline-sm font-bold text-on-surface mb-2">Project snapshot</h4>
               <pre className="text-xs bg-surface-container-low border border-outline-variant rounded-lg p-3 overflow-auto max-h-[220px]">{JSON.stringify(project, null, 2)}</pre>
