@@ -5774,7 +5774,7 @@ function ChapterTemplatePage({ go, instId, deptId }) {
           const resolved = await resolveInstitutionId().catch(()=> "")
           if (resolved) effInst = String(resolved)
         } catch {}
-        const list = await onboardingApi.getPrograms(String(effInst), String(deptId)).catch(()=>[])
+        const list = await onboardingApi.getProgramsRobust(String(effInst), String(deptId)).catch(()=>[])
         if (!cancelled && Array.isArray(list)) {
           setProgs(list)
           if (list.length === 1) setProgramId(s => s || String(list[0].Id ?? list[0].id))
@@ -5832,7 +5832,7 @@ function ChapterTemplatePage({ go, instId, deptId }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
             <select value={programId} onChange={e=>setProgramId(e.target.value)} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-              <option value="">{progsLoading ? "Loading…" : (progs.length ? "Select programme" : "No programmes found for this department")}</option>
+              <option value="">{progsLoading ? "Loading…" : "Select programme"}</option>
               {progs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name ?? `Programme ${p.Id ?? p.id}`}</option>))}
             </select>
           </div>

@@ -240,6 +240,36 @@ export const onboardingApi = {
   async getPrograms(institutionId, departmentId) {
     return obFetch("get-programs/" + institutionId + "/" + departmentId);
   },
+  // Robust programme listing: the scoped get-programs/{inst}/{dept} route is
+  // currently returning empty backend-side even where rows exist, while the
+  // direct record lookup still resolves. Return the scoped list when it has
+  // rows; otherwise surface whatever the direct lookup returns (deduped) so
+  // dropdowns list programmes that exist at all and the coordinator picks
+  // whichever applies.
+  async getProgramsRobust(institutionId, departmentId) {
+    const inst = String(institutionId ?? "").trim();
+    const dept = String(departmentId ?? "").trim();
+    if (inst && dept) {
+      try {
+        const list = await onboardingApi.getPrograms(inst, dept);
+        if (Array.isArray(list) && list.length) return list;
+      } catch {}
+    }
+    const seen = new Map();
+    for (const c of [dept, inst]) {
+      const key = String(c ?? "").trim();
+      if (!key) continue;
+      try {
+        const rec = await onboardingApi.getProgram(key);
+        const row = Array.isArray(rec) ? rec[0] : rec;
+        const pid = row?.Id ?? row?.id;
+        if (row && pid !== undefined && pid !== null && String(pid) !== "" && !seen.has(String(pid))) {
+          seen.set(String(pid), row);
+        }
+      } catch {}
+    }
+    return [...seen.values()];
+  },
   async getProgram(id) {
     return obFetch("programs/" + encodeURIComponent(id));
   },
