@@ -1004,7 +1004,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
   return (
     <div className="min-h-screen flex bg-background">
       {/* SideNav - desktop */}
-      <nav className="hidden md:flex flex-col bg-surface-container-low border-r border-outline-variant shadow-sm w-64 h-screen fixed left-0 top-0 p-4 z-40">
+      <nav className="hidden md:flex flex-col bg-surface-container-low border-r border-outline-variant shadow-sm w-72 h-screen fixed left-0 top-0 p-4 z-40">
         <div className="flex items-center gap-2 mb-6">
           {role==='admin' ? (
             instLogo ? (
@@ -1114,7 +1114,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
               </li>
               <li>
                 <button onClick={()=>toggleGroup('Research Template')} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left">
-                  <span className="material-symbols-outlined text-[20px]">library_books</span> <span className="flex-1 text-left">Research Template</span> <span className="material-symbols-outlined text-[18px]">{openGroups['Research Template'] === false ? 'expand_more' : 'expand_less'}</span>
+                  <span className="material-symbols-outlined text-[20px] shrink-0">library_books</span> <span className="flex-1 text-left whitespace-nowrap">Research Template</span> <span className="material-symbols-outlined text-[18px]">{openGroups['Research Template'] === false ? 'expand_more' : 'expand_less'}</span>
                 </button>
                 {openGroups['Research Template'] !== false && (
                   <ul className="ml-9 mt-1 space-y-0.5 border-l border-outline-variant pl-3">
@@ -1190,7 +1190,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
         </div>
       )}
 
-      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 md:ml-72 flex flex-col min-h-screen">
         {/* TopBar for faculty/student - keep simple header */}
         {role !== 'admin' ? (
           <header className="bg-surface border-b border-outline-variant px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 md:top-0 z-20 mt-12 md:mt-0">
