@@ -1,7 +1,7 @@
 // EARMS Admin Onboarding module — wired to /api/onboarding endpoints.
 // Renders inside the shared DashShell (sidebar/header) from main.jsx.
 import React, { useState, useEffect, useCallback } from "react";
-import { onboardingApi, STAFF_CATEGORIES, STUDENT_CATEGORIES } from "./onboarding";
+import { onboardingApi, resolveInstitutionId, STAFF_CATEGORIES, STUDENT_CATEGORIES } from "./onboarding";
 import { decodeToken } from "./iam";
 
 /* ---------- small shared field primitives ---------- */
@@ -70,30 +70,40 @@ export function AdminOnboarding({ go }) {
   }, []);
 
   useEffect(() => {
-    const tokenData = decodeToken()
-    const tokenInstName = tokenData?.institutionName || tokenData?.InstitutionName || ""
-    const tokenInstCode = tokenData?.institutionCode || tokenData?.InstitutionCode || ""
-    const tokenOwnerId = tokenData?.ownerId || tokenData?.OwnerId || ""
-    onboardingApi
-      .getInstitutionsDropdown()
-      .then((list) => {
+    let cancelled = false;
+    (async () => {
+      const tokenData = decodeToken()
+      const tokenInstName = tokenData?.institutionName || tokenData?.InstitutionName || ""
+      const tokenInstCode = tokenData?.institutionCode || tokenData?.InstitutionCode || ""
+      const tokenOwnerId = tokenData?.ownerId || tokenData?.OwnerId || ""
+      // Prefer the code-resolved institution id (ownerId is NOT the institution
+      // id — e.g. owner 5 vs institution 4. Matching by ownerId first sent
+      // creates to one institution while list pages queried another, so created
+      // departments never appeared and programmes couldn't be created).
+      let resolvedId = ""
+      try { resolvedId = await resolveInstitutionId() } catch {}
+      try {
+        const list = await onboardingApi.getInstitutionsDropdown()
+        if (cancelled) return
         const arr = list || []
-        // Try to find user's institution in the dropdown by id, code or name from token
         let match = null
-        if (tokenOwnerId) match = arr.find((i) => String(i.Id ?? i.id) === String(tokenOwnerId))
-        if (!match && tokenInstCode) match = arr.find((i) => (i.Code ?? i.code ?? i.code) === tokenInstCode || (i.code ?? i.Code) === tokenInstCode)
+        if (resolvedId) match = arr.find((i) => String(i.Id ?? i.id) === String(resolvedId))
+        if (!match && tokenInstCode) match = arr.find((i) => (i.Code ?? i.code) === tokenInstCode)
         if (!match && tokenInstName) match = arr.find((i) => (i.Name ?? i.name) === tokenInstName)
-        // If user's institution not in dropdown (e.g. University of Gboko not yet onboarded), inject it so UI shows correct name instead of hardcoded first item
+        if (!match && tokenOwnerId) match = arr.find((i) => String(i.Id ?? i.id) === String(tokenOwnerId))
+        // If user's institution not in dropdown (e.g. not yet onboarded), inject it so UI shows correct name instead of hardcoded first item
         if (!match && (tokenInstName || tokenInstCode)) {
-          const synthetic = { Id: tokenOwnerId ? Number(tokenOwnerId) : 9999, id: tokenOwnerId ? Number(tokenOwnerId) : 9999, Name: tokenInstName || tokenInstCode, name: tokenInstName || tokenInstCode, Code: tokenInstCode, code: tokenInstCode }
+          const synthId = resolvedId || tokenOwnerId || 9999
+          const synthetic = { Id: Number(synthId) || 9999, id: Number(synthId) || 9999, Name: tokenInstName || tokenInstCode, name: tokenInstName || tokenInstCode, Code: tokenInstCode, code: tokenInstCode }
           arr.unshift(synthetic)
           match = synthetic
         }
         setInstitutions(arr)
         if (match) setInstId(String(match.Id ?? match.id))
         else if (arr.length) setInstId(String(arr[0].Id ?? arr[0].id))
-      })
-      .catch((e) => setInstErr(e.message || "Could not load institutions"));
+      } catch (e) { if (!cancelled) setInstErr(e.message || "Could not load institutions") }
+    })();
+    return () => { cancelled = true };
   }, []);
 
   const collegeTerm = (() => {

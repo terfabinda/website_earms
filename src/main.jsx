@@ -2212,12 +2212,17 @@ function DepartmentPage({ go }) {
     try {
       const { onboardingApi } = await import("./onboarding")
       const id = await resolveDeptInstId()
-      if (!id) { setDepts([]); setFaculties([]); return }
+      if (!id) {
+        setDepts([]); setFaculties([]);
+        setErr("No institution record found for this account yet — complete Onboarding → Institution first (institution could not be resolved from your login).");
+        return
+      }
       if (id) {
         const [data, facs] = await Promise.all([
           onboardingApi.getDepartments(String(id)).catch(()=>[]),
           onboardingApi.getColleges(String(id)).catch(()=>[])
         ])
+        try { console.log(`[departments] institution ${id}: ${(Array.isArray(data) ? data : []).length} departments, ${(Array.isArray(facs) ? facs : []).length} colleges`); } catch {}
         setDepts(Array.isArray(data) ? data : [])
         setFaculties(Array.isArray(facs) ? facs : [])
         if (Array.isArray(facs) && facs.length && !facultyId) setFacultyId(String(facs[0].Id ?? facs[0].id))
@@ -2648,7 +2653,7 @@ function StaffManagementPage({ go }) {
   const loadMeta = async () => {
     try {
       const id = await resolveInstId()
-      if (!id) return
+      if (!id) { setErr("No institution record found for this account yet — complete Onboarding → Institution first (institution could not be resolved from your login)."); return }
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
