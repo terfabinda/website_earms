@@ -1215,7 +1215,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
               )}
             </nav>
               <div className="flex items-center gap-2 md:gap-3">
-                {role!=='student' && role!=='regulator' && <button className="hidden md:block bg-primary text-on-primary font-label-md py-1.5 px-4 rounded hover:bg-primary-container transition-colors text-sm">Submit Proposal</button>}
               <button className="p-1 hover:bg-surface-variant rounded-full"><span className="material-symbols-outlined text-[20px]">notifications</span></button>
               <button className="p-1 hover:bg-surface-variant rounded-full hidden md:block"><span className="material-symbols-outlined text-[20px]">apps</span></button>
               <img alt="avatar" className="w-8 h-8 rounded-full object-cover border border-outline-variant" src={role==='student' ? AVATAR_STUDENT : AVATAR_FACULTY}/>
