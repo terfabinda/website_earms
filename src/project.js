@@ -36,14 +36,14 @@ async function parseEnvelope(res) {
     body = null
   }
   if (!res.ok) {
-    const msg = (body && (body.message || body.errorCode || (body.errors && body.errors.join(" ")))) || `Project request failed (${res.status})`
+    const msg = (body && (body.message || body.error || body.errorCode || (body.errors && body.errors.join(" ")))) || `Project request failed (${res.status})`
     const err = new Error(msg)
     err.status = res.status
     err.body = body
     throw err
   }
   if (body && body.success === false) {
-    const msg = body.message || body.errorCode || body.errors?.join(" ") || "Operation failed"
+    const msg = body.message || body.error || body.errorCode || body.errors?.join(" ") || "Operation failed"
     const err = new Error(msg)
     err.body = body
     throw err

@@ -4841,7 +4841,11 @@ function StudentDashboard({ go }) {
           if (firstPending) setCreateChapNo(firstPending.chapterNumber ?? firstPending.ChapterNumber ?? 1)
         }
       } else if (d.status === 'rejected') {
-        setDashErr(d.reason?.message || "Could not load student dashboard")
+        const reason = d.reason?.message || "Could not load student dashboard"
+        try { console.warn("[student] student-dashboard failed:", reason) } catch {}
+        // Server blobs (e.g. backend EF exception text) stay in the console;
+        // the page shows a compact line since project/topics/chapters load anyway.
+        setDashErr(reason.length > 180 ? "Dashboard summary unavailable (server error) — project, topics and chapters below still load." : reason)
       }
       let projData = null
       if (proj.status === 'fulfilled' && proj.value) {
