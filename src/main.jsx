@@ -5026,7 +5026,7 @@ function StudentDashboard({ go }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
           <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Time Progress</span><span className="material-symbols-outlined text-primary text-[18px]">schedule</span></div>
           <p className="font-headline-md font-bold text-primary mt-1">{dash?.timeProgress !== undefined ? `${Number(dash.timeProgress).toFixed(1)}%` : (dashLoading ? "…" : "—")}</p>
@@ -5039,18 +5039,8 @@ function StudentDashboard({ go }) {
           <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-secondary h-1.5 rounded-full" style={{width: `${Math.min(100, Number(dash?.projectProgress||0))}%`}}></div></div>
           <p className="text-[11px] text-outline mt-1">{dash?.completedChapters ?? 0} completed • Ch {dash?.ongoingChapter ?? "—"} ongoing {dash?.pendingCorrection ? `• ${dash.pendingCorrection} needs correction` : ""}</p>
         </div>
-        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
-          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors</span><span className="material-symbols-outlined text-primary text-[18px]">group</span></div>
-          <p className="font-headline-sm font-bold text-on-surface mt-1 truncate">{(dash?.supervisorStaffNo && (Array.isArray(dash.supervisorStaffNo)? dash.supervisorStaffNo.join(", ") : dash.supervisorStaffNo)) || (project?.supervisors?.map(s=>s.staffNo ?? s.StaffNo).join(", ") || "—")}</p>
-          <p className="text-[11px] text-outline mt-1">{dash?.lastSubmissionDate ? `Last submission ${new Date(dash.lastSubmissionDate).toLocaleDateString()}` : "No submissions yet"}</p>
-          {dashErr && <p className="text-[11px] text-error mt-1">{dashErr}</p>}
-        </div>
-        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
-          <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Project Title</span><span className="material-symbols-outlined text-primary text-[18px]">title</span></div>
-          <p className="font-body-sm font-semibold text-on-surface mt-1 line-clamp-2">{dash?.projectTitle ?? project?.title ?? "—"}</p>
-          <p className="text-[11px] text-outline mt-1">Status: {dash?.projectStatus !== undefined ? ProjectStatusLabel[dash.projectStatus] ?? dash.projectStatus : "—"}</p>
-        </div>
       </div>
+      {dashErr && <p className="text-[11px] text-error mb-4">{dashErr}</p>}
 
       <div className="flex flex-wrap gap-1.5 mb-4 p-1 bg-surface-container-low rounded-xl border border-outline-variant w-fit">
         {[
@@ -5535,45 +5525,47 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
   const [acBusy, setAcBusy] = useState(false)
   const [acMsg, setAcMsg] = useState("")
   const [acErr, setAcErr] = useState("")
-  const fetchCreateMeta = useCallback(async ()=>{
+  // Department + programme are auto-detected from the coordinator's profile
+  // (staff record → DepartmentId/ProgramId), falling back to token department,
+  // then first available. No dropdowns — resolved values render as read-only.
+  const initCreateContext = useCallback(async ()=>{
     if (!instId) return
     try {
       const { onboardingApi } = await import("./onboarding")
-      const depts = await onboardingApi.getDepartmentsRobust(String(instId)).catch(()=>[])
-      const arr = Array.isArray(depts) ? depts : []
-      setCpDepts(arr)
-      const own = deptId && arr.some(d => String(d.Id ?? d.id) === String(deptId)) ? String(deptId) : ""
-      if (own) {
-        setCpForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
-        setAcForm(f => f.departmentId ? f : ({ ...f, departmentId: own }))
+      const [depts, profile] = await Promise.all([
+        onboardingApi.getDepartments(String(instId)).catch(()=>[]),
+        (staffNo ? onboardingApi.getStaff(String(staffNo), String(instId)).catch(()=>null) : null),
+      ])
+      const deptArr = Array.isArray(depts) ? depts : []
+      setCpDepts(deptArr)
+      const inList = (id) => deptArr.some(d => String(d.Id ?? d.id) === String(id)) ? String(id) : ""
+      const profDept = profile?.DepartmentId ?? profile?.departmentId ?? ""
+      const dept = inList(deptId) || inList(profDept) || (deptArr.length ? String(deptArr[0].Id ?? deptArr[0].id) : "")
+      if (dept) {
+        setCpForm(f => ({ ...f, departmentId: f.departmentId || dept }))
+        setAcForm(f => ({ ...f, departmentId: f.departmentId || dept }))
       }
-    } catch {}
-  }, [instId, deptId])
-  const loadCpDept = useCallback(async (dept)=>{
-    if (!dept || !instId) { setCpProgs([]); setCpStaff([]); setCpTemplates([]); return }
-    try {
-      const { onboardingApi } = await import("./onboarding")
+      if (!dept) { setCpStaff([]); setCpTemplates([]); setCpProgs([]); setAcProgs([]); return }
       const [progs, staff, tmpl] = await Promise.all([
         onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[]),
         onboardingApi.getAcademicStaff({ departmentId: String(dept), institutionId: String(instId) }).catch(()=>[]),
         projectApi.getTemplates({ institutionId: instId, departmentId: dept }).catch(()=>[]),
       ])
-      setCpProgs(Array.isArray(progs) ? progs : [])
+      const progArr = Array.isArray(progs) ? progs : []
+      setCpProgs(progArr)
+      setAcProgs(progArr)
       setCpStaff(Array.isArray(staff) ? staff : [])
       setCpTemplates(Array.isArray(tmpl) ? tmpl : [])
-    } catch { setCpProgs([]); setCpStaff([]); setCpTemplates([]) }
-  }, [instId])
-  const loadAcDept = useCallback(async (dept)=>{
-    if (!dept || !instId) { setAcProgs([]); return }
-    try {
-      const { onboardingApi } = await import("./onboarding")
-      const progs = await onboardingApi.getPrograms(String(instId), String(dept)).catch(()=>[])
-      setAcProgs(Array.isArray(progs) ? progs : [])
-    } catch { setAcProgs([]) }
-  }, [instId])
-  useEffect(()=>{ fetchCreateMeta() }, [fetchCreateMeta])
-  useEffect(()=>{ loadCpDept(cpForm.departmentId) }, [cpForm.departmentId, loadCpDept])
-  useEffect(()=>{ loadAcDept(acForm.departmentId) }, [acForm.departmentId, loadAcDept])
+      const profProg = profile?.ProgramId ?? profile?.programId ?? ""
+      const progInList = profProg && progArr.some(p => String(p.Id ?? p.id) === String(profProg)) ? String(profProg)
+        : progArr.length ? String(progArr[0].Id ?? progArr[0].id) : ""
+      if (progInList) {
+        setCpForm(f => ({ ...f, programId: f.programId || progInList }))
+        setAcForm(f => ({ ...f, programId: f.programId || progInList }))
+      }
+    } catch {}
+  }, [instId, deptId, staffNo])
+  useEffect(()=>{ initCreateContext() }, [initCreateContext])
   // Default the creator as Supervisor once on sign-in.
   useEffect(()=>{ if (staffNo && cpSups.length === 0) setCpSups([{ staffNo, role: 1 }]) }, [staffNo])
   const cpSet = (k) => (e) => setCpForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }))
@@ -5653,18 +5645,12 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Matric No *</span><input value={cpForm.matricNo} onChange={cpSet("matricNo")} placeholder="CSC/2024/001" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={cpForm.session} onChange={cpSet("session")} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
-            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
-              <select value={cpForm.departmentId} onChange={cpSet("departmentId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                <option value="">Select</option>
-                {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
-              </select>
-            </label>
-            <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
-              <select value={cpForm.programId} onChange={cpSet("programId")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                <option value="">Select</option>
-                {cpProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
-              </select>
-            </label>
+                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span>
+                  <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpDepts.find(d => String(d.Id ?? d.id) === String(cpForm.departmentId))?.Name ?? cpDepts.find(d => String(d.Id ?? d.id) === String(cpForm.departmentId))?.name ?? (cpForm.departmentId ? `Dept ${cpForm.departmentId}` : "Resolving…")}</div>
+                </label>
+                <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span>
+                  <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpProgs.find(p => String(p.Id ?? p.id) === String(cpForm.programId))?.Name ?? cpProgs.find(p => String(p.Id ?? p.id) === String(cpForm.programId))?.name ?? (cpForm.programId ? `Prog ${cpForm.programId}` : "Resolving…")}</div>
+                </label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Start</span><input type="date" value={cpForm.startDate} onChange={cpSet("startDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">End</span><input type="date" value={cpForm.endDate} onChange={cpSet("endDate")} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
             <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Chapter Template</span>
@@ -5682,13 +5668,10 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
               </select>
             </label>
           </div>
-          <div>
-            <span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors *</span>
-            <div className="flex gap-2 mt-1">
-              <select value={cpForm.supStaffNo} onChange={cpSet("supStaffNo")} className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-                <option value="">Pick staff…</option>
-                {cpStaff.map(s=>(<option key={s.staffId ?? s.StaffId} value={String(s.staffId ?? s.StaffId)}>{s.staffId ?? s.StaffId}{s.specialization ?? s.Specialization ? ` · ${s.specialization ?? s.Specialization}` : ""}</option>))}
-              </select>
+            <div>
+                <span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Supervisors *</span>
+                <div className="flex gap-2 mt-1">
+                  <input value={cpForm.supStaffNo} onChange={cpSet("supStaffNo")} placeholder="Staff ID e.g. JST/STF/4455" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
               <select value={cpForm.supRole} onChange={cpSet("supRole")} className="border border-outline-variant rounded-lg px-2 py-2 bg-surface text-sm">
                 <option value={1}>Supervisor</option>
                 <option value={2}>Co-supervisor</option>
@@ -5714,18 +5697,12 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
           <p className="text-xs text-on-surface-variant">Creates projects for unassigned students in a programme.</p>
           {acErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{acErr}</div>}
           {acMsg && <div className="rounded-lg bg-green-50 text-green-800 border border-green-200 px-3 py-2 text-sm">{acMsg}</div>}
-          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department *</span>
-            <select value={acForm.departmentId} onChange={e=>setAcForm(f=>({...f, departmentId: e.target.value, programId: ""}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-              <option value="">Select</option>
-              {cpDepts.map(d=>(<option key={d.Id ?? d.id} value={String(d.Id ?? d.id)}>{d.Name ?? d.name}</option>))}
-            </select>
-          </label>
-          <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme *</span>
-            <select value={acForm.programId} onChange={e=>setAcForm(f=>({...f, programId: e.target.value}))} className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm">
-              <option value="">Select</option>
-              {acProgs.map(p=>(<option key={p.Id ?? p.id} value={String(p.Id ?? p.id)}>{p.Name ?? p.name}</option>))}
-            </select>
-          </label>
+              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Department</span>
+                <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{cpDepts.find(d => String(d.Id ?? d.id) === String(acForm.departmentId))?.Name ?? cpDepts.find(d => String(d.Id ?? d.id) === String(acForm.departmentId))?.name ?? (acForm.departmentId ? `Dept ${acForm.departmentId}` : "Resolving…")}</div>
+              </label>
+              <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Programme</span>
+                <div className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface-container-low text-sm">{acProgs.find(p => String(p.Id ?? p.id) === String(acForm.programId))?.Name ?? acProgs.find(p => String(p.Id ?? p.id) === String(acForm.programId))?.name ?? (acForm.programId ? `Prog ${acForm.programId}` : "Resolving…")}</div>
+              </label>
           <label className="block"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Session</span><input value={acForm.session} onChange={e=>setAcForm(f=>({...f, session: e.target.value}))} placeholder="2025/2026" className="mt-1 w-full border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={acForm.useSpecialization} onChange={e=>setAcForm(f=>({...f, useSpecialization: e.target.checked}))} className="w-4 h-4 accent-primary" /> Match by specialization</label>
           <button type="submit" disabled={acBusy} className="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-sm disabled:opacity-40">{acBusy ? "Working…" : "Auto-create Projects"}</button>
