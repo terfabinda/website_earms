@@ -5533,11 +5533,12 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
     try {
       const { onboardingApi } = await import("./onboarding")
       const [depts, profile] = await Promise.all([
-        onboardingApi.getDepartments(String(instId)).catch(()=>[]),
+        onboardingApi.getDepartmentsRobust(String(instId)).catch(()=>[]),
         (staffNo ? onboardingApi.getStaff(String(staffNo), String(instId)).catch(()=>null) : null),
       ])
       const deptArr = Array.isArray(depts) ? depts : []
       setCpDepts(deptArr)
+      if (!deptArr.length) setCpErr("Could not load your department — check connection and reload.");
       const inList = (id) => deptArr.some(d => String(d.Id ?? d.id) === String(id)) ? String(id) : ""
       const profDept = profile?.DepartmentId ?? profile?.departmentId ?? ""
       const dept = inList(deptId) || inList(profDept) || (deptArr.length ? String(deptArr[0].Id ?? deptArr[0].id) : "")
