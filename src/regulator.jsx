@@ -151,20 +151,23 @@ function OverviewTab({ dash, reg, go, route }) {
   const topStudents = studentList.slice(0, 6);
   const bySpec = (Array.isArray(dash.staffBySpecialization) ? dash.staffBySpecialization : []).slice(0, 8);
   const maxSpec = Math.max(...bySpec.map((s) => Number(s.count) || 0), 1);
-  // Illustrative fallbacks (mandate spec): live-first, mock figures when the
-  // endpoint returns 0; cards 5–8 + repo/gender panels have no backing endpoint.
+  // NCCE is strict-endpoint: live values even when 0, "—" where no endpoint
+  // exists. Other mandated bodies keep illustrative fallbacks for gaps.
+  const noData = "—";
   const fb = reg.fallbacks || {};
+  const live = (v, mock) => fmtNum(reg.strict ? v : (v || mock));
+  const staticOrDash = (mock) => (reg.strict ? noData : fmtNum(mock));
   const pendingPct = reg.completion ? (100 - reg.completion.pct) : 0;
   const pendingPctLabel = Number.isInteger(pendingPct) ? String(pendingPct) : pendingPct.toFixed(1);
   const cards = reg.fallbacks ? [
-    { label: reg.cardAccredited, value: fmtNum(scopedInst || fb.inst), sub: reg.cardAccreditedSub, icon: "account_balance", color: "#0b6639" },
-    { label: reg.cardStaff, value: fmtNum(scopedStaff || fb.staff), sub: reg.cardStaffSub, icon: "supervisor_account", color: "#1d4ed8" },
-    { label: reg.cardStudents, value: fmtNum(scopedStudents || fb.students), sub: reg.cardStudentsSub, icon: "school", color: "#a16207" },
-    { label: reg.cardProgs, value: fmtNum(scopedProgs || fb.progs), sub: reg.cardProgsSub, icon: "menu_book", color: "#1e3a8a" },
-    { label: reg.cardCompleted, value: fmtNum(reg.completion.completed), sub: `${reg.completion.pct}% Completion rate`, icon: "task", color: "#059669" },
-    { label: reg.cardPending, value: fmtNum(reg.completion.pending), sub: `${pendingPctLabel}% Awaiting completion`, icon: "schedule", color: "#65a30d" },
-    { label: reg.cardRepo, value: fmtNum(reg.reposTotal), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
-    { label: reg.cardRecords, value: fmtNum(reg.recordsTotal), sub: reg.cardRecordsSub, icon: "inventory_2", color: "#be185d" },
+    { label: reg.cardAccredited, value: live(scopedInst, fb.inst), sub: reg.cardAccreditedSub, icon: "account_balance", color: "#0b6639" },
+    { label: reg.cardStaff, value: live(scopedStaff, fb.staff), sub: reg.cardStaffSub, icon: "supervisor_account", color: "#1d4ed8" },
+    { label: reg.cardStudents, value: live(scopedStudents, fb.students), sub: reg.cardStudentsSub, icon: "school", color: "#a16207" },
+    { label: reg.cardProgs, value: live(scopedProgs, fb.progs), sub: reg.cardProgsSub, icon: "menu_book", color: "#1e3a8a" },
+    { label: reg.cardCompleted, value: staticOrDash(reg.completion.completed), sub: `${reg.completion.pct}% Completion rate`, icon: "task", color: "#059669" },
+    { label: reg.cardPending, value: staticOrDash(reg.completion.pending), sub: `${pendingPctLabel}% Awaiting completion`, icon: "schedule", color: "#65a30d" },
+    { label: reg.cardRepo, value: staticOrDash(reg.reposTotal), sub: "Institutional repositories", icon: "dns", color: "#7c3aed" },
+    { label: reg.cardRecords, value: staticOrDash(reg.recordsTotal), sub: reg.cardRecordsSub, icon: "inventory_2", color: "#be185d" },
   ] : [
     { label: `${reg.typePlural}`, value: fmtNum(scopedInst), icon: "account_balance", color: CARD_ICON_BG[0] },
     { label: reg.unitTerm, value: fmtNum(scopedColleges), sub: `${reg.unitTerm} under mandate`, icon: "apartment", color: CARD_ICON_BG[1] },
@@ -1226,7 +1229,13 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
       <aside className="w-64 bg-[#084d2a] text-white flex-shrink-0 hidden md:flex flex-col justify-between min-h-screen shadow-xl border-r border-[#063d21]">
         <div>
           <div className="px-5 pt-5 pb-4 text-center border-b border-emerald-900/60 bg-[#064223] relative overflow-hidden">
-            <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto relative z-10 drop-shadow-[0_10px_18px_rgba(0,0,0,0.8)]" src={reg.logo} />
+            {reg.logo ? (
+              <img alt={`${reg.short} logo`} className="w-28 h-auto mx-auto relative z-10 drop-shadow-[0_10px_18px_rgba(0,0,0,0.8)]" src={reg.logo} />
+            ) : (
+              <div className="w-20 h-20 mx-auto rounded-full bg-white/10 border border-emerald-100/30 flex items-center justify-center relative z-10">
+                <span className="material-symbols-outlined text-[40px] text-white">{reg.icon}</span>
+              </div>
+            )}
             <h1 className="text-xl font-bold tracking-wider uppercase text-white relative z-10 mt-1">{reg.short}</h1>
             <p className="text-[11px] text-emerald-200 tracking-wide font-medium mt-0.5 uppercase relative z-10">EARMS Oversight Portal</p>
           </div>

@@ -328,6 +328,8 @@ export const REGULATORS = {
     footerMid: "EARMS • Electronic Academic Research Management System",
     footerRight: "National Commission for Colleges of Education Oversight",
     // Mandated spec (live-first; mock figures when endpoint is 0/absent).
+    // strict: backend team requires endpoint-only values (0 stays 0, no mocks).
+    strict: true,
     fallbacks: { staff: 12480, students: 84000, progs: 1560 },
     cardAccredited: "Accredited Colleges",
     cardAccreditedSub: "Colleges of Education\nunder this mandate",
