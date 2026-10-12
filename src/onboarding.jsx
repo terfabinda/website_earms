@@ -287,7 +287,7 @@ function useList(fetcher, instId) {
 }
 
 function DepartmentsTab({ instId }) {
-  const { items, error, reload } = useList(() => onboardingApi.getDepartments(instId), instId);
+  const { items, error, reload } = useList(() => onboardingApi.getDepartmentsRobust(instId), instId);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [msg, setMsg] = useState("");
@@ -437,7 +437,7 @@ function ProgramsTab({ instId }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
+    onboardingApi.getDepartmentsRobust(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
 
   const loadPrograms = useCallback(async () => {
@@ -592,7 +592,7 @@ function StaffTab({ instId }) {
   const [deptId, setDeptId] = useState("");
 
   useEffect(() => {
-    onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
+    onboardingApi.getDepartmentsRobust(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
   useEffect(() => {
     if (!depts.length) return;
@@ -998,7 +998,7 @@ function StudentsTab({ instId }) {
   const [editForm, setEditForm] = useState(null);
 
   useEffect(() => {
-    onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
+    onboardingApi.getDepartmentsRobust(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
   useEffect(() => {
     if (!depts.length) return;
@@ -1763,7 +1763,7 @@ function LookupTab({ instId }) {
 
   useEffect(() => {
     if (!instId) return;
-    onboardingApi.getDepartments(instId).then((d) => setDepts(d || [])).catch(() => {});
+    onboardingApi.getDepartmentsRobust(instId).then((d) => setDepts(d || [])).catch(() => {});
   }, [instId]);
 
   const search = async (e) => {

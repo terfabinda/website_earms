@@ -207,6 +207,30 @@ export const onboardingApi = {
   async getDepartments(institutionId) {
     return obFetch(institutionId + "/get-depts");
   },
+  // Robust list fetch: get-depts is currently returning empty for some tenants
+  // while the records exist. Fall back to get-minidepts/{institutionId} (minimal
+  // rows: Id/Name/InstitutionId) so listings + programme creation keep working
+  // on whichever route the backend serves. Console logs which source won.
+  async getDepartmentsRobust(institutionId) {
+    const id = String(institutionId ?? "");
+    if (!id) return [];
+    try {
+      const full = await onboardingApi.getDepartments(id);
+      if (Array.isArray(full) && full.length) return full;
+      try { console.log(`[departments] get-depts empty for institution ${id}; trying get-minidepts fallback`); } catch {}
+    } catch (e) {
+      try { console.warn(`[departments] get-depts failed for institution ${id} (${e?.message || e}); trying get-minidepts fallback`); } catch {}
+    }
+    try {
+      const mini = await onboardingApi.getMiniDepartments(id);
+      const arr = Array.isArray(mini) ? mini : [];
+      try { console.log(`[departments] get-minidepts for institution ${id}: ${arr.length} rows`); } catch {}
+      return arr;
+    } catch (e) {
+      try { console.warn(`[departments] get-minidepts also failed for institution ${id} (${e?.message || e})`); } catch {}
+      return [];
+    }
+  },
   async getMiniDepartments(id) {
     return obFetch("get-minidepts/" + encodeURIComponent(id));
   },

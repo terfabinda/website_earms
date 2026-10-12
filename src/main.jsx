@@ -1728,7 +1728,7 @@ function BulkImportPage({ go }) {
         if (!id) { setErr("No institution record found for this account yet — complete Onboarding → Institution first."); return }
         const [cols, depts] = await Promise.all([
           onboardingApi.getColleges(String(id)).catch(() => []),
-          onboardingApi.getDepartments(String(id)).catch(() => []),
+          onboardingApi.getDepartmentsRobust(String(id)).catch(() => []),
         ])
         if (Array.isArray(cols)) setColleges(cols)
         if (Array.isArray(depts)) setDepartments(depts)
@@ -2219,7 +2219,7 @@ function DepartmentPage({ go }) {
       }
       if (id) {
         const [data, facs] = await Promise.all([
-          onboardingApi.getDepartments(String(id)).catch(()=>[]),
+          onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[]),
           onboardingApi.getColleges(String(id)).catch(()=>[])
         ])
         try { console.log(`[departments] institution ${id}: ${(Array.isArray(data) ? data : []).length} departments, ${(Array.isArray(facs) ? facs : []).length} colleges`); } catch {}
@@ -2371,7 +2371,7 @@ function ProgrammeCreate({ go }) {
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
-        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+        onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[]),
       ])
       const colArr = Array.isArray(cols) ? cols : []
       const deptArr = Array.isArray(depts) ? depts : []
@@ -2405,7 +2405,7 @@ function ProgrammeCreate({ go }) {
         setProgrammes(results.flat().filter(Boolean))
       } else {
         // No departments yet — try loading after meta
-        const depts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+        const depts = await onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[])
         if (Array.isArray(depts) && depts.length) {
           const all = await Promise.all(depts.map(d => onboardingApi.getPrograms(String(id), String(d.Id ?? d.id)).catch(()=>[])))
           setProgrammes(all.flat().filter(Boolean))
@@ -2657,7 +2657,7 @@ function StaffManagementPage({ go }) {
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
-        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+        onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[]),
       ])
       const colArr = Array.isArray(cols) ? cols : []
       const deptArr = Array.isArray(depts) ? depts : []
@@ -2697,7 +2697,7 @@ function StaffManagementPage({ go }) {
         all = results.flat()
       } else {
         const acad = await onboardingApi.getAcademicStaff({ institutionId: String(id) }).catch(()=>[])
-        const listAllDepts = await onboardingApi.getDepartments(String(id)).catch(()=>[])
+        const listAllDepts = await onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[])
         if (Array.isArray(listAllDepts) && listAllDepts.length) {
           const lists = await Promise.all(listAllDepts.map(d=> onboardingApi.getStaffList(String(d.Id ?? d.id), String(id)).catch(()=>[])))
           all = [...(Array.isArray(acad)?acad:[]), ...lists.flat()]
@@ -3384,7 +3384,7 @@ function StudentManagementPage({ go }) {
       const { onboardingApi } = await import("./onboarding")
       const [cols, depts] = await Promise.all([
         onboardingApi.getColleges(String(id)).catch(()=>[]),
-        onboardingApi.getDepartments(String(id)).catch(()=>[]),
+        onboardingApi.getDepartmentsRobust(String(id)).catch(()=>[]),
       ])
       const colArr = Array.isArray(cols) ? cols : []
       const deptArr = Array.isArray(depts) ? depts : []
@@ -4678,7 +4678,7 @@ function StudentDashboard({ go }) {
             else if (arr.length === 1 && !s) s = arr[0]
             if (!s && arr.length===0) {
               try {
-                const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
+                const depts = await onboardingApi.getDepartmentsRobust(String(instId)).catch(()=>[])
                 const deptArr = Array.isArray(depts)? depts : []
                 const results = await Promise.all(deptArr.map(async d=>{
                   const did = String(d.Id ?? d.id)
@@ -4757,7 +4757,7 @@ function StudentDashboard({ go }) {
                   try { dept = await obDept.getMiniDepartment(String(deptId)) } catch {}
                   if (!dept || !(dept.Name ?? dept.name)) {
                     try {
-                      const list = await obDept.getDepartments(String(instId)).catch(()=>[])
+                      const list = await obDept.getDepartmentsRobust(String(instId)).catch(()=>[])
                       const arr = Array.isArray(list)? list : []
                       dept = arr.find(d=> String(d.Id??d.id)===String(deptId))
                     } catch {}
@@ -5534,7 +5534,7 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
     if (!instId) return
     try {
       const { onboardingApi } = await import("./onboarding")
-      const depts = await onboardingApi.getDepartments(String(instId)).catch(()=>[])
+      const depts = await onboardingApi.getDepartmentsRobust(String(instId)).catch(()=>[])
       const arr = Array.isArray(depts) ? depts : []
       setCpDepts(arr)
       const own = deptId && arr.some(d => String(d.Id ?? d.id) === String(deptId)) ? String(deptId) : ""
