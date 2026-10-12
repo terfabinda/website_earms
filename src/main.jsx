@@ -5564,13 +5564,16 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
       const rawProfile = staffNo ? await getStaffRobust(String(staffNo), String(effInst), deptArr).catch(()=>null) : null
       const profile = Array.isArray(rawProfile) ? (rawProfile[0] || null) : rawProfile
       const inList = (id) => (id !== undefined && id !== null && String(id) !== "" && deptArr.some(d => String(d.Id ?? d.id) === String(id))) ? String(id) : ""
-      const profDept = profile?.DepartmentId ?? profile?.departmentId ?? profile?.DeptId ?? profile?.deptId ?? ""
-      const profProg = profile?.ProgramId ?? profile?.programId ?? profile?.ProgId ?? profile?.progId ?? ""
+      const profDept = validId(profile?.DepartmentId ?? profile?.departmentId ?? profile?.DeptId ?? profile?.deptId)
+      const profProg = validId(profile?.ProgramId ?? profile?.programId ?? profile?.ProgId ?? profile?.progId)
       // Accept the profile/token department even when the department list comes
       // back empty (backend get-depts gap) so creation can still proceed.
+      // validId keeps a 0 from an incomplete staff record from shadowing the
+      // good token department (e.g. dept 0 vs token 782 → templates queried
+      // under department 0 came back empty).
       const dept = inList(deptId) || inList(profDept)
-        || (profDept !== undefined && profDept !== null && String(profDept) !== "" ? String(profDept) : "")
-        || (deptId !== undefined && deptId !== null && String(deptId) !== "" ? String(deptId) : "")
+        || profDept
+        || validId(deptId)
         || (deptArr.length ? String(deptArr[0].Id ?? deptArr[0].id) : "")
       if (dept) {
         setCpForm(f => ({ ...f, departmentId: f.departmentId || dept }))
@@ -5587,9 +5590,8 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
       setAcProgs(progArr)
       setCpStaff(Array.isArray(staff) ? staff : [])
       setCpTemplates(Array.isArray(tmpl) ? tmpl : [])
-      const progInList = (profProg !== undefined && profProg !== null && String(profProg) !== "" && progArr.some(p => String(p.Id ?? p.id) === String(profProg))) ? String(profProg)
-        : (profProg !== undefined && profProg !== null && String(profProg) !== "" ? String(profProg) : "")
-          || (progArr.length ? String(progArr[0].Id ?? progArr[0].id) : "")
+      const progInList = (profProg && progArr.some(p => String(p.Id ?? p.id) === String(profProg))) ? String(profProg)
+        : (profProg || (progArr.length ? String(progArr[0].Id ?? progArr[0].id) : ""))
       if (progInList) {
         setCpForm(f => ({ ...f, programId: f.programId || progInList }))
         setAcForm(f => ({ ...f, programId: f.programId || progInList }))
