@@ -5386,7 +5386,7 @@ function StudentDashboard({ go }) {
 
             <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6">
               <h4 className="font-headline-sm font-bold text-on-surface">Upload / Create Chapter</h4>
-              <p className="text-xs text-on-surface-variant mb-3">Multipart FormData: chapterNumber, supervisorNote, file. Previous chapter must be Approved.</p>
+              <p className="text-xs text-on-surface-variant mb-3">Upload your chapter document and add a note for your supervisor if needed. Chapters are sequential — the previous chapter must be Approved first.</p>
               <form onSubmit={handleCreateChapter} className="space-y-3">
                 <div>
                   <label className="font-label-md text-xs uppercase tracking-wide text-outline">Chapter Number</label>
