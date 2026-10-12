@@ -921,7 +921,7 @@ function Dashboard({ go }) {
 }
 
 /* ---------- Shared Dashboard Shell ---------- */
-function DashShell({ go, active, title, subtitle, children, role, subrole }) {
+function DashShell({ go, active, title, subtitle, children, role, subrole, focus = null }) {
   const [mobileNav, setMobileNav] = useState(false)
   const [openGroups, setOpenGroups] = useState({})
   const toggleGroup = (key) => setOpenGroups(s => ({...s, [key]: !s[key]}))
@@ -1243,7 +1243,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole }) {
                 <p className="font-body-lg text-on-surface-variant mt-1">{subtitle}</p>
               </div>
             </div>
-            {role==='student' && <div className="hidden lg:block text-right"><p className="font-label-md text-outline">Current Focus</p><p className="font-headline-sm text-secondary-container">Chapter 2: Literature Review</p></div>}
+            {role==='student' && <div className="hidden lg:block text-right"><p className="font-label-md text-outline">Current Focus</p><p className="font-headline-sm text-secondary-container">{focus || "N/A"}</p></div>}
             {role==='admin' && <div className="flex items-center gap-2"><div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-1.5 rounded-full border border-outline-variant ambient-shadow"><span className="w-2 h-2 rounded-full bg-green-500"></span><span className="font-label-md text-label-md">System Optimal</span></div><button className="p-2 rounded-full bg-surface-container-lowest border border-outline-variant hover:bg-surface-container-low ambient-shadow"><span className="material-symbols-outlined text-[20px]">refresh</span></button></div>}
           </header>
           {children}
@@ -4939,6 +4939,11 @@ function StudentDashboard({ go }) {
   const completedLive = approvedCount || dash?.completedChapters || 0
   const openNos = chapRows.filter(c => Number(c.chapterStatus ?? c.ChapterStatus) !== 3).map(c => Number(c.chapterNumber ?? c.ChapterNumber) || 0).filter(n => n > 0)
   const ongoingLive = openNos.length ? Math.min(...openNos) : (dash?.ongoingChapter ?? dash?.OngoingChapter ?? null)
+  // Current Focus header: live ongoing chapter + title, else N/A (visible
+  // signal that nothing is underway / the chapter feed is unavailable).
+  const focusRow = ongoingLive ? (chapRows.find(c => Number(c.chapterNumber ?? c.ChapterNumber) === Number(ongoingLive)) || ((dash?.chapterRoadmap || dash?.ChapterRoadmap) || []).find(r => Number(r.chapterNumber ?? r.ChapterNumber) === Number(ongoingLive))) : null
+  const focusTitle = focusRow?.title ?? focusRow?.Title ?? null
+  const focusText = ongoingLive ? `Chapter ${ongoingLive}${focusTitle ? `: ${focusTitle}` : ""}` : null
 
   const refreshTopics = useCallback(async ()=>{
     if (!projectId) return
@@ -5017,7 +5022,7 @@ function StudentDashboard({ go }) {
   const workspaceStorageKey = `earms_workspace_${matricNo || 'anon'}_${projectId || 'noproject'}_${workspaceChap}`
 
   return (
-    <DashShell go={go} active="student" role="student" title={billingSection ? (section === 'subscription' ? 'Subscription' : 'Payment History') : settingsSection ? 'Settings' : downloadSection ? 'Download' : `Welcome back, ${firstName}.`} subtitle={billingSection ? (section === 'subscription' ? 'View plans and manage your subscription.' : 'Subscription and payment records for your account.') : settingsSection ? 'Account, academic year and security settings.' : downloadSection ? 'Files and documents available for download.' : loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
+    <DashShell go={go} active="student" role="student" focus={focusText} title={billingSection ? (section === 'subscription' ? 'Subscription' : 'Payment History') : settingsSection ? 'Settings' : downloadSection ? 'Download' : `Welcome back, ${firstName}.`} subtitle={billingSection ? (section === 'subscription' ? 'View plans and manage your subscription.' : 'Subscription and payment records for your account.') : settingsSection ? 'Account, academic year and security settings.' : downloadSection ? 'Files and documents available for download.' : loading ? "Loading your profile…" : err && !student ? err : `Matric ${student?.MatricNo ?? student?.matricNo ?? matricNo ?? "—"} · ${deptProg?.deptName || student?.DepartmentName || "—"} · Level ${deptProg?.level || student?.Level || "—"}`}>
       {billingSection ? (
         <div className="space-y-6 max-w-5xl">
           <button onClick={()=>go('student')} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
