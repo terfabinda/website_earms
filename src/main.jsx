@@ -5733,7 +5733,7 @@ function CreateProjectPage({ go, staffNo, instId, deptId, onChanged }) {
       </button>
       <div>
         <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">add_task</span> Create Project</h2>
-        <p className="font-body-sm text-on-surface-variant">Coordinator function — single project (POST /api/Project/create) or bulk auto-create for a programme (POST /api/Project/autocreate).</p>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — create a single project or bulk auto-create for a whole programme.</p>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <form onSubmit={submitCreateProject} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-3">
@@ -5891,7 +5891,7 @@ function ChapterTemplatePage({ go, instId, deptId }) {
       </button>
       <div>
         <h2 className="font-headline-md font-bold text-primary flex items-center gap-2"><span className="material-symbols-outlined">library_books</span> Project Template</h2>
-        <p className="font-body-sm text-on-surface-variant">Coordinator function — define a project template per programme (POST /api/Project/create-chapter-template).</p>
+        <p className="font-body-sm text-on-surface-variant">Coordinator function — define a project template per programme.</p>
       </div>
       <form onSubmit={submit} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 space-y-4 max-w-2xl">
         {err && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm">{err}</div>}
@@ -6273,7 +6273,6 @@ function FacultyDashboard({ go }) {
                 <button onClick={()=>setPage(p=>p+1)} className="px-3 py-1 border border-outline-variant rounded">Next</button>
               </div>
             </div>
-            <p className="px-4 pb-2 text-[11px] text-outline">GET /api/Project/get-projects-by-supervisor?staffNo={staffNo}&status={statusFilter || "all"}&pageNumber={page}&pageSize={pageSize}</p>
           </div>
 
           <div className="glass-card ambient-shadow rounded-xl border border-surface-container flex flex-col">
@@ -6283,7 +6282,7 @@ function FacultyDashboard({ go }) {
                 <div className="py-8 text-center border-2 border-dashed border-outline-variant rounded-xl">
                   <span className="material-symbols-outlined text-3xl text-outline">check_circle</span>
                   <p className="text-sm text-on-surface-variant mt-2">No pending chapters</p>
-                  <p className="text-xs text-outline">GET /api/Project/awaiting-action?StaffNo={staffNo}&institutionId={instId || "—"}</p>
+                  <p className="text-xs text-outline">New submissions from your supervisees will appear here.</p>
                 </div>
               ) : (
                 pending.map((it,i)=>(
@@ -6304,7 +6303,7 @@ function FacultyDashboard({ go }) {
 
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
           <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">manage_search</span> Project Inspector — student ↔ supervisor trail</h3>
-          <p className="text-xs text-on-surface-variant mb-3">Topics proposed by the student → chapters submitted → your reviews → advance the project status. (Topic approval + chapter edit have no dedicated endpoints in the current API; status and reviews below are the supervisor's levers.)</p>
+          <p className="text-xs text-on-surface-variant mb-3">Topics proposed by the student → chapters submitted → your reviews → advance the project status.</p>
           <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <input value={inspMatric} onChange={e=>setInspMatric(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); loadInspector(inspMatric) } }} placeholder="Matric No e.g. CSC/2024/001" className="flex-1 border border-outline-variant rounded-lg px-3 py-2 bg-surface text-sm" />
             <button onClick={()=>loadInspector(inspMatric)} disabled={inspLoading} className="bg-primary text-on-primary px-5 py-2 rounded-lg font-label-md text-sm disabled:opacity-40">Load</button>
@@ -6356,7 +6355,6 @@ function FacultyDashboard({ go }) {
                     <button key={s} onClick={()=>advanceStatus(s)} disabled={statusBusy} className="px-4 py-2 rounded-lg border text-sm font-label-md disabled:opacity-40 border-outline-variant hover:bg-surface-variant">{ProjectStatusLabel[s]}</button>
                   ))}
                 </div>
-                <p className="text-[11px] text-outline mt-1">PUT /api/Project/update-project-status?projectId={inspData.projectId ?? "—"}&projectStatus=… (ProjectSupervisor role)</p>
               </div>
             </div>
           )}
@@ -6364,7 +6362,7 @@ function FacultyDashboard({ go }) {
 
         <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
           <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined">rate_review</span> Review Chapter Version</h3>
-          <p className="text-xs text-on-surface-variant mb-3">POST /api/Project/version-review — multipart: chapterVersionId, reviewer (StaffNo), reviewComment, reviewDecision (1=NeedsCorrection,2=Approved,3=Rejected), correctionFile.</p>
+          <p className="text-xs text-on-surface-variant mb-3">Add your decision, comments and an optional correction file. The student sees your review on their Reviews tab.</p>
           <form onSubmit={handleReview} className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
               <label className="font-label-md text-[11px] uppercase tracking-wide text-outline">Version ID</label>
