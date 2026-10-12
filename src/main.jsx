@@ -4905,6 +4905,41 @@ function StudentDashboard({ go }) {
     else if (!sectionTab) setActiveTabState('overview')
   }, [sectionTab])
 
+  // Real-time progress: the student-dashboard summary endpoint is unreliable
+  // backend-side, so derive both bars from live records instead of dash.*.
+  // Time = elapsed project window from start/end dates (fully live).
+  // Project = approved chapters ÷ best-known total: template chapter rows if
+  // the template record ever carries them, else highest chapter number seen,
+  // else a trailing "N Chapters" in the template name, else dash fallback.
+  const projStart = project?.startDate ?? project?.StartDate ?? dash?.startDate
+  const projEnd = project?.endDate ?? project?.EndDate ?? dash?.endDate
+  let rtTime = null
+  {
+    const s = projStart ? new Date(projStart).getTime() : NaN
+    const e = projEnd ? new Date(projEnd).getTime() : NaN
+    if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
+      rtTime = Math.min(100, Math.max(0, ((Date.now() - s) / (e - s)) * 100))
+    }
+  }
+  const timePct = rtTime !== null ? rtTime : (dash?.timeProgress !== undefined ? Number(dash.timeProgress) : null)
+  const tmplRow = (Array.isArray(templates) ? templates : []).find(t => String(t.id ?? t.Id) === String(project?.chapterTemplateId ?? project?.ChapterTemplateId ?? ""))
+  const tmplChaps = tmplRow?.chapters ?? tmplRow?.Chapters
+  const chapRows = Array.isArray(chapters) ? chapters : []
+  const approvedCount = chapRows.filter(c => Number(c.chapterStatus ?? c.ChapterStatus) === 3).length
+  let totalChaps = Array.isArray(tmplChaps) && tmplChaps.length ? tmplChaps.length : 0
+  if (!totalChaps) {
+    totalChaps = chapRows.reduce((m, c) => Math.max(m, Number(c.chapterNumber ?? c.ChapterNumber) || 0), 0)
+  }
+  if (!totalChaps) {
+    const m = String(tmplRow?.templateName ?? tmplRow?.TemplateName ?? "").match(/(\d+)\s*chapters?/i)
+    if (m) totalChaps = Number(m[1])
+  }
+  const rtProj = totalChaps > 0 ? (approvedCount / totalChaps) * 100 : null
+  const projPct = rtProj !== null ? rtProj : (dash?.projectProgress !== undefined ? Number(dash.projectProgress) : null)
+  const completedLive = approvedCount || dash?.completedChapters || 0
+  const openNos = chapRows.filter(c => Number(c.chapterStatus ?? c.ChapterStatus) !== 3).map(c => Number(c.chapterNumber ?? c.ChapterNumber) || 0).filter(n => n > 0)
+  const ongoingLive = openNos.length ? Math.min(...openNos) : (dash?.ongoingChapter ?? dash?.OngoingChapter ?? null)
+
   const refreshTopics = useCallback(async ()=>{
     if (!projectId) return
     setTopicsLoading(true)
@@ -5053,15 +5088,15 @@ function StudentDashboard({ go }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
           <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Time Progress</span><span className="material-symbols-outlined text-primary text-[18px]">schedule</span></div>
-          <p className="font-headline-md font-bold text-primary mt-1">{dash?.timeProgress !== undefined ? `${Number(dash.timeProgress).toFixed(1)}%` : (dashLoading ? "…" : "—")}</p>
-          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-primary h-1.5 rounded-full" style={{width: `${Math.min(100, Number(dash?.timeProgress||0))}%`}}></div></div>
-          <p className="text-[11px] text-outline mt-1">{dash?.startDate ? new Date(dash.startDate).toLocaleDateString() : ""} — {dash?.endDate ? new Date(dash.endDate).toLocaleDateString() : ""}</p>
+          <p className="font-headline-md font-bold text-primary mt-1">{timePct !== null ? `${Number(timePct).toFixed(1)}%` : (dashLoading ? "…" : "—")}</p>
+          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-primary h-1.5 rounded-full" style={{width: `${timePct !== null ? Math.min(100, Number(timePct)) : 0}%`}}></div></div>
+          <p className="text-[11px] text-outline mt-1">{projStart ? new Date(projStart).toLocaleDateString() : ""} — {projEnd ? new Date(projEnd).toLocaleDateString() : ""}</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant">
           <div className="flex items-center justify-between"><span className="font-label-md text-[11px] uppercase tracking-wide text-outline">Project Progress</span><span className="material-symbols-outlined text-primary text-[18px]">flag</span></div>
-          <p className="font-headline-md font-bold text-primary mt-1">{dash?.projectProgress !== undefined ? `${dash.projectProgress}%` : (dashLoading ? "…" : "—")}</p>
-          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-secondary h-1.5 rounded-full" style={{width: `${Math.min(100, Number(dash?.projectProgress||0))}%`}}></div></div>
-          <p className="text-[11px] text-outline mt-1">{dash?.completedChapters ?? 0} completed • Ch {dash?.ongoingChapter ?? "—"} ongoing {dash?.pendingCorrection ? `• ${dash.pendingCorrection} needs correction` : ""}</p>
+          <p className="font-headline-md font-bold text-primary mt-1">{projPct !== null ? `${Number(projPct).toFixed(1)}%` : (dashLoading ? "…" : "—")}</p>
+          <div className="w-full bg-surface-variant rounded-full h-1.5 mt-2"><div className="bg-secondary h-1.5 rounded-full" style={{width: `${projPct !== null ? Math.min(100, Number(projPct)) : 0}%`}}></div></div>
+          <p className="text-[11px] text-outline mt-1">{completedLive} completed • Ch {ongoingLive ?? "—"} ongoing {dash?.pendingCorrection ? `• ${dash.pendingCorrection} needs correction` : ""}</p>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-4 p-1 bg-surface-container-low rounded-xl border border-outline-variant w-fit">
