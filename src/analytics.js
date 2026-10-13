@@ -1,7 +1,8 @@
 // Project_Flow Regulator Analytics API client.
 // Source: RegulatorAnalyticsApi.md (git-ignored, internal reference only)
-//   - Base https://project.earmshub.com, prefix /api/project-analytics (proxied
-//     locally + on Vercel under /api/project, same as the Project Flow API).
+//   - Base https://project.earmshub.com, prefix /api/project-analytics (relative
+//     /api/project proxy locally + on Vercel; direct backend on earmshub.com
+//     — see src/api-config.js).
 //   - Scope is server-side from the JWT (nucadmin/nbteadmin/ncceadmin). NEVER send
 //     an InstitutionId outside the caller's scope (401). Omit it for full scope.
 //   - StartDate/EndDate must be sent together or not at all (400 otherwise).

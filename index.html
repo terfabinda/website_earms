@@ -94,6 +94,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Runtime API base overrides (optional; see public/earms-config.js).
+         Loaded before the bundle so window.EARMS_*_BASE_URL wins. -->
+    <script src="/earms-config.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

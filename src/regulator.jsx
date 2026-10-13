@@ -1334,7 +1334,7 @@ export function RegulatorDashboard({ go, regulatorKey, query }) {
           )}
           {!loading && !dash && err && (
             <div className="bg-white rounded-xl p-6 text-sm text-slate-500 border border-slate-200">
-              Could not reach <code>/api/onboarding/regulator/dashboard</code> — {err} Ensure you are signed in with a <code>RegulatorAdmin</code> account and the onboarding proxy is configured.
+              Could not reach <code>/api/onboarding/regulator/dashboard</code> — {err} Ensure you are signed in with a <code>RegulatorAdmin</code> account and the API is reachable.
             </div>
           )}
         </div>

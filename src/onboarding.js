@@ -7,9 +7,9 @@
 //   - Institution registration is multipart/form-data (logoFile), everything else JSON
 
 import { apiFetch, BASE_URL, decodeToken } from "./iam";
+import { ONBOARDING_BASE_URL as SHARED_ONB_BASE } from "./api-config";
 
-const ONB_BASE =
-  ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/");
+const ONB_BASE = SHARED_ONB_BASE;
 
 const OB = "api/onboarding/";
 

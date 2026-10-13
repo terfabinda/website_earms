@@ -5,9 +5,9 @@
 //     colleges, departments, programmes, staff/student statistics, programme details.
 
 import { apiFetch } from "./iam";
+import { ONBOARDING_BASE_URL as SHARED_ONB_BASE } from "./api-config";
 
-const ONB_BASE =
-  ((typeof window !== "undefined" && window.EARMS_ONBOARDING_BASE_URL) || "/api/onb").replace(/\/?$/, "/");
+const ONB_BASE = SHARED_ONB_BASE;
 
 const REG = "api/onboarding/regulator/";
 

@@ -4,8 +4,12 @@
 //   - tokenService: storage / retrieval / replacement / removal of access + refresh tokens
 //   - apiFetch: attaches Bearer token and handles 401 -> refresh -> retry (Section 13)
 
-export const BASE_URL =
-  ((typeof window !== "undefined" && window.EARMS_IAM_BASE_URL) || "/api/iam").replace(/\/?$/, "/");
+// Centralized base URL (no hardcoding) — see src/api-config.js.
+// Relative /api/* on Vercel (rewrites) + vite dev (proxy); direct https on
+// earmshub.com (Apache has no /api proxy, backends CORS-allow that origin).
+import { IAM_BASE_URL as SHARED_IAM_BASE_URL } from "./api-config";
+
+export const BASE_URL = SHARED_IAM_BASE_URL;
 
 export const tokenService = {
   accessTokenKey: "earms_accessToken",

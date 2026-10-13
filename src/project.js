@@ -6,9 +6,9 @@
 //  - Multi-tenant: frontend should derive matricNo/staffNo/institutionId/departmentId from token claims where possible
 
 import { apiFetch } from "./iam"
+import { PROJECT_BASE_URL as SHARED_PROJECT_BASE_URL } from "./api-config"
 
-export const PROJECT_BASE_URL =
-  ((typeof window !== "undefined" && window.EARMS_PROJECT_BASE_URL) || "/api/project").replace(/\/?$/, "/")
+export const PROJECT_BASE_URL = SHARED_PROJECT_BASE_URL
 
 const P = "api/Project/"
 

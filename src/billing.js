@@ -2,9 +2,9 @@
 // Implements the endpoints from Billing_API_Documentation.docx
 
 import { apiFetch, tokenService } from './iam'
+import { BILLING_BASE_URL as SHARED_BILLING_BASE_URL } from './api-config'
 
-export const BILLING_BASE_URL =
-  ((typeof window !== "undefined" && window.EARMS_BILLING_BASE_URL) || "/api/billing").replace(/\/?$/, "/");
+export const BILLING_BASE_URL = SHARED_BILLING_BASE_URL;
 
 async function billingFetch(path, options = {}) {
   return apiFetch(path, options, false, BILLING_BASE_URL);
