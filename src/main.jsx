@@ -8,7 +8,7 @@ import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
 import { REGULATORS } from './regulator'
-import { billingApi } from './billing'
+import { billingApi, SUBSCRIPTION_STATUS } from './billing'
 import { projectApi, ProjectStatusLabel, ChapterStatusLabel, TopicStatusLabel, VersionStatusLabel } from './project'
 import { TipTapEditor } from './tiptap-editor.jsx'
 
@@ -3984,49 +3984,185 @@ function StudentManagementPage({ go }) {
 }
 
 
+// Billing username derived from the access token (email preferred; matches
+// what the billing API stores on subscriptions). Shared by all billing views.
+function billingUsernameFromToken() {
+  const tok = decodeToken()
+  const c = [tok?.email, tok?.Email, tok?.unique_name, tok?.uniqueName, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String)
+  const withAt = c.find((s) => s.includes('@'))
+  return withAt || c[0] || ''
+}
+
+// Currency-aware money formatting (doc: responses carry amount + currency).
+function formatMoney(amount, currency) {
+  const n = Number(amount || 0)
+  const cur = String(currency || 'NGN').toUpperCase()
+  try {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n)
+  } catch {
+    return cur + ' ' + n.toLocaleString('en-NG')
+  }
+}
+
+// Payment providers typically redirect back with the reference in the query
+// string or hash. Check both (plus common aliases).
+function paymentReferenceFromUrl() {
+  try {
+    const search = new URLSearchParams(window.location.search || '')
+    const hash = new URLSearchParams((window.location.hash.split('?')[1]) || '')
+    for (const k of ['reference', 'Reference', 'trxref', 'txref', 'paymentReference', 'payment_reference']) {
+      const v = search.get(k) || hash.get(k)
+      if (v) return v
+    }
+  } catch {}
+  return ''
+}
+
+// Drop the payment params from the URL (query string + hash) after
+// verification so a refresh doesn't re-trigger verification.
+function stripPaymentParamsFromHash() {
+  try {
+    const keys = ['reference', 'Reference', 'trxref', 'txref', 'paymentReference', 'payment_reference']
+    const searchUs = new URLSearchParams(window.location.search || '')
+    keys.forEach((k) => searchUs.delete(k))
+    const search = searchUs.toString()
+    let hash = window.location.hash || ''
+    if (hash.includes('?')) {
+      const [path, qsPart] = hash.split('?')
+      const hashUs = new URLSearchParams(qsPart)
+      keys.forEach((k) => hashUs.delete(k))
+      const rest = hashUs.toString()
+      hash = rest ? path + '?' + rest : path
+    }
+    window.history.replaceState(null, '', window.location.pathname + (search ? '?' + search : '') + hash)
+  } catch {}
+}
+
 function SubscriptionPage() {
   const [showSubscribe, setShowSubscribe] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState('')
   const [selectedPlanPricingId, setSelectedPlanPricingId] = useState(0)
-  const [billingCycle, setBillingCycle] = useState('Annual')
   const [provider, setProvider] = useState('')
   const [plans, setPlans] = useState([])
   const [currentSub, setCurrentSub] = useState(null)
+  const [planDetails, setPlanDetails] = useState(null)
+  const [entitlements, setEntitlements] = useState(null)
+  const [currencies, setCurrencies] = useState([])
+  const [currency, setCurrency] = useState('NGN')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
+  // AI units top-up (Billing doc §3.18)
+  const [aiPackages, setAiPackages] = useState([])
+  const [aiPkgId, setAiPkgId] = useState('')
+  const [aiProvider, setAiProvider] = useState('credo')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMsg, setAiMsg] = useState('')
+  const [aiErr, setAiErr] = useState('')
+  // Result of verifyPayment after the provider redirect (Billing doc §3.4)
+  const [verify, setVerify] = useState(null)
 
-  useEffect(() => {
-    const tok = decodeToken()
-    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
+  const username = billingUsernameFromToken()
+
+  const loadAll = useCallback(async () => {
     if (!username) { setLoading(false); return }
-
-    Promise.all([
+    setLoading(true)
+    const [subRes, curRes] = await Promise.all([
       billingApi.getUserSubscription(username).catch(() => ({ data: [] })),
-      billingApi.getPrices('NGN').catch(() => ({ data: [] })),
-    ]).then(([subRes, priceRes]) => {
-      const subs = subRes.data || []
-      if (subs.length > 0) setCurrentSub(subs[0])
-      const priceList = priceRes.data || []
-      setPlans(priceList.map((p) => ({
-        id: p.id,
-        name: p.planName,
-        detail: p.billingCycle === 12 ? 'Annual plan' : p.billingCycle === 3 ? 'Quarterly plan' : 'Monthly plan',
-        price: '\u20A6' + Number(p.price || 0).toLocaleString('en-NG') + ' / ' + (p.billingCycle === 12 ? 'year' : p.billingCycle === 3 ? 'quarter' : 'month'),
-        current: currentSub && currentSub.planName === p.planName,
-        pricingId: p.id,
-        billingCycle: p.billingCycle,
-      })))
-    }).finally(() => setLoading(false))
-  }, [])
+      billingApi.getCurrencies().catch(() => ({ data: [] })),
+    ])
+    const list = Array.isArray(subRes?.data) ? subRes.data : []
+    const active = list.find((s) => s.planStatus === 2) || list[0] || null
+    setCurrentSub(active)
+    const curs = (Array.isArray(curRes?.data) ? curRes.data : []).map((c) => c.code).filter(Boolean)
+    setCurrencies(curs)
+    setCurrency((prev) => (active?.currency && curs.includes(active.currency) ? active.currency : (curs.includes(prev) ? prev : (curs.includes('NGN') ? 'NGN' : curs[0] || 'NGN'))))
+    // §3.6 Entitlements — anonymous; inactive accounts answer 400 with data.status "Inactive".
+    const ent = await billingApi.getEntitlements(username).catch((e) => (e && e.body) || null)
+    setEntitlements(ent && ent.data ? ent.data : null)
+    setLoading(false)
+  }, [username])
+
+  useEffect(() => { loadAll() }, [loadAll])
+
+  // §3.8 Plan pricings + AI-unit packages follow the selected currency (§3.7).
+  useEffect(() => {
+    if (!username) return
+    let cancelled = false
+    billingApi.getAiUnitPackages(currency)
+      .then((rows) => {
+        if (cancelled) return
+        setPlans(rows.map((p) => ({
+          id: p.id,
+          name: p.planName,
+          detail: p.billingCycle === 12 ? 'Annual plan' : p.billingCycle === 3 ? 'Quarterly plan' : 'Monthly plan',
+          price: formatMoney(p.price, p.currency || currency) + ' / ' + (p.billingCycle === 12 ? 'year' : p.billingCycle === 3 ? 'quarter' : 'month'),
+          pricingId: p.id,
+          billingCycle: p.billingCycle,
+        })))
+        setAiPackages(rows)
+      })
+      .catch(() => { if (!cancelled) { setPlans([]); setAiPackages([]) } })
+    return () => { cancelled = true }
+  }, [username, currency])
+
+  // §3.11 Current plan details — AI units included/remaining + features.
+  useEffect(() => {
+    const planName = currentSub?.planName
+    if (!username || !planName) { setPlanDetails(null); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const sum = await billingApi.getPlansSummary()
+        const hit = (Array.isArray(sum?.data) ? sum.data : []).find((p) => p.planName === planName)
+        if (!hit) return
+        const det = await billingApi.getPlanDetails(hit.id)
+        if (!cancelled) setPlanDetails(det?.data || null)
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [username, currentSub?.planName])
+
+  // Payment return: verify the reference the provider appended (or the one
+  // saved before the redirect), then refresh balances (§3.4).
+  useEffect(() => {
+    if (!username) return
+    let pending = ''
+    try { pending = localStorage.getItem('earms_pending_payment_ref') || '' } catch {}
+    const reference = paymentReferenceFromUrl() || pending
+    if (!reference) return
+    let cancelled = false
+    ;(async () => {
+      try { localStorage.removeItem('earms_pending_payment_ref') } catch {}
+      const res = await billingApi.verifyPayment(reference).catch((e) => ({ __error: e }))
+      if (cancelled) return
+      if (res && res.__error) {
+        setVerify({ ok: false, reference, message: res.__error.message || 'Could not verify the payment.' })
+      } else {
+        const d = res?.data || {}
+        const ps = Number(d.paymentStatus)
+        setVerify({
+          ok: ps === 2,
+          pending: ps === 1,
+          reference: d.reference || reference,
+          message: d.message || (ps === 2 ? 'Payment confirmed.' : ps === 3 ? 'The payment failed.' : 'Payment is being processed.'),
+          amount: d.amount,
+          currency: d.currency,
+          endDate: d.subscriptionEndDate,
+        })
+        if (ps === 2) await loadAll()
+      }
+      stripPaymentParamsFromHash()
+    })()
+    return () => { cancelled = true }
+  }, [username, loadAll])
 
   const submit = async (event) => {
     event.preventDefault()
     setError('')
     setMsg('')
     const tok = decodeToken()
-    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
     const ownerName = tok?.name || tok?.unique_name || username
     const ownerEmail = tok?.email || ''
     if (!selectedPlan || !provider || !username) {
@@ -4035,11 +4171,14 @@ function SubscriptionPage() {
     }
     setSubmitting(true)
     try {
+      // ownerType follows the doc enum (§3.2): institution admins subscribe as
+      // the institution (1), students/staff subscribe personally (2).
+      const ownerType = String(getRoleFromToken() || '').toLowerCase().includes('institution') ? 1 : 2
       const res = await billingApi.subscribe({
         username,
         ownerName,
         ownerEmail,
-        ownerType: 1,
+        ownerType,
         subscriptionType: 1,
         planPricingId: selectedPlanPricingId,
         aiUnit: 0,
@@ -4049,6 +4188,7 @@ function SubscriptionPage() {
       })
       const redirectUrl = res.data?.paymentRedirectUrl
       if (redirectUrl) {
+        try { if (res.data?.paymentReference) localStorage.setItem('earms_pending_payment_ref', res.data.paymentReference) } catch {}
         window.location.href = redirectUrl
       } else {
         setMsg('Subscription initialised. Reference: ' + (res.data?.paymentReference || '—'))
@@ -4061,35 +4201,110 @@ function SubscriptionPage() {
     }
   }
 
+  // §3.18 AI units top-up — initialise the purchase and hand off to the provider.
+  const buyAiUnits = async () => {
+    setAiErr('')
+    setAiMsg('')
+    if (!username) { setAiErr('No billing username in your session — sign in again.'); return }
+    if (!aiPkgId) { setAiErr('Select an AI unit package first.'); return }
+    setAiBusy(true)
+    try {
+      const res = await billingApi.purchaseAIUnits({ username, aiUnitPackageId: Number(aiPkgId), provider: aiProvider })
+      const d = res?.data || {}
+      if (d.paymentRedirectUrl) {
+        try { if (d.paymentReference) localStorage.setItem('earms_pending_payment_ref', d.paymentReference) } catch {}
+        window.location.href = d.paymentRedirectUrl
+        return
+      }
+      setAiMsg('AI unit purchase initialised' + (d.units ? ` — ${d.units} units for ${formatMoney(d.amount, d.currency || currency)}` : '') + '. Reference: ' + (d.paymentReference || '—'))
+    } catch (e) {
+      setAiErr(e.message || 'AI unit purchase failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   if (loading) {
     return <div className="py-8 text-center"><span className="material-symbols-outlined text-4xl text-outline animate-spin">progress_activity</span><p className="font-body-sm text-on-surface-variant mt-2">Loading subscription…</p></div>
   }
 
   const cycleMap = { 12: 'Annual', 3: 'Quarterly', 1: 'Monthly' }
-  const providerMap = { credo: 'Card', bank: 'Bank Transfer', paystack: 'Paystack' }
+  const subStatusLabel = (s) => SUBSCRIPTION_STATUS[s] || '—'
+  const subStatusClass = (s) => s === 2 ? 'bg-green-100 text-green-800' : s === 3 ? 'bg-red-100 text-red-700' : s === 4 ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-container text-on-primary-container'
+  const prettyFeature = (f) => String(f || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
   return (
     <div className="space-y-6">
+      {verify && (
+        <div className={`rounded-lg px-4 py-3 text-sm flex items-start gap-2 ${verify.ok ? 'bg-green-50 text-green-800 border border-green-200' : verify.pending ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-error-container text-on-error-container'}`}>
+          <span className="material-symbols-outlined text-[18px]">{verify.ok ? 'check_circle' : verify.pending ? 'schedule' : 'error'}</span>
+          <div>
+            <p className="font-label-md">{verify.ok ? 'Payment confirmed' : verify.pending ? 'Payment processing' : 'Payment not confirmed'}</p>
+            <p className="text-xs opacity-90">{verify.message} Reference: {verify.reference}{verify.amount ? ` · ${formatMoney(verify.amount, verify.currency)}` : ''}{verify.endDate ? ` · valid until ${new Date(verify.endDate).toLocaleDateString('en-GB')}` : ''}</p>
+          </div>
+        </div>
+      )}
       {error && <div className="rounded-lg bg-error-container text-on-error-container px-4 py-2 text-sm">{error}</div>}
       {msg && <div className="rounded-lg bg-primary-container text-on-primary-container px-4 py-2 text-sm">{msg}</div>}
       {!showSubscribe ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5 md:col-span-2"><div className="flex items-start justify-between gap-4"><div><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Subscription Plan</p><p className="font-headline-md font-bold text-primary mt-2">{currentSub ? currentSub.planName : 'No active plan'}</p></div><div className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-label-md ${currentSub && currentSub.planStatus === 2 ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface-variant'}`}>{currentSub && currentSub.planStatus === 2 ? 'Current' : 'Inactive'}</span><button type="button" onClick={() => { setSelectedPlan(''); setShowSubscribe(true) }} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-label-md text-white hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">upgrade</span> Upgrade</button></div></div></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5 md:col-span-2"><div className="flex items-start justify-between gap-4"><div><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Subscription Plan</p><p className="font-headline-md font-bold text-primary mt-2">{currentSub ? currentSub.planName : 'No active plan'}</p>{currentSub?.subscriptionEndDate && <p className="text-xs text-on-surface-variant mt-1">Valid until {new Date(currentSub.subscriptionEndDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>}</div><div className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-label-md ${subStatusClass(currentSub?.planStatus)}`}>{currentSub ? subStatusLabel(currentSub.planStatus) : 'Inactive'}</span><button type="button" onClick={() => { setSelectedPlan(''); setShowSubscribe(true) }} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-label-md text-white hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">upgrade</span> Upgrade</button></div></div></div>
             <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Billing Cycle</p><p className="font-headline-sm font-bold text-on-surface mt-2">{currentSub ? (cycleMap[currentSub.billingCycle] || currentSub.billingCycle + ' months') : '—'}</p></div>
-            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">Provider</p><p className="font-headline-sm font-bold text-on-surface mt-2">{currentSub ? (providerMap[currentSub.activatedBy] || currentSub.activatedBy || '—') : '—'}</p></div>
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5"><p className="font-label-md text-on-surface-variant text-[11px] uppercase tracking-wide">AI Units</p><p className="font-headline-sm font-bold text-on-surface mt-2">{planDetails ? `${planDetails.remainingAIUnits ?? '—'} / ${planDetails.aiUnits ?? '—'}` : '—'}</p><p className="text-xs text-on-surface-variant mt-1">remaining / included</p>{aiPackages.length > 0 && <button type="button" onClick={() => document.getElementById('buy-ai-units')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="mt-1 text-xs font-label-md text-primary hover:underline">Buy more →</button>}</div>
+          </div>
+          {entitlements && (
+            <div className="bg-surface-container-low rounded-xl border border-outline-variant p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-lg bg-tertiary-container flex items-center justify-center"><span className="material-symbols-outlined text-white text-[20px]">workspace_premium</span></div>
+                <div className="flex-1">
+                  <p className="font-label-md font-bold text-on-surface">Entitlements</p>
+                  <p className="text-xs text-on-surface-variant">What your current subscription unlocks.</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-label-md ${entitlements.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface-variant'}`}>{entitlements.status || 'Unknown'}{entitlements.plan ? ` · ${entitlements.plan}` : ''}</span>
+              </div>
+              {Array.isArray(entitlements.features) && entitlements.features.length > 0 ? (
+                <div className="flex flex-wrap gap-2">{entitlements.features.map((f, i) => <span key={i} className="rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs text-on-surface">{prettyFeature(f)}</span>)}</div>
+              ) : (
+                <p className="text-xs text-on-surface-variant">No feature list on your subscription yet.</p>
+              )}
+            </div>
+          )}
+          <div id="buy-ai-units" className="bg-surface-container-low rounded-xl border border-outline-variant p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center"><span className="material-symbols-outlined text-on-secondary-container">smart_toy</span></div>
+              <div>
+                <h3 className="font-headline-sm font-bold text-primary">Buy AI Units</h3>
+                <p className="font-body-sm text-on-surface-variant">Top up AI units for research tools. You'll be redirected to the payment provider to complete the purchase.</p>
+              </div>
+            </div>
+            {aiErr && <div className="rounded-lg bg-error-container text-on-error-container px-3 py-2 text-sm mb-3">{aiErr}</div>}
+            {aiMsg && <div className="rounded-lg bg-primary-container text-on-primary-container px-3 py-2 text-sm mb-3">{aiMsg}</div>}
+            {aiPackages.length === 0 ? (
+              <p className="text-sm text-on-surface-variant">No AI unit packages available for {currency}.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Package</span><select value={aiPkgId} onChange={(e) => setAiPkgId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select AI unit package</option>{aiPackages.map((p) => <option key={p.id} value={p.id}>{p.planName} — {formatMoney(p.price, p.currency || currency)}{p.billingCycle ? ` (${cycleMap[p.billingCycle] || p.billingCycle + ' mo'})` : ''}</option>)}</select></label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="credo">Card (Credo)</option><option value="bank">Bank Transfer</option><option value="paystack">Paystack</option></select></label>
+                <button type="button" onClick={buyAiUnits} disabled={!aiPkgId || aiBusy} className="bg-primary text-on-primary py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-50">{aiBusy ? 'Processing…' : 'Buy AI Units'}</button>
+              </div>
+            )}
           </div>
           <div className="flex justify-end"><button type="button" onClick={() => setShowSubscribe(true)} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-3 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add_card</span> Subscribe Now</button></div>
         </>
       ) : (
         <form onSubmit={submit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {plans.length === 0 && <p className="text-on-surface-variant col-span-2">No plans available for this currency.</p>}
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Currency</span><select value={currency} onChange={event => setCurrency(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none">{currencies.length === 0 && <option value={currency}>{currency}</option>}{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={provider} onChange={event => setProvider(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select Provider</option><option value="bank">Bank Transfer</option><option value="credo">Card</option><option value="paystack">Paystack</option></select></label>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {plans.length === 0 && <p className="text-on-surface-variant col-span-2">No plans available for {currency}.</p>}
             {plans.map(plan => {
               const sel = selectedPlan === plan.name
               return (
                 <label key={plan.id} className={`block cursor-pointer rounded-xl border p-5 transition-colors ${sel ? 'border-primary bg-primary' : 'border-outline-variant bg-surface-container-low'}`}>
-                  <input type="radio" name="plan" value={plan.name} checked={sel} onChange={() => { setSelectedPlan(plan.name); setSelectedPlanPricingId(plan.pricingId); setBillingCycle(cycleMap[plan.billingCycle] || 'Annual') }} className="sr-only" />
+                  <input type="radio" name="plan" value={plan.name} checked={sel} onChange={() => { setSelectedPlan(plan.name); setSelectedPlanPricingId(plan.pricingId) }} className="sr-only" />
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className={`font-headline-sm font-bold ${sel ? 'text-white' : 'text-on-surface'}`}>{plan.name}</h3>
@@ -4098,14 +4313,10 @@ function SubscriptionPage() {
                     <span className={`material-symbols-outlined ${sel ? 'text-white' : 'text-primary'}`}>{sel ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
                   </div>
                   <p className={`font-headline-sm font-bold mt-5 ${sel ? 'text-white' : 'text-primary'}`}>{plan.price}</p>
-                  {plan.current && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}
+                  {currentSub && currentSub.planName === plan.name && <span className="inline-block mt-3 rounded-full bg-secondary-container px-2.5 py-1 text-xs text-on-secondary-container">Current plan</span>}
                 </label>
               )
             })}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing Cycle</span><select value={billingCycle} onChange={event => setBillingCycle(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
-            <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Provider</span><select value={provider} onChange={event => setProvider(event.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none"><option value="">Select Provider</option><option value="bank">Bank Transfer</option><option value="credo">Card</option><option value="paystack">Paystack</option></select></label>
           </div>
           <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end"><button type="button" onClick={() => setShowSubscribe(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button><button type="submit" disabled={!selectedPlan || !provider || submitting} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-50">{submitting ? 'Processing…' : 'Submit'}</button></div>
         </form>
@@ -4121,33 +4332,52 @@ function PaymentHistoryPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const tok = decodeToken()
-    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
+    const username = billingUsernameFromToken()
     if (!username) { setLoading(false); return }
 
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
     billingApi.getUserSubscription(username)
-      .then((res) => {
+      .then(async (res) => {
         const subs = (res.data || []).map((s) => ({
           plan: s.planName || '—',
           reference: 'SUB-' + s.id,
-          start: s.subscriptionStartDate ? new Date(s.subscriptionStartDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-          end: s.subscriptionEndDate ? new Date(s.subscriptionEndDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-          status: s.planStatus === 2 ? 'Active' : s.planStatus === 3 ? 'Expired' : s.planStatus === 1 ? 'Pending' : '—',
-          amount: '\u20A6' + Number(s.planPrice || 0).toLocaleString('en-NG'),
+          start: fmtDate(s.subscriptionStartDate),
+          end: fmtDate(s.subscriptionEndDate),
+          status: SUBSCRIPTION_STATUS[s.planStatus] || '—',
+          amount: formatMoney(s.planPrice, s.currency),
           _raw: s,
         }))
-        setSubscriptions(subs)
+
+        // §3.17 Billing history — fallback rows for accounts whose records
+        // exist only in history (field-name typos in the API are aliased).
+        if (subs.length === 0) {
+          try {
+            const hres = await billingApi.getBillingHistory(username)
+            const rows = (Array.isArray(hres?.data) ? hres.data : []).map((h) => ({
+              plan: h.planName || '—',
+              reference: h.id ? 'BILL-' + h.id : '—',
+              start: fmtDate(h.actvationDate || h.activationDate),
+              end: fmtDate(h.enddDate || h.endDate),
+              status: '—',
+              amount: formatMoney(h.amount, h.currency),
+            }))
+            setSubscriptions(rows)
+          } catch {}
+        } else {
+          setSubscriptions(subs)
+        }
 
         const paymentPromises = subs.filter((s) => s._raw.id).map((s) =>
           billingApi.getPaymentDetails(s._raw.id).then((pres) => {
             const pd = pres.data
             return pd ? [{
               reference: pd.reference || '—',
-              date: pd.createdAt ? new Date(pd.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+              date: fmtDate(pd.createdAt),
               description: s.plan + ' subscription',
               method: pd.provider || '—',
               status: pd.paymentStatus === 2 ? 'Successful' : pd.paymentStatus === 3 ? 'Failed' : 'Pending',
-              amount: '\u20A6' + Number(pd.amount || 0).toLocaleString('en-NG'),
+              amount: formatMoney(pd.amount, pd.currency),
             }] : []
           }).catch(() => [])
         )
@@ -4198,8 +4428,7 @@ function InstitutionHome({ go }) {
   })
 
   useEffect(() => {
-    const tok = decodeToken()
-    const username = (()=>{ const c=[tok?.email, tok?.Email, tok?.unique_name, tok?.preferred_username, tok?.preferredUsername, tok?.sub, tok?.name].filter(Boolean).map(String); const withAt=c.find(s=>s.includes('@')); return withAt || c[0] || ''; })()
+    const username = billingUsernameFromToken()
     if (!username) return
     billingApi.getUserSubscription(username)
       .then((res) => {

@@ -17,8 +17,8 @@ WHAT TO UPLOAD
 
 VERIFY AFTER UPLOAD (in a fresh/hard-refresh browser session)
   1. https://earmshub.com/earms-config.js  -> 200 (not 404)
-  2. Page source references the current bundle (check this folder's
-     assets/ file name, e.g. index-YNXqGivj.js).
+   2. Page source references the current bundle (check this folder's
+      assets/ file name, e.g. index-inH5_jsx.js).
   3. Login network call goes to https://iam.earmshub.com/api/Auth/login
      (direct backend). If it instead hits
      https://earmshub.com/api/iam/... and 404s, the old files are still

@@ -11,9 +11,19 @@ async function billingFetch(path, options = {}) {
 }
 
 async function parseResponse(res) {
-  const data = await res.json();
-  if (!res.ok || data.success === false) {
-    throw new Error(data.message || "Request failed (" + res.status + ")");
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok || (data && data.success === false)) {
+    // Attach the envelope + status so callers can read partial data
+    // (e.g. entitlements returns 400 with data.status "Inactive").
+    const err = new Error((data && data.message) || "Request failed (" + res.status + ")");
+    err.status = res.status;
+    err.body = data;
+    throw err;
   }
   return data;
 }
@@ -53,6 +63,9 @@ export const billingApi = {
   },
 
   // 3.4 Verify Payment
+  // Doc shape is literal: /payments/verify{reference} (no slash). Confirmed
+  // against the live backend — with a slash the route 404s, without it the
+  // API answers (400 "Payment not found" for unknown refs).
   async verifyPayment(reference) {
     const res = await fetch(BILLING_BASE_URL + "api/billing/payments/verify" + encodeURIComponent(reference), {
       method: "GET",
@@ -170,6 +183,18 @@ export const billingApi = {
     return parseResponse(res);
   },
 
+  // 3.18 companion — selectable AI unit packages.
+  // The doc describes aiUnitPackageId but exposes no listing endpoint; the
+  // live backend 404s all common routes (/aiunit-packages, /get-aiunit-packages,
+  // /aiunits, ...). Until the backend ships one, the plan pricing rows double
+  // as packages: pass the row's id as aiUnitPackageId to purchaseAIUnits.
+  // Swap the body here when a dedicated listing endpoint appears.
+  async getAiUnitPackages(currencyCode) {
+    const res = await billingFetch("api/billing/getprices" + qs({ currency: currencyCode }), { method: "GET" });
+    const data = await parseResponse(res);
+    return Array.isArray(data?.data) ? data.data : [];
+  },
+
   // 3.19 Manual Payment Approval
   async manualPaymentApproval(payload) {
     const res = await billingFetch("api/billing/manual-payment-approval", {
@@ -179,3 +204,11 @@ export const billingApi = {
     return parseResponse(res);
   },
 };
+
+// ---- Enumerations (doc §6) ----
+export const SUBSCRIPTION_STATUS = { 1: "Pending", 2: "Active", 3: "Expired", 4: "Cancelled" };
+export const OWNER_TYPE = { 1: "Institution", 2: "Personal" };
+export const PAYMENT_STATUS = { 1: "Pending", 2: "Success", 3: "Failed" };
+export const BILLING_CYCLE_LABEL = { 12: "Yearly", 3: "Quarterly", 1: "Monthly" };
+export const PLAN_STATUS = { 1: "Active", 2: "Retired" };
+export const SUBSCRIPTION_TYPE = { 1: "Subscription", 2: "AIUnitPurchase" };
