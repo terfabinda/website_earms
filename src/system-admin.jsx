@@ -172,42 +172,23 @@ function Stars({ n = 0, size = 16 }) {
   )
 }
 
-/* ---------- Subscription Management ---------- */
+/* ---------- Subscription Plan Management ---------- */
 
 const STATUS = {
   active: { label: 'Active', badge: 'bg-green-100 text-green-800', dot: 'bg-green-500', icon: 'verified' },
-  suspended: { label: 'Suspended', badge: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500', icon: 'pause_circle' },
-  expired: { label: 'Expired', badge: 'bg-red-100 text-red-700', dot: 'bg-red-500', icon: 'dangerous' },
-  pending: { label: 'Pending', badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: 'schedule' },
+  retired: { label: 'Retired', badge: 'bg-surface-container-high text-on-surface-variant', dot: 'bg-outline', icon: 'archive' },
 }
 
 const BILLING_CYCLE_MAP = { 12: 'Annual', 3: 'Quarterly', 1: 'Monthly' }
 
-const PLAN_STATUS_MAP = { 1: 'active', 2: 'expired' }
+// Doc §6 PlanStatus: 1 = Active, 2 = Retired
+const PLAN_STATUS_MAP = { 1: 'active', 2: 'retired' }
 
-const SUB_STATUS_MAP = { 1: 'pending', 2: 'active', 3: 'expired', 4: 'suspended' }
+const emptyPlanForm = { name: '', aiUnits: '', price: '', active: true, featureIds: [], featuresText: '' }
 
-function mapApiSubscriptions(apiSubs) {
-  if (!apiSubs || !Array.isArray(apiSubs)) return []
-  return apiSubs.map((s) => ({
-    id: 'SUB-' + s.id,
-    institution: s.ownerName || s.activatedBy || '—',
-    ownerCode: '',
-    email: '',
-    plan: s.planName || '—',
-    status: SUB_STATUS_MAP[s.planStatus] || 'pending',
-    billing: BILLING_CYCLE_MAP[s.billingCycle] || (s.billingCycle + ' mo'),
-    amount: s.planPrice || 0,
-    seats: 0,
-    provider: '',
-    features: [],
-    start: (s.subscriptionStartDate || '').slice(0, 10),
-    end: (s.subscriptionEndDate || '').slice(0, 10),
-    created: (s.subscriptionStartDate || '').slice(0, 10),
-    usage: 0,
-    payments: [],
-    _raw: s,
-  }))
+const fmtPrice = (v, c = 'NGN') => {
+  const sym = { NGN: '₦', USD: '$', EUR: '€', GBP: '£' }[String(c || '').toUpperCase()] || (c ? c + ' ' : '₦')
+  return sym + Number(v || 0).toLocaleString('en-NG')
 }
 
 function DetailTile({ label, value }) {
@@ -219,127 +200,95 @@ function DetailTile({ label, value }) {
   )
 }
 
-function SubscriptionDetail({ sub, onBack, onToggle, onRenew }) {
-  const st = STATUS[sub.status] || STATUS.expired
+function SubscriptionDetail({ sub, onBack, onToggle, onEdit, onTopUp }) {
+  const st = STATUS[sub.status] || STATUS.retired
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <button onClick={onBack} className="inline-flex items-center gap-1.5 font-label-md text-primary hover:text-primary-fixed-dim">
-          <span className="material-symbols-outlined text-[18px]">arrow_back</span> All subscriptions
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span> All plans
         </button>
         <div className="flex flex-wrap items-center gap-2">
+          <button onClick={onEdit} className="inline-flex items-center gap-1.5 border border-outline-variant bg-surface text-on-surface px-4 py-2 rounded-lg font-label-md hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit Plan</button>
+          <button onClick={onTopUp} className="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">bolt</span> Top Up AI Units</button>
           {sub.status === 'active' ? (
-            <button onClick={() => onToggle(sub.id)} className="inline-flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-800 px-4 py-2 rounded-lg font-label-md hover:bg-amber-100"><span className="material-symbols-outlined text-[16px]">pause</span> Suspend</button>
+            <button onClick={() => onToggle(sub.id)} className="inline-flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-800 px-4 py-2 rounded-lg font-label-md hover:bg-amber-100"><span className="material-symbols-outlined text-[16px]">archive</span> Archive</button>
           ) : (
-            <button onClick={() => onToggle(sub.id)} className="inline-flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-lg font-label-md hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">play_arrow</span> Resume</button>
+            <button onClick={() => onToggle(sub.id)} className="inline-flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-lg font-label-md hover:bg-green-700"><span className="material-symbols-outlined text-[16px]">unarchive</span> Restore</button>
           )}
-          <button onClick={() => onRenew(sub.id)} className="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[16px]">history</span> Renew</button>
         </div>
       </div>
       <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">account_balance</span></div>
+            <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">sell</span></div>
             <div>
-              <h3 className="font-headline-md font-bold text-on-surface">{sub.institution}</h3>
-              <p className="font-body-sm text-on-surface-variant">{sub.plan} · {sub.id}</p>
+              <h3 className="font-headline-md font-bold text-on-surface">{sub.name}</h3>
+              <p className="font-body-sm text-on-surface-variant">{sub.billing} billing · {sub.id}</p>
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label-md text-[11px] border border-outline-variant ${st.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}></span>{st.label}</span>
-                <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{sub.ownerCode}</span>
+                <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">{fmtNum(sub.aiUnits)} AI units</span>
               </div>
             </div>
           </div>
           <div className="text-left md:text-right">
-            <p className="font-headline-lg font-bold text-primary">{fmtMoney(sub.amount)}</p>
-            <p className="font-body-sm text-on-surface-variant text-[12px]">per {sub.billing.toLowerCase()} cycle</p>
+            <p className="font-headline-lg font-bold text-primary">{fmtPrice(sub.amount, sub.currency)}</p>
+            <p className="font-body-sm text-on-surface-variant text-[12px]">{sub.billing === '—' ? 'annual billing' : 'per ' + sub.billing.toLowerCase() + ' cycle'}</p>
           </div>
         </div>
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
           <DetailTile label="Billing Cycle" value={sub.billing} />
-          <DetailTile label="Provider" value={sub.provider} />
-          <DetailTile label="Seats" value={fmtNum(sub.seats)} />
-          <DetailTile label="Contact" value={sub.email} />
-          <DetailTile label="Start Date" value={fmtDate(sub.start)} />
-          <DetailTile label="End Date" value={fmtDate(sub.end)} />
-          <DetailTile label="Created" value={fmtDate(sub.created)} />
+          <DetailTile label="AI Units" value={fmtNum(sub.aiUnits)} />
+          <DetailTile label="Currency" value={sub.currency} />
           <DetailTile label="Reference" value={sub.id} />
         </div>
         <div className="mt-6">
           <p className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide mb-2">Plan Features</p>
-          <div className="flex flex-wrap gap-2">
-            {sub.features.map((f) => <span key={f} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">check</span>{f}</span>)}
-          </div>
-        </div>
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Usage</p>
-            <p className="font-label-md font-bold text-on-surface text-[12px]">{sub.usage}%</p>
-          </div>
-          <div className="w-full bg-surface-variant rounded-full h-2.5 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary" style={{ width: sub.usage + '%' }}></div></div>
-        </div>
-      </div>
-      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-6">
-        <h4 className="font-headline-sm font-bold text-on-surface mb-3">Payment History</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[520px]">
-            <thead>
-              <tr className="border-b border-outline-variant text-left font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">
-                <th className="py-2.5 pr-3">Reference</th>
-                <th className="py-2.5 pr-3">Date</th>
-                <th className="py-2.5 pr-3">Method</th>
-                <th className="py-2.5 pr-3 text-right">Amount</th>
-                <th className="py-2.5 pl-3 text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sub.payments.map((p) => (
-                <tr key={p.ref} className="border-b border-surface-variant last:border-0">
-                  <td className="py-2.5 pr-3 font-label-md text-on-surface">{p.ref}</td>
-                  <td className="py-2.5 pr-3 text-on-surface-variant">{fmtDate(p.date)}</td>
-                  <td className="py-2.5 pr-3 text-on-surface-variant">{p.method}</td>
-                  <td className="py-2.5 pr-3 text-right font-label-md text-on-surface">{fmtMoney(p.amount)}</td>
-                  <td className="py-2.5 pl-3 text-right"><span className="px-2.5 py-1 rounded-full bg-green-100 text-green-800 font-label-md text-[11px]">{p.status}</span></td>
-                </tr>
-              ))}
-              {sub.payments.length === 0 && <tr><td colSpan="5" className="py-6 text-center text-on-surface-variant">No recorded payments yet.</td></tr>}
-            </tbody>
-          </table>
+          {sub.features.length ? (
+            <div className="flex flex-wrap gap-2">
+              {sub.features.map((f) => <span key={f} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white font-label-md text-[12px]"><span className="material-symbols-outlined text-[14px]">check</span>{f}</span>)}
+            </div>
+          ) : (
+            <p className="font-body-sm text-on-surface-variant">No features attached to this plan.</p>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-function SubCard({ s, onOpen, onToggle }) {
-  const st = STATUS[s.status] || STATUS.expired
-  const manage = s.status === 'active' || s.status === 'pending'
+function SubCard({ s, onOpen, onToggle, onTopUp }) {
+  const st = STATUS[s.status] || STATUS.retired
   return (
     <div className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all cursor-pointer" onClick={onOpen}>
       <div className="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">account_balance</span></div>
+          <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-white">card_membership</span></div>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label-md text-[11px] border border-outline-variant ${st.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}></span>{st.label}</span>
         </div>
-        <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{s.institution}</h4>
-        <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{s.plan} · {s.id}</p>
+        <h4 className="font-headline-sm font-bold text-on-surface mt-3 line-clamp-1">{s.name}</h4>
+        <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{s.id}</p>
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
-          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Price</p><p className="font-label-md font-bold text-on-surface text-[13px]">{fmtMoney(s.amount)}</p></div>
+          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Price</p><p className="font-label-md font-bold text-on-surface text-[13px]">{fmtPrice(s.amount, s.currency)}</p></div>
           <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Cycle</p><p className="font-label-md text-on-surface text-[13px]">{s.billing}</p></div>
-          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Run</p><p className="font-label-md text-on-surface text-[13px]">{fmtDate(s.start)} → {fmtDate(s.end)}</p></div>
-          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Seats</p><p className="font-label-md text-on-surface text-[13px]">{fmtNum(s.seats)}</p></div>
+          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">AI Units</p><p className="font-label-md text-on-surface text-[13px]">{fmtNum(s.aiUnits)}</p></div>
+          <div><p className="font-label-md text-outline text-[10px] uppercase tracking-wide">Features</p><p className="font-label-md text-on-surface text-[13px]">{s.features.length} feature{s.features.length === 1 ? '' : 's'}</p></div>
         </div>
         <div className="flex gap-2 mt-4">
-          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen() }} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-primary text-on-primary py-2 rounded-lg font-label-md text-[13px] hover:bg-primary-fixed-dim">
-            <span className="material-symbols-outlined text-[16px]">open_in_new</span> Details
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen() }} className="flex-1 inline-flex items-center justify-center gap-1 bg-primary text-on-primary py-2 rounded-lg font-label-md text-[12px] hover:bg-primary-fixed-dim">
+            <span className="material-symbols-outlined text-[15px]">open_in_new</span> Details
           </button>
-          {manage ? (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} className="flex-1 inline-flex items-center justify-center gap-1.5 border border-outline-variant bg-surface py-2 rounded-lg font-label-md text-[13px] hover:bg-surface-variant text-amber-800">
-              <span className="material-symbols-outlined text-[16px]">pause</span> Suspend
+          <button type="button" onClick={(e) => { e.stopPropagation(); onTopUp() }} className="flex-1 inline-flex items-center justify-center gap-1 border border-outline-variant bg-surface text-primary py-2 rounded-lg font-label-md text-[12px] hover:bg-surface-variant">
+            <span className="material-symbols-outlined text-[15px]">bolt</span> Top Up
+          </button>
+          {s.status === 'active' ? (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} className="flex-1 inline-flex items-center justify-center gap-1 border border-outline-variant bg-surface py-2 rounded-lg font-label-md text-[12px] hover:bg-surface-variant text-amber-800">
+              <span className="material-symbols-outlined text-[15px]">archive</span> Archive
             </button>
           ) : (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} className="flex-1 inline-flex items-center justify-center gap-1.5 border border-outline-variant bg-surface py-2 rounded-lg font-label-md text-[13px] hover:bg-surface-variant text-green-700">
-              <span className="material-symbols-outlined text-[16px]">play_arrow</span> Resume
+            <button type="button" onClick={(e) => { e.stopPropagation(); onToggle() }} className="flex-1 inline-flex items-center justify-center gap-1 border border-outline-variant bg-surface py-2 rounded-lg font-label-md text-[12px] hover:bg-surface-variant text-green-700">
+              <span className="material-symbols-outlined text-[15px]">unarchive</span> Restore
             </button>
           )}
         </div>
@@ -348,253 +297,180 @@ function SubCard({ s, onOpen, onToggle }) {
   )
 }
 
-export function SubscriptionManagementPage({ go }) {
+export function SubscriptionManagementPage() {
   const [subs, setSubs] = useState([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
-  const [sort, setSort] = useState('Newest first')
+  const [sort, setSort] = useState('Name A–Z')
   const [selectedId, setSelectedId] = useState(null)
   const [toast, notify] = useToast()
+  // Create / edit plan (doc §3.10, §3.16)
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState(emptyPlanForm)
+  const [allFeatures, setAllFeatures] = useState([])
+  const [saving, setSaving] = useState(false)
+  // Top Up AI Units (doc §3.18)
+  const [topUp, setTopUp] = useState(null)
 
-  useEffect(() => {
+  const loadPlans = async () => {
     setLoading(true)
-    billingApi.getPlansSummary()
-      .then(async (res) => {
-        const plans = res.data || []
-        const allSubs = []
-        for (const plan of plans) {
-          try {
-            const detail = await billingApi.getPlanDetails(plan.id)
-            const d = detail.data || {}
-            allSubs.push({
-              id: 'PLAN-' + d.id,
-              institution: d.planeName || plan.planName || '—',
-              ownerCode: '',
-              email: '',
-              plan: d.planeName || plan.planName || '—',
-              status: PLAN_STATUS_MAP[d.planStatus] || PLAN_STATUS_MAP[plan.planStatus] || 'active',
-              billing: d.planPricings && d.planPricings[0] ? (BILLING_CYCLE_MAP[d.planPricings[0].billingCycle] || d.planPricings[0].billingCycle + ' mo') : '—',
-              amount: d.planPricings && d.planPricings[0] ? d.planPricings[0].price : 0,
-              seats: d.aiUnits || 0,
-              provider: '',
-              features: (d.planFeatures || []).map((f) => f.feature || f.description || ''),
-              start: '',
-              end: '',
-              created: '',
-              usage: 0,
-              payments: [],
-              _raw: d,
-            })
-          } catch (e) {
-            allSubs.push({
-              id: 'PLAN-' + plan.id,
-              institution: plan.planName || '—',
-              ownerCode: '',
-              email: '',
-              plan: plan.planName || '—',
-              status: PLAN_STATUS_MAP[plan.planStatus] || 'active',
-              billing: '—',
-              amount: 0,
-              seats: 0,
-              provider: '',
-              features: [],
-              start: '',
-              end: '',
-              created: '',
-              usage: 0,
-              payments: [],
-              _raw: plan,
-            })
-          }
+    try {
+      const res = await billingApi.getPlansSummary()
+      const plans = res.data || []
+      const all = []
+      for (const plan of plans) {
+        try {
+          const detail = await billingApi.getPlanDetails(plan.id)
+          const d = detail.data || {}
+          const pricing = (d.planPricings || [])[0] || {}
+          all.push({
+            id: 'PLAN-' + (d.id || plan.id),
+            name: d.planeName || plan.planName || '—',
+            status: PLAN_STATUS_MAP[d.planStatus != null ? d.planStatus : plan.planStatus] || 'active',
+            billing: BILLING_CYCLE_MAP[pricing.billingCycle] || (pricing.billingCycle ? pricing.billingCycle + ' mo' : '—'),
+            amount: pricing.price || 0,
+            currency: pricing.currency || 'NGN',
+            aiUnits: d.aiUnits || 0,
+            featureIds: (d.planFeatures || []).map((f) => f.id).filter(Boolean),
+            features: (d.planFeatures || []).map((f) => f.feature || f.description || '').filter(Boolean),
+            _raw: d,
+          })
+        } catch (e) {
+          all.push({
+            id: 'PLAN-' + plan.id,
+            name: plan.planName || '—',
+            status: PLAN_STATUS_MAP[plan.planStatus] || 'active',
+            billing: '—',
+            amount: 0,
+            currency: 'NGN',
+            aiUnits: 0,
+            featureIds: [],
+            features: [],
+            _raw: plan,
+          })
         }
-        setSubs(allSubs.length > 0 ? allSubs : [])
-      })
+      }
+      setSubs(all)
+    } catch {
+      setSubs([])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadPlans() }, [])
+  useEffect(() => {
+    billingApi.getAllFeatures()
+      .then((res) => setAllFeatures(Array.isArray(res?.data) ? res.data : []))
       .catch(() => {})
-      .finally(() => setLoading(false))
   }, [])
 
   const selected = subs.find((s) => s.id === selectedId) || null
-  const counts = { all: subs.length, active: 0, suspended: 0, expired: 0, pending: 0 }
+  const counts = { all: subs.length, active: 0, retired: 0 }
   subs.forEach((s) => { counts[s.status] = (counts[s.status] || 0) + 1 })
   const cleaned = q.trim().toLowerCase()
   let list = subs.filter((s) => {
-    const matchQ = !cleaned || [s.institution, s.id, s.plan, s.ownerCode, s.email].some((f) => String(f || '').toLowerCase().includes(cleaned))
+    const matchQ = !cleaned || [s.name, s.id].some((f) => String(f || '').toLowerCase().includes(cleaned))
     const matchF = filter === 'all' || s.status === filter
     return matchQ && matchF
   })
-  if (sort === 'Highest value') list = [...list].sort((a, b) => b.amount - a.amount)
-  if (sort === 'Institution A–Z') list = [...list].sort((a, b) => a.institution.localeCompare(b.institution))
-  if (sort === 'Oldest first') list = [...list].sort((a, b) => a.created.localeCompare(b.created))
+  if (sort === 'Highest price') list = [...list].sort((a, b) => b.amount - a.amount)
+  if (sort === 'Lowest price') list = [...list].sort((a, b) => a.amount - b.amount)
+  if (sort === 'Name A–Z') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
 
   const toggle = async (id) => {
     const s = subs.find((x) => x.id === id)
-    const isActive = s && (s.status === 'active')
+    const isActive = s && s.status === 'active'
     const numericId = id.replace('PLAN-', '')
     try {
       if (isActive) {
         await billingApi.deactivatePlan(numericId)
-        notify(`${s.institution} was suspended`)
+        notify(`"${s.name}" archived`)
       } else {
         await billingApi.activatePlan(numericId)
-        notify(`${s.institution} was reactivated`)
+        notify(`"${s.name}" restored`)
       }
-      setSubs((prev) => prev.map((x) => (x.id !== id ? x : { ...x, status: isActive ? 'suspended' : 'active' })))
+      setSubs((prev) => prev.map((x) => (x.id !== id ? x : { ...x, status: isActive ? 'retired' : 'active' })))
     } catch (e) {
       notify('Action failed: ' + e.message)
     }
   }
-  const renew = (id) => {
-    const s = subs.find((x) => x.id === id)
-    setSubs((prev) => prev.map((x) => {
-      if (x.id !== id) return x
-      const end = new Date(x.end + 'T00:00:00')
-      end.setFullYear(end.getFullYear() + 1)
-      const next = end.toISOString().slice(0, 10)
-      return { ...x, status: 'active', start: x.end, end: next, payments: [...x.payments, { ref: 'PAY-' + Math.floor(1000 + Math.random() * 9000), date: next, amount: x.amount, method: x.provider, status: 'Successful' }] }
-    }))
-    if (s) notify(`${s.institution} renewed for another cycle`)
+
+  const setFormField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const openCreate = () => { setEditing(null); setForm(emptyPlanForm); setShowForm(true) }
+  const openEdit = (p) => {
+    setSelectedId(null)
+    setEditing(p)
+    setForm({ name: p.name, aiUnits: String(p.aiUnits || ''), price: String(p.amount || ''), active: p.status === 'active', featureIds: p.featureIds || [], featuresText: '' })
+    setShowForm(true)
+  }
+  const save = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    const featurePayload = allFeatures.length > 0
+      ? form.featureIds.map((id) => ({ featureId: id }))
+      : form.featuresText.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0).map((id) => ({ featureId: id }))
+    const payload = {
+      name: form.name,
+      aiUnits: Number(form.aiUnits) || 0,
+      planStatus: form.active ? 1 : 2,
+      planFeatures: featurePayload,
+      planPrices: [{ price: Number(form.price) || 0, currency: 'NGN', billingCycle: 12 }],
+    }
+    try {
+      if (editing) {
+        await billingApi.updatePlan(editing.id.replace('PLAN-', ''), payload)
+        notify(`"${form.name}" updated`)
+      } else {
+        await billingApi.createPlan(payload)
+        notify(`"${form.name}" created`)
+      }
+      setShowForm(false)
+      await loadPlans()
+    } catch (err) {
+      notify('Save failed: ' + err.message)
+    }
+    setSaving(false)
+  }
+
+  const openTopUp = async (plan) => {
+    setSelectedId(null)
+    setTopUp({ plan, username: '', pkgId: '', provider: 'credo', packages: null, busy: false, result: null, error: '' })
+    try {
+      const pkgs = await billingApi.getAiUnitPackages(plan.currency || 'NGN')
+      setTopUp((t) => (t && t.plan.id === plan.id ? { ...t, packages: pkgs } : t))
+    } catch {
+      setTopUp((t) => (t && t.plan.id === plan.id ? { ...t, packages: [] } : t))
+    }
+  }
+  const submitTopUp = async (e) => {
+    e.preventDefault()
+    if (!topUp) return
+    if (!topUp.pkgId) { setTopUp((t) => ({ ...t, error: 'Select an AI unit package.' })); return }
+    setTopUp((t) => ({ ...t, busy: true, error: '', result: null }))
+    try {
+      const res = await billingApi.purchaseAIUnits({ username: topUp.username, aiUnitPackageId: Number(topUp.pkgId), provider: topUp.provider })
+      setTopUp((t) => ({ ...t, busy: false, result: res?.data || {} }))
+    } catch (err) {
+      setTopUp((t) => ({ ...t, busy: false, error: err.message || 'Top-up failed' }))
+    }
   }
 
   const filters = [
     { k: 'all', label: 'All', icon: 'apps' },
     { k: 'active', label: 'Active', icon: 'verified' },
-    { k: 'suspended', label: 'Suspended', icon: 'pause_circle' },
-    { k: 'expired', label: 'Expired', icon: 'dangerous' },
-    { k: 'pending', label: 'Pending', icon: 'schedule' },
+    { k: 'retired', label: 'Retired', icon: 'archive' },
   ]
 
   if (selected) {
-    return <SubscriptionDetail sub={selected} onBack={() => setSelectedId(null)} onToggle={toggle} onRenew={renew} />
+    return <SubscriptionDetail sub={selected} onBack={() => setSelectedId(null)} onToggle={toggle} onEdit={() => openEdit(selected)} onTopUp={() => openTopUp(selected)} />
   }
 
   if (loading) {
     return (
       <div className="space-y-5">
-        <PageHeader icon="card_membership" title="Subscriptions" desc="All institutional subscriptions with live status and management actions." />
-        <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
-          <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">progress_activity</span>
-          <p className="font-headline-sm text-on-surface">Loading subscriptions…</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-5">
-      <PageHeader icon="card_membership" title="Subscriptions" desc="All institutional subscriptions with live status and management actions.">
-        <button type="button" onClick={() => notify('Subscription creation wizard coming soon')} className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add_card</span> New Subscription</button>
-      </PageHeader>
-      <ToastBar toast={toast} />
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {filters.map((f) => (
-          <button key={f.k} type="button" onClick={() => setFilter(f.k)} className={`rounded-xl border p-3 text-left transition-colors ${filter === f.k ? 'border-primary bg-primary' : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}>
-            <p className={`font-label-md text-[10px] uppercase tracking-wide flex items-center gap-1 ${filter === f.k ? 'text-white/85' : 'text-on-surface-variant'}`}>{f.label} <span className={`material-symbols-outlined text-[13px] ${f.icon === 'verified' ? (filter === f.k ? 'text-white' : 'text-green-600') : f.icon === 'pause_circle' ? (filter === f.k ? 'text-white' : 'text-amber-600') : f.icon === 'dangerous' ? (filter === f.k ? 'text-white' : 'text-red-500') : f.icon === 'schedule' ? (filter === f.k ? 'text-white' : 'text-blue-600') : (filter === f.k ? 'text-white' : 'text-outline')}`}>{f.icon}</span></p>
-            <p className={`font-headline-md font-bold mt-0.5 ${filter === f.k ? 'text-white' : 'text-primary'}`}>{counts[f.k]}</p>
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="relative flex-1">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">search</span>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by institution, reference, plan or code…" className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm" />
-        </div>
-        <div className="flex items-center gap-2 whitespace-nowrap">
-          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Sort</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none">
-            <option>Newest first</option>
-            <option>Oldest first</option>
-            <option>Highest value</option>
-            <option>Institution A–Z</option>
-          </select>
-        </div>
-      </div>
-      {list.length ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {list.map((s) => <SubCard key={s.id} s={s} onOpen={() => setSelectedId(s.id)} onToggle={() => toggle(s.id)} />)}
-        </div>
-      ) : (
-        <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
-          <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
-          <p className="font-headline-sm text-on-surface">No subscriptions match your filters</p>
-          <p className="font-body-sm text-on-surface-variant mt-1">Try a different search term or status.</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ---------- Subscription Pricing Management ---------- */
-
-const emptyForm = { name: '', tagline: '', ownerType: 'Institution', cycle: 'Annual', price: '', setupFee: 0, seats: '', active: true, features: '' }
-
-export function PricingManagementPage({ go }) {
-  const [plans, setPlans] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [cycles, setCycles] = useState([
-    { name: 'Monthly', months: 1, note: 'No commitment, paid every month', factor: 1 },
-    { name: 'Quarterly', months: 3, note: 'Billed every 3 months', factor: 3.2 },
-    { name: 'Annual', months: 12, note: 'Billed once per academic year', factor: 10 },
-  ])
-  const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(emptyForm)
-  const [toast, notify] = useToast()
-
-  useEffect(() => {
-    setLoading(true)
-    billingApi.getPlansSummary()
-      .then(async (res) => {
-        const summaries = res.data || []
-        const fullPlans = []
-        for (const s of summaries) {
-          try {
-            const detail = await billingApi.getPlanDetails(s.id)
-            const d = detail.data || {}
-            const pricing = (d.planPricings || [])[0] || {}
-            fullPlans.push({
-              id: d.id || s.id,
-              name: d.planeName || s.planName || '—',
-              tagline: '',
-              ownerType: 'Institution',
-              cycle: BILLING_CYCLE_MAP[pricing.billingCycle] || 'Annual',
-              price: pricing.price || 0,
-              setupFee: 0,
-              seats: d.aiUnits || 0,
-              active: (d.planStatus || s.planStatus) === 1,
-              features: (d.planFeatures || []).map((f) => f.feature || f.description || '').join(', '),
-              _raw: d,
-            })
-          } catch (e) {
-            fullPlans.push({
-              id: s.id,
-              name: s.planName || '—',
-              tagline: '',
-              ownerType: 'Institution',
-              cycle: 'Annual',
-              price: 0,
-              setupFee: 0,
-              seats: 0,
-              active: s.planStatus === 1,
-              features: '',
-              _raw: s,
-            })
-          }
-        }
-        setPlans(fullPlans)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  const activeCount = plans.filter((p) => p.active).length
-  const cheapest = plans.length > 0 ? Math.min(...plans.map((p) => p.price || Infinity)) : 0
-  const setFormField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-
-  if (loading) {
-    return (
-      <div className="space-y-5">
-        <PageHeader icon="sell" title="Subscription Pricing Management" desc="Structure plans, set prices and configure billing cycles." />
+        <PageHeader icon="card_membership" title="Subscription Plans" desc="Create and manage plans, pricing, AI units and status." />
         <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
           <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">progress_activity</span>
           <p className="font-headline-sm text-on-surface">Loading plans…</p>
@@ -603,140 +479,124 @@ export function PricingManagementPage({ go }) {
     )
   }
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm); setShowForm(true) }
-  const openEdit = (p) => { setEditing(p); setForm({ name: p.name, tagline: p.tagline, ownerType: p.ownerType, cycle: p.cycle, price: p.price, setupFee: p.setupFee, seats: p.seats, active: p.active, features: p.features }); setShowForm(true) }
-  const save = async (e) => {
-    e.preventDefault()
-    const cycleMonths = form.cycle === 'Monthly' ? 1 : form.cycle === 'Quarterly' ? 3 : 12
-    const payload = {
-      name: form.name,
-      aiUnits: Number(form.seats) || 100,
-      planStatus: form.active ? 1 : 2,
-      planFeatures: form.features ? form.features.split(',').map((f, i) => ({ featureId: i + 1 })).filter(Boolean) : [],
-      planPrices: [{ price: Number(form.price) || 0, currency: 'NGN', billingCycle: cycleMonths }],
-    }
-    try {
-      if (editing) {
-        await billingApi.updatePlan(editing.id, payload)
-        setPlans((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form, price: Number(form.price) || 0, seats: Number(form.seats) || 0 } : p)))
-        notify(`"${form.name || editing.name}" updated`)
-      } else {
-        const res = await billingApi.createPlan(payload)
-        const newId = res.data?.id || Math.max(0, ...plans.map((p) => p.id)) + 1
-        setPlans((prev) => [...prev, { ...form, id: newId, price: Number(form.price) || 0, seats: Number(form.seats) || 0 }])
-        notify(`"${form.name || 'New plan'}" created`)
-      }
-    } catch (err) {
-      notify('Save failed: ' + err.message)
-    }
-    setShowForm(false)
-  }
-  const togglePlan = async (id) => {
-    try {
-      const plan = plans.find((p) => p.id === id)
-      if (plan && plan.active) {
-        await billingApi.deactivatePlan(id)
-      } else {
-        await billingApi.activatePlan(id)
-      }
-      setPlans((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)))
-      notify('Plan status updated')
-    } catch (err) {
-      notify('Toggle failed: ' + err.message)
-    }
-  }
-  const setCycleField = (name, val) => setCycles((prev) => prev.map((c) => (c.name === name ? { ...c, factor: val } : c)))
-
   return (
     <div className="space-y-5">
-      <PageHeader icon="sell" title="Subscription Pricing Management" desc="Structure plans, set prices and configure billing cycles.">
-        <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add</span> Create Plan</button>
+      <PageHeader icon="card_membership" title="Subscription Plans" desc="Create and manage plans, pricing, AI units and status.">
+        <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">add</span> Create Subscription Plan</button>
       </PageHeader>
       <ToastBar toast={toast} />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Active Plans" value={String(activeCount)} sub={`${plans.length} plans in the catalogue`} icon="sell" color="bg-secondary-container text-on-secondary-container" />
-        <StatCard label="Total Plans" value={String(plans.length)} sub="Institution and personal tiers" icon="inventory_2" color="bg-primary-container text-white" />
-        <StatCard label="Starting Price" value={fmtMoney(cheapest)} sub="Across all billing cycles" icon="payments" color="bg-green-100 text-green-800" />
-        <StatCard label="Billing Cycles" value="3" sub="Monthly · Quarterly · Annual" icon="calendar_month" color="bg-amber-100 text-amber-800" />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {filters.map((f) => (
+          <button key={f.k} type="button" onClick={() => setFilter(f.k)} className={`rounded-xl border p-3 text-left transition-colors ${filter === f.k ? 'border-primary bg-primary' : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'}`}>
+            <p className={`font-label-md text-[10px] uppercase tracking-wide flex items-center gap-1 ${filter === f.k ? 'text-white/85' : 'text-on-surface-variant'}`}>{f.label} <span className={`material-symbols-outlined text-[13px] ${f.icon === 'verified' ? (filter === f.k ? 'text-white' : 'text-green-600') : (filter === f.k ? 'text-white' : 'text-outline')}`}>{f.icon}</span></p>
+            <p className={`font-headline-md font-bold mt-0.5 ${filter === f.k ? 'text-white' : 'text-primary'}`}>{counts[f.k] || 0}</p>
+          </button>
+        ))}
       </div>
-      <div className="glass-card ambient-shadow rounded-xl border border-surface-container p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-headline-sm font-bold text-on-surface">Billing Cycle Multipliers</h3>
-            <p className="font-body-sm text-on-surface-variant text-[12px]">Adjust how a cycle price translates into annual equivalents.</p>
-          </div>
-          <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px] border border-outline-variant">Auto-save</span>
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        <div className="relative flex-1">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">search</span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search plans by name or reference…" className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cycles.map((c) => (
-            <div key={c.name} className="bg-surface-container-low rounded-xl border border-outline-variant p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-label-md font-bold text-on-surface">{c.name}</p>
-                <input type="number" min="0.1" step="0.1" value={c.factor} onChange={(e) => setCycleField(c.name, Number(e.target.value) || 0)} className="w-20 px-2 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm text-right outline-none focus:border-primary" />
-              </div>
-              <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">{c.months}-month term · {c.note}</p>
-              <p className="font-body-sm text-on-surface-variant text-[12px] mt-1">Multiplier <span className="font-label-md font-bold text-primary">×{c.factor}</span></p>
-            </div>
-          ))}
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Sort</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm outline-none">
+            <option>Name A–Z</option>
+            <option>Highest price</option>
+            <option>Lowest price</option>
+          </select>
         </div>
       </div>
-      <div>
-        <h3 className="font-headline-sm font-bold text-primary">Plans</h3>
-        <p className="font-body-sm text-on-surface-variant mb-4">Each plan determines the features and capacity a subscriber receives.</p>
+      {list.length ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {plans.map((p) => (
-            <div key={p.id} className="group relative overflow-hidden rounded-xl border border-surface-container bg-surface-container-lowest shadow-sm hover:shadow-elevated transition-all">
-              <div className="h-1.5 w-full bg-gradient-to-r from-secondary to-primary"></div>
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-secondary-container">sell</span></div>
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label-md text-[11px] border border-outline-variant ${p.active ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface-variant'}`}><span className={`w-1.5 h-1.5 rounded-full ${p.active ? 'bg-green-500' : 'bg-outline'}`}></span>{p.active ? 'Active' : 'Archived'}</span>
-                </div>
-                <h4 className="font-headline-sm font-bold text-on-surface mt-3">{p.name}</h4>
-                <p className="font-body-sm text-on-surface-variant text-[12px] mt-1 line-clamp-1">{p.tagline}</p>
-                <div className="mt-3 flex items-baseline gap-2"><p className="font-headline-md font-bold text-primary">{fmtMoney(p.price || 0)}</p><p className="font-body-sm text-on-surface-variant text-[12px]">/ {p.cycle.toLowerCase()}</p></div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px]">{p.ownerType}</span>
-                  <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[11px]">{fmtNum(p.seats)} seats</span>
-                  {p.setupFee ? <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-label-md text-[11px] border border-amber-200">Setup {fmtMoney(p.setupFee)}</span> : null}
-                </div>
-                <div className="mt-3 space-y-1">
-                  {String(p.features).split(',').map((f) => <p key={f.trim()} className="flex items-center gap-1 text-[12px] text-on-surface-variant"><span className="material-symbols-outlined text-[13px] text-primary">check</span>{f.trim()}</p>)}
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button type="button" onClick={() => openEdit(p)} className="flex-1 inline-flex items-center justify-center gap-1.5 border border-outline-variant bg-surface py-2 rounded-lg font-label-md text-[13px] hover:bg-surface-variant"><span className="material-symbols-outlined text-[16px]">edit</span> Edit</button>
-                  <button type="button" onClick={() => togglePlan(p.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-primary text-on-primary py-2 rounded-lg font-label-md text-[13px] hover:bg-primary-fixed-dim">
-                    <span className="material-symbols-outlined text-[16px]">{p.active ? 'archive' : 'unarchive'}</span>{p.active ? 'Archive' : 'Restore'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+          {list.map((s) => <SubCard key={s.id} s={s} onOpen={() => setSelectedId(s.id)} onToggle={() => toggle(s.id)} onTopUp={() => openTopUp(s)} />)}
         </div>
-      </div>
+      ) : (
+        <div className="py-12 text-center border border-dashed border-outline-variant rounded-xl bg-surface-container-low">
+          <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
+          <p className="font-headline-sm text-on-surface">No plans match your filters</p>
+          <p className="font-body-sm text-on-surface-variant mt-1">Try a different search term or create a new plan.</p>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 backdrop-blur-sm px-4 py-8" onClick={() => setShowForm(false)}>
           <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 w-full max-w-xl">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-headline-sm font-bold text-on-surface">{editing ? 'Edit plan' : 'Create a plan'}</h3>
+              <h3 className="font-headline-sm font-bold text-on-surface">{editing ? 'Edit Subscription Plan' : 'Create Subscription Plan'}</h3>
               <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined text-[20px] text-on-surface-variant">close</span></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block sm:col-span-2"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Plan name</span><input required value={form.name} onChange={(e) => setFormField('name', e.target.value)} className={fieldCls} placeholder="e.g. Institution Premium" /></label>
-              <label className="block sm:col-span-2"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Tagline</span><input value={form.tagline} onChange={(e) => setFormField('tagline', e.target.value)} className={fieldCls} placeholder="Short marketing description" /></label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Owner type</span><select value={form.ownerType} onChange={(e) => setFormField('ownerType', e.target.value)} className={fieldCls}><option>Institution</option><option>Personal</option></select></label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing cycle</span><select value={form.cycle} onChange={(e) => setFormField('cycle', e.target.value)} className={fieldCls}><option>Monthly</option><option>Quarterly</option><option>Annual</option></select></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Billing cycle</span><div className={`${fieldCls} bg-surface-container-high text-on-surface-variant`}>Annual</div></label>
               <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Price (₦)</span><input type="number" min="0" step="1000" required value={form.price} onChange={(e) => setFormField('price', e.target.value)} className={fieldCls} placeholder="250000" /></label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Setup fee (₦)</span><input type="number" min="0" step="1000" value={form.setupFee} onChange={(e) => setFormField('setupFee', e.target.value)} className={fieldCls} placeholder="0" /></label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Seats</span><input type="number" min="1" required value={form.seats} onChange={(e) => setFormField('seats', e.target.value)} className={fieldCls} placeholder="500" /></label>
-              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Features</span><textarea value={form.features} onChange={(e) => setFormField('features', e.target.value)} rows="2" className={fieldCls} placeholder="Comma separated, e.g. Project Management, Analytics" /></label>
-              <label className="flex items-center gap-2 sm:col-span-2 cursor-pointer"><input type="checkbox" checked={form.active} onChange={(e) => setFormField('active', e.target.checked)} className="accent-primary" /><span className="font-label-md text-on-surface">Active plan</span></label>
+              <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">AI Units</span><input type="number" min="0" required value={form.aiUnits} onChange={(e) => setFormField('aiUnits', e.target.value)} className={fieldCls} placeholder="100" /></label>
+              <label className="flex items-center gap-2 sm:mt-5 cursor-pointer"><input type="checkbox" checked={form.active} onChange={(e) => setFormField('active', e.target.checked)} className="accent-primary" /><span className="font-label-md text-on-surface">Active plan</span></label>
+              <div className="block sm:col-span-2">
+                <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Features</span>
+                {allFeatures.length > 0 ? (
+                  <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-outline-variant bg-surface-container-lowest divide-y divide-surface-variant">
+                    {allFeatures.map((f) => (
+                      <label key={f.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-container-low">
+                        <input type="checkbox" className="accent-primary" checked={form.featureIds.includes(f.id)} onChange={(e) => setFormField('featureIds', e.target.checked ? [...form.featureIds, f.id] : form.featureIds.filter((x) => x !== f.id))} />
+                        <span className="font-label-md text-on-surface text-[13px]">{f.feature}</span>
+                        {f.description && <span className="font-body-sm text-on-surface-variant text-[12px] ml-auto text-right line-clamp-1">{f.description}</span>}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <input value={form.featuresText} onChange={(e) => setFormField('featuresText', e.target.value)} className={`${fieldCls} mt-1`} placeholder="Feature IDs separated by commas, e.g. 1, 2, 3" />
+                )}
+              </div>
             </div>
             <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end mt-6">
               <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
-              <button type="submit" className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim">{editing ? 'Save changes' : 'Create plan'}</button>
+              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{saving ? 'Saving…' : editing ? 'Save changes' : 'Create Subscription Plan'}</button>
             </div>
+          </form>
+        </div>
+      )}
+
+      {topUp && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 backdrop-blur-sm px-4 py-8" onClick={() => setTopUp(null)}>
+          <form onSubmit={submitTopUp} onClick={(e) => e.stopPropagation()} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-headline-sm font-bold text-on-surface">Top Up AI Units</h3>
+              <button type="button" onClick={() => setTopUp(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined text-[20px] text-on-surface-variant">close</span></button>
+            </div>
+            <p className="font-body-sm text-on-surface-variant mb-4">Purchase additional AI units ({topUp.plan.name}). A payment is initialised through the billing provider.</p>
+            {topUp.result ? (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-3">
+                  <p className="font-label-md">Purchase initialised</p>
+                  <p className="text-xs mt-1 opacity-90">Reference: {topUp.result.paymentReference || '—'}{topUp.result.units ? ` · ${topUp.result.units} units` : ''}{topUp.result.amount ? ` · ${fmtPrice(topUp.result.amount, topUp.result.currency || topUp.plan.currency)}` : ''}</p>
+                </div>
+                <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                  {topUp.result.paymentRedirectUrl && (
+                    <a href={topUp.result.paymentRedirectUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:bg-primary-fixed-dim"><span className="material-symbols-outlined text-[18px]">open_in_new</span> Open payment page</a>
+                  )}
+                  <button type="button" onClick={() => setTopUp(null)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Done</button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block sm:col-span-2"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Subscriber username</span><input required value={topUp.username} onChange={(e) => setTopUp((t) => ({ ...t, username: e.target.value }))} className={fieldCls} placeholder="Username or email of the subscriber" /></label>
+                <label className="block sm:col-span-2">
+                  <span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">AI unit package</span>
+                  <select required value={topUp.pkgId} onChange={(e) => setTopUp((t) => ({ ...t, pkgId: e.target.value }))} className={fieldCls}>
+                    <option value="">{topUp.packages === null ? 'Loading packages…' : 'Select a package'}</option>
+                    {(topUp.packages || []).map((p) => <option key={p.id} value={p.id}>{p.planName} — {fmtPrice(p.price, p.currency || topUp.plan.currency)}</option>)}
+                  </select>
+                  {topUp.packages && topUp.packages.length === 0 && <span className="font-body-sm text-on-surface-variant text-[12px]">No packages available right now.</span>}
+                </label>
+                <label className="block"><span className="font-label-md text-on-surface-variant text-[12px] uppercase tracking-wide">Payment provider</span><select value={topUp.provider} onChange={(e) => setTopUp((t) => ({ ...t, provider: e.target.value }))} className={fieldCls}><option value="credo">Credo</option><option value="bank">Bank transfer</option><option value="paystack">Paystack</option></select></label>
+                {topUp.error && <p className="sm:col-span-2 text-sm text-red-600">{topUp.error}</p>}
+                <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                  <button type="button" onClick={() => setTopUp(null)} className="px-5 py-2.5 border border-outline-variant rounded-lg font-label-md hover:bg-surface-variant">Cancel</button>
+                  <button type="submit" disabled={topUp.busy || topUp.packages === null} className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md hover:bg-primary-fixed-dim disabled:opacity-60">{topUp.busy ? 'Initialising…' : 'Initialise top-up'}</button>
+                </div>
+              </div>
+            )}
           </form>
         </div>
       )}

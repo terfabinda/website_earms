@@ -5,7 +5,7 @@ import { authApi, userApi, ownerApi, tokenService, getRoleFromToken, routeForRol
 import { AdminOnboarding } from './onboarding.jsx'
 import { RolesPanel } from './iam-admin.jsx'
 import { AFRICAN_REGIONS } from './regions'
-import { SubscriptionManagementPage, PricingManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
+import { SubscriptionManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
 import { REGULATORS } from './regulator'
 import { billingApi, SUBSCRIPTION_STATUS } from './billing'
@@ -967,7 +967,6 @@ function DashShell({ go, active, title, subtitle, children, role, subrole, focus
   const systemAdminNavItems = [
     {label: 'Home', icon: 'home'},
     {label: 'Subscription', icon: 'card_membership'},
-    {label: 'Pricing', icon: 'sell'},
     {label: 'Analytics', icon: 'analytics'},
     {label: 'Regional', icon: 'public'},
     {label: 'Settings', icon: 'settings'},
@@ -1078,7 +1077,7 @@ function DashShell({ go, active, title, subtitle, children, role, subrole, focus
                     return <li key={it.label}><button onClick={it.onClick} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   if (!hasSub) {
-                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : it.label === 'Pricing' ? ()=>go('system?section=pricing') : it.label === 'Regional' ? ()=>go('system?section=regional') : undefined
+                    const nav = it.label === 'Home' ? ()=>go('system') : it.label === 'Settings' ? ()=>go('system?section=settings') : it.label === 'Subscription' ? ()=>go('system?section=subscription') : it.label === 'Analytics' ? ()=>go('system?section=analytics') : it.label === 'Regional' ? ()=>go('system?section=regional') : undefined
                     return <li key={it.label}><button onClick={nav} type="button" className="w-full flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg text-left"><span className="material-symbols-outlined text-[20px]">{it.icon}</span> {it.label}</button></li>
                   }
                   return (
@@ -1276,7 +1275,7 @@ function SystemHome({ go }) {
           {label: 'Total Plans', value: String(total), sub: total + ' plans in the catalogue', icon: 'sell', color: 'bg-primary-container text-white'},
           {label: 'Active Plans', value: String(active), sub: active + ' active plans', icon: 'card_membership', color: 'bg-secondary-container text-on-secondary-container'},
           {label: 'Active Subscriptions', value: '—', sub: 'View subscription page for details', icon: 'verified', color: 'bg-green-100 text-green-800'},
-          {label: 'Billing Cycles', value: '3', sub: 'Monthly · Quarterly · Annual', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
+          {label: 'Billing Cycle', value: 'Annual', sub: 'Yearly billing (12 months)', icon: 'calendar_month', color: 'bg-surface-container-high text-on-surface'},
         ])
       })
       .catch(() => {})
@@ -1284,10 +1283,9 @@ function SystemHome({ go }) {
 
   // If a specific section is requested, render its dedicated page
   if (section) {
-    if (section === 'subscription' || section === 'pricing' || section === 'analytics' || section === 'regional') {
+    if (section === 'subscription' || section === 'analytics' || section === 'regional') {
       const page =
         section === 'subscription' ? <SubscriptionManagementPage go={go} />
-        : section === 'pricing' ? <PricingManagementPage go={go} />
         : section === 'analytics' ? <AnalyticsPage go={go} item={item} />
         : <RegionManagementPage go={go} />
       return (
@@ -1342,13 +1340,12 @@ function SystemHome({ go }) {
   // Home dashboard - stat cards + icon grid mapping to sidebar
   const stats = [
     {label: 'Total Subscriptions', value: '1,348', sub: 'Active: 1,042', icon: 'card_membership', color: 'bg-primary-container text-white'},
-    {label: 'Active Plans', value: '5', sub: 'Across 3 billing cycles', icon: 'sell', color: 'bg-secondary-container text-on-secondary-container'},
+    {label: 'Active Plans', value: '5', sub: 'Annual billing plans', icon: 'sell', color: 'bg-secondary-container text-on-secondary-container'},
     {label: 'Institutions', value: '1,248', sub: 'Onboarded in 14 regions', icon: 'business', color: 'bg-tertiary-container text-white'},
     {label: 'Regions', value: '14', sub: 'Africa coverage', icon: 'public', color: 'bg-surface-container-high text-on-surface'},
   ]
   const groups = [
-    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'All subscriptions with live status and management actions', subs: [], color: 'bg-primary-fixed'},
-    {key: 'pricing', label: 'Pricing', icon: 'sell', desc: 'Structure plans and manage subscription pricing', subs: ['Subscription Pricing Management'], color: 'bg-secondary-fixed'},
+    {key: 'subscription', label: 'Subscription', icon: 'card_membership', desc: 'Subscription plans, pricing, AI units and status management', subs: [], color: 'bg-primary-fixed'},
     {key: 'analytics', label: 'Analytics', icon: 'analytics', desc: 'Dashboards, revenue and ratings insight', subs: ['Dashboard','Revenue Reports','Subscription Status','Ratings'], color: 'bg-tertiary-fixed'},
     {key: 'regional', label: 'Regional', icon: 'public', desc: 'Regional distribution and view', subs: [], color: 'bg-surface-container-high'},
     {key: 'settings', label: 'Settings', icon: 'settings', desc: 'System settings, password and preferences', subs: [], color: 'bg-surface-container-low'},
