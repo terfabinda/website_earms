@@ -212,3 +212,26 @@ export const PAYMENT_STATUS = { 1: "Pending", 2: "Success", 3: "Failed" };
 export const BILLING_CYCLE_LABEL = { 12: "Yearly", 3: "Quarterly", 1: "Monthly" };
 export const PLAN_STATUS = { 1: "Active", 2: "Retired" };
 export const SUBSCRIPTION_TYPE = { 1: "Subscription", 2: "AIUnitPurchase" };
+
+// Display labels for plan feature codes (§3.15). Unknown codes fall back to
+// title-cased words; add explicit entries here for aliases/acronyms.
+export const FEATURE_LABELS = {
+  ai_research: "AI Research",
+  defense: "Defense",
+  project_workflow: "Project Workflow",
+  similarity_check: "Plagiarism Check",
+  storage: "Storage",
+};
+
+export function featureLabel(code, fallback) {
+  const raw = String(code || fallback || "").trim();
+  if (!raw) return "";
+  const key = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  if (FEATURE_LABELS[key]) return FEATURE_LABELS[key];
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\bAi\b/g, "AI")
+    .replace(/\bApi\b/g, "API")
+    .replace(/\bLms\b/g, "LMS");
+}

@@ -8,7 +8,7 @@ import { AFRICAN_REGIONS } from './regions'
 import { SubscriptionManagementPage, AnalyticsPage, RegionManagementPage } from './system-admin.jsx'
 import { NucDashboard, NbteDashboard, NcceDashboard } from './regulator.jsx'
 import { REGULATORS } from './regulator'
-import { billingApi, SUBSCRIPTION_STATUS } from './billing'
+import { billingApi, SUBSCRIPTION_STATUS, featureLabel } from './billing'
 import { projectApi, ProjectStatusLabel, ChapterStatusLabel, TopicStatusLabel, VersionStatusLabel } from './project'
 import { TipTapEditor } from './tiptap-editor.jsx'
 
@@ -4228,7 +4228,6 @@ function SubscriptionPage() {
   const cycleMap = { 12: 'Annual', 3: 'Quarterly', 1: 'Monthly' }
   const subStatusLabel = (s) => SUBSCRIPTION_STATUS[s] || '—'
   const subStatusClass = (s) => s === 2 ? 'bg-green-100 text-green-800' : s === 3 ? 'bg-red-100 text-red-700' : s === 4 ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-container text-on-primary-container'
-  const prettyFeature = (f) => String(f || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
   return (
     <div className="space-y-6">
@@ -4261,7 +4260,7 @@ function SubscriptionPage() {
                 <span className={`rounded-full px-3 py-1 text-xs font-label-md ${entitlements.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-surface-container-high text-on-surface-variant'}`}>{entitlements.status || 'Unknown'}{entitlements.plan ? ` · ${entitlements.plan}` : ''}</span>
               </div>
               {Array.isArray(entitlements.features) && entitlements.features.length > 0 ? (
-                <div className="flex flex-wrap gap-2">{entitlements.features.map((f, i) => <span key={i} className="rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs text-on-surface">{prettyFeature(f)}</span>)}</div>
+                <div className="flex flex-wrap gap-2">{entitlements.features.map((f, i) => <span key={i} className="rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs text-on-surface">{featureLabel(f)}</span>)}</div>
               ) : (
                 <p className="text-xs text-on-surface-variant">No feature list on your subscription yet.</p>
               )}

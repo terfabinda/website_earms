@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { AFRICAN_REGIONS } from './regions'
-import { billingApi } from './billing'
+import { billingApi, featureLabel } from './billing'
 
 /* ---------- Shared helpers ---------- */
 
@@ -334,7 +334,7 @@ export function SubscriptionManagementPage() {
             currency: pricing.currency || 'NGN',
             aiUnits: d.aiUnits || 0,
             featureIds: (d.planFeatures || []).map((f) => f.id).filter(Boolean),
-            features: (d.planFeatures || []).map((f) => f.feature || f.description || '').filter(Boolean),
+            features: (d.planFeatures || []).map((f) => featureLabel(f.feature, f.description)).filter(Boolean),
             _raw: d,
           })
         } catch (e) {
@@ -539,7 +539,7 @@ export function SubscriptionManagementPage() {
                     {allFeatures.map((f) => (
                       <label key={f.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-container-low">
                         <input type="checkbox" className="accent-primary" checked={form.featureIds.includes(f.id)} onChange={(e) => setFormField('featureIds', e.target.checked ? [...form.featureIds, f.id] : form.featureIds.filter((x) => x !== f.id))} />
-                        <span className="font-label-md text-on-surface text-[13px]">{f.feature}</span>
+                        <span className="font-label-md text-on-surface text-[13px]">{featureLabel(f.feature, f.description)}</span>
                         {f.description && <span className="font-body-sm text-on-surface-variant text-[12px] ml-auto text-right line-clamp-1">{f.description}</span>}
                       </label>
                     ))}
