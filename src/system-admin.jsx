@@ -521,7 +521,7 @@ export function SubscriptionManagementPage() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 backdrop-blur-sm px-4 py-8" onClick={() => setShowForm(false)}>
-          <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 w-full max-w-xl">
+          <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="bg-white shadow-xl rounded-xl border border-surface-container p-6 w-full max-w-xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-headline-sm font-bold text-on-surface">{editing ? 'Edit Subscription Plan' : 'Create Subscription Plan'}</h3>
               <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined text-[20px] text-on-surface-variant">close</span></button>
@@ -559,7 +559,7 @@ export function SubscriptionManagementPage() {
 
       {topUp && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 backdrop-blur-sm px-4 py-8" onClick={() => setTopUp(null)}>
-          <form onSubmit={submitTopUp} onClick={(e) => e.stopPropagation()} className="glass-card ambient-shadow rounded-xl border border-surface-container p-6 w-full max-w-lg">
+          <form onSubmit={submitTopUp} onClick={(e) => e.stopPropagation()} className="bg-white shadow-xl rounded-xl border border-surface-container p-6 w-full max-w-lg">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-headline-sm font-bold text-on-surface">Top Up AI Units</h3>
               <button type="button" onClick={() => setTopUp(null)} className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center"><span className="material-symbols-outlined text-[20px] text-on-surface-variant">close</span></button>
