@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/public_html
+    - rm -rf "$DEPLOYPATH/assets"
+    - /bin/cp -Rf assets images regulators stitch "$DEPLOYPATH"
+    - /bin/cp -f index.html earms-config.js .htaccess site.webmanifest logo.png "$DEPLOYPATH"
+    - /bin/cp -f android-chrome-192x192.png android-chrome-512x512.png apple-touch-icon.png favicon.ico favicon-16x16.png favicon-32x32.png favicon-48x48.png "$DEPLOYPATH"
