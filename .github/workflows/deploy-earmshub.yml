@@ -9,6 +9,9 @@ concurrency:
   group: deploy-earmshub
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -29,36 +32,17 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Include Apache config
-        run: cp deploy-earmshub/.htaccess dist/.htaccess
-
-      - name: Check FTP secrets
-        id: ftp
-        env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      - name: Include Apache config and cPanel deploy file
         run: |
-          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$FTP_PASSWORD" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::FTP deploy skipped - add FTP_SERVER, FTP_USERNAME and FTP_PASSWORD in Settings > Secrets and variables > Actions."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
+          cp deploy-earmshub/.htaccess dist/.htaccess
+          cp deploy-earmshub/.cpanel.yml dist/.cpanel.yml
 
-      - name: Deploy
-        if: steps.ftp.outputs.configured == 'true'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Publish site to deploy branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT || '21' }}
-          protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR || '/public_html/' }}
-          local-dir: ./dist/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            **/.ftp-deploy-sync-state.json
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: deploy
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "deploy: ${{ github.sha }}"

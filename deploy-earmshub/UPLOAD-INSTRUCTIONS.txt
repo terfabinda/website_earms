@@ -1,48 +1,58 @@
 EARMS — earmshub.com deployment (static hosting)
 ================================================
 
-AUTOMATIC DEPLOYMENT (default — no copying by hand)
-  Pushing to main runs .github/workflows/deploy-earmshub.yml, which builds
-  the site from source (npm ci && npm run build) and uploads dist/ to the
-  web host over FTP, including earms-config.js and .htaccess.
+HOW IT WORKS (no copy-paste)
+  main branch    = source code
+  deploy branch  = ready-built website; its ROOT is the public_html content
+                   (index.html, assets/, earms-config.js, .htaccess, ...)
 
-  One-time setup (repository owner only, ~2 minutes):
-    GitHub -> the repo -> Settings -> Secrets and variables -> Actions
-    Add repository secrets:
-      FTP_SERVER        e.g. ftp.earmshub.com
-      FTP_USERNAME      cPanel/FTP account for the earmshub.com host
-      FTP_PASSWORD      FTP password
-      FTP_SERVER_DIR    optional, default /public_html/
-      FTP_PORT          optional, default 21
-      FTP_PROTOCOL      optional, ftp (default) or ftps
+  Pushing to main runs .github/workflows/deploy-earmshub.yml:
+    npm ci -> npm run build -> publishes dist/ to the deploy branch.
+  Both mirrored repos (terfabinda/website_earms and
+  EARMS-AfDIC/earms-main-portal) run the workflow, so each keeps its own
+  up-to-date deploy branch. It uses the built-in GITHUB_TOKEN — no FTP or
+  other secrets are required.
 
-  Add the secrets to only ONE of the two mirrored repositories (recommended:
-  terfabinda/website_earms) so two workflows do not sync the same FTP account
-  at the same time. Until the secrets exist, the workflow builds successfully
-  and skips only the FTP step with a warning.
+ONE-TIME SETUP ON THE WEB HOST (admin, ~3 minutes)
+  1. cPanel -> Git Version Control -> Create (clone):
+       URL:    https://github.com/EARMS-AfDIC/earms-main-portal.git
+               (or https://github.com/terfabinda/website_earms.git)
+       Branch: deploy
+       Path:   repositories/earms-main-portal   (outside public_html)
+  2. Press "Deploy HEAD Commit" once. This runs .cpanel.yml from the branch,
+     which copies the site into $HOME/public_html.
+     If the document root has a different path, edit DEPLOYPATH in
+     deploy-earmshub/.cpanel.yml on main, push, then deploy again.
 
-MANUAL FALLBACK (if FTP automation is unavailable)
-  This folder is a ready-built copy of the site. Upload the CONTENTS of this
-  folder (not the folder itself) to the earmshub.com document root
-  (cPanel: public_html).
+  EVERY UPDATE AFTER THAT (2 clicks, nothing to upload):
+    cPanel -> Git Version Control -> your repository
+      -> "Update from Remote"   (pulls new deploy branch)
+      -> "Deploy HEAD Commit"   (copies files into public_html)
 
-  Must include the hidden file .htaccess (File Manager: enable "Show Hidden
-  Files", or use FTP with dotfiles visible). Required files at docroot:
+  OPTIONAL: fully automatic pull/deploy via cron (if cron is available)
+    Add a cron job every 5-10 minutes:
+      cd $HOME/repositories/earms-main-portal && git pull --ff-only origin deploy && rm -rf $HOME/public_html/assets && cp -Rf assets images regulators stitch $HOME/public_html/ && cp -f index.html earms-config.js .htaccess site.webmanifest logo.png *.png *.ico $HOME/public_html/
+    The cPanel buttons above are enough; cron is only for hands-off updates.
+    A shell script can hold that command to keep the cron line short.
 
-    index.html
-    earms-config.js
-    .htaccess
-    assets/  images/  regulators/  stitch/
-    favicon.*, *.png, site.webmanifest, logo.png
+ALTERNATIVE: DOCROOT AS CHECKOUT
+  If the host allows public_html itself to be a git checkout (usually only
+  when the docroot is empty):
+    git clone --branch deploy --single-branch <repo-url> public_html
+  Then "git -C public_html pull --ff-only" updates the live site directly.
+  Do not use this when public_html already has files (clone would fail).
+
+MANUAL FALLBACK
+  GitHub -> repo -> branch "deploy" -> Code -> Download ZIP. Upload the
+  CONTENTS of the ZIP (not the ZIP/folder itself) to public_html. Must include
+  the hidden file .htaccess.
 
 VERIFY AFTER DEPLOY (fresh/hard-refresh browser session)
   1. https://earmshub.com/earms-config.js  -> 200 (not 404)
-  2. Page source references the current bundle in assets/ (the workflow log
-     prints the files it uploaded).
+  2. Page source references the current bundle in assets/
   3. Login network call goes to https://iam.earmshub.com/api/Auth/login
-     (direct backend). If it instead hits
-     https://earmshub.com/api/iam/... and 404s, the old files are still
-     cached/served — clear cache and re-check the deployed files.
+     (direct backend). If it instead hits https://earmshub.com/api/iam/...
+     and 404s, old files are still served — deploy again and clear cache.
 
 WHY DIRECT BACKEND (no /api proxy on this host)
   earmshub.com is plain Apache static hosting: vercel.json rewrites do not
@@ -51,7 +61,6 @@ WHY DIRECT BACKEND (no /api proxy on this host)
   hosted on earmshub.com (backends CORS-allow that origin — verified).
   On Vercel deployments the same build keeps using the /api/* proxy.
 
-REBUILDING LOCALLY (manual fallback only)
-  npm run build, then copy dist/* over this folder's contents. The automatic
-  workflow does not use this folder for the build (it only reads .htaccess
-  from here).
+LOCAL PREVIEW
+  npm run build -> output in dist/. Preview with npm run preview.
+  Do not commit dist/; the workflow publishes it to the deploy branch.
