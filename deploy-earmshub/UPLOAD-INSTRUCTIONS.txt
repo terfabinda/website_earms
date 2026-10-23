@@ -1,10 +1,30 @@
-EARMS — earmshub.com static hosting upload (no build needed)
-============================================================
-This folder is a ready-built copy of the site. No npm / no code changes required.
+EARMS — earmshub.com deployment (static hosting)
+================================================
 
-WHAT TO UPLOAD
-  Upload the CONTENTS of this folder (not the folder itself) to the
-  earmshub.com document root (cPanel: public_html).
+AUTOMATIC DEPLOYMENT (default — no copying by hand)
+  Pushing to main runs .github/workflows/deploy-earmshub.yml, which builds
+  the site from source (npm ci && npm run build) and uploads dist/ to the
+  web host over FTP, including earms-config.js and .htaccess.
+
+  One-time setup (repository owner only, ~2 minutes):
+    GitHub -> the repo -> Settings -> Secrets and variables -> Actions
+    Add repository secrets:
+      FTP_SERVER        e.g. ftp.earmshub.com
+      FTP_USERNAME      cPanel/FTP account for the earmshub.com host
+      FTP_PASSWORD      FTP password
+      FTP_SERVER_DIR    optional, default /public_html/
+      FTP_PORT          optional, default 21
+      FTP_PROTOCOL      optional, ftp (default) or ftps
+
+  Add the secrets to only ONE of the two mirrored repositories (recommended:
+  terfabinda/website_earms) so two workflows do not sync the same FTP account
+  at the same time. Until the secrets exist, the workflow builds successfully
+  and skips only the FTP step with a warning.
+
+MANUAL FALLBACK (if FTP automation is unavailable)
+  This folder is a ready-built copy of the site. Upload the CONTENTS of this
+  folder (not the folder itself) to the earmshub.com document root
+  (cPanel: public_html).
 
   Must include the hidden file .htaccess (File Manager: enable "Show Hidden
   Files", or use FTP with dotfiles visible). Required files at docroot:
@@ -15,14 +35,14 @@ WHAT TO UPLOAD
     assets/  images/  regulators/  stitch/
     favicon.*, *.png, site.webmanifest, logo.png
 
-VERIFY AFTER UPLOAD (in a fresh/hard-refresh browser session)
+VERIFY AFTER DEPLOY (fresh/hard-refresh browser session)
   1. https://earmshub.com/earms-config.js  -> 200 (not 404)
-   2. Page source references the current bundle (check this folder's
-      assets/ file name, e.g. index-BaUVKnUL.js).
+  2. Page source references the current bundle in assets/ (the workflow log
+     prints the files it uploaded).
   3. Login network call goes to https://iam.earmshub.com/api/Auth/login
      (direct backend). If it instead hits
      https://earmshub.com/api/iam/... and 404s, the old files are still
-     cached/served — clear cache and re-check the uploaded files.
+     cached/served — clear cache and re-check the deployed files.
 
 WHY DIRECT BACKEND (no /api proxy on this host)
   earmshub.com is plain Apache static hosting: vercel.json rewrites do not
@@ -31,5 +51,7 @@ WHY DIRECT BACKEND (no /api proxy on this host)
   hosted on earmshub.com (backends CORS-allow that origin — verified).
   On Vercel deployments the same build keeps using the /api/* proxy.
 
-REBUILDING (frontend owner only — backend team can ignore)
-  npm run build, then copy dist/* over this folder's contents.
+REBUILDING LOCALLY (manual fallback only)
+  npm run build, then copy dist/* over this folder's contents. The automatic
+  workflow does not use this folder for the build (it only reads .htaccess
+  from here).
