@@ -12,6 +12,11 @@ npm run build
 cp -f public/.htaccess dist/.htaccess
 rm -f dist/.cpanel.yml dist/.nojekyll
 
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  rm -f "dist/${file#public/}"
+done < <(git ls-files --others --exclude-standard -- public)
+
 git fetch "$REMOTE" --prune
 git worktree prune
 
