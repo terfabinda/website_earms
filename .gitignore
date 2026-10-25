@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+.earmshub-publish/
 
 # Stitch generated assets (fetched via MCP / curl -L)
 # public/stitch/ hero images (4 PNGs, ~230KB) are now tracked for Vercel — required for "Real people. Real research" section

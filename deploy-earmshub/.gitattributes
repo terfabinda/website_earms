@@ -1,2 +1,0 @@
-# Keep Apache config LF-only so .htaccess never breaks on checkout.
-.htaccess text eol=lf

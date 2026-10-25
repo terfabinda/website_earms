@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "publish:earmshub": "bash scripts/publish-earmshub.sh"
   },
   "dependencies": {
     "@tiptap/extension-character-count": "^3.31.3",

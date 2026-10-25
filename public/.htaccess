@@ -27,6 +27,11 @@
   RewriteRule ^ index.html [L]
 </IfModule>
 
+# Never serve git metadata when the docroot itself is a pull checkout.
+<IfModule mod_alias.c>
+  RedirectMatch 404 /\.git
+</IfModule>
+
 # Cache hashed build assets for 1 year (filenames change each build, safe).
 <IfModule mod_expires.c>
   ExpiresActive On
