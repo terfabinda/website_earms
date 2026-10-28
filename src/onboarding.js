@@ -6,7 +6,7 @@
 //     and StudentCategory (1 Non_Degree,2 Undergraduate,3 Postgraduate)
 //   - Institution registration is multipart/form-data (logoFile), everything else JSON
 
-import { apiFetch, BASE_URL, decodeToken } from "./iam";
+import { apiFetch, BASE_URL, decodeToken, ownerApi } from "./iam";
 import { ONBOARDING_BASE_URL as SHARED_ONB_BASE } from "./api-config";
 
 const ONB_BASE = SHARED_ONB_BASE;
@@ -444,12 +444,37 @@ export const onboardingApi = {
 
 // Resolve the real onboarding institution id for the current JWT.
 // NEVER use token ownerId as institution id (owner 5 vs institution 4 for JST).
-// Order: institutionCode -> get-institution/{code}, then dropdown/list match.
+// Order: institutionCode -> get-institution/{code}; then the full institution
+// list (Code + Name); then the dropdown (Id + Name only). Institution-admin
+// tokens do not always carry institutionCode/institutionName, so recover both
+// from the owner record created at signup before giving up.
 export async function resolveInstitutionId() {
   let tok = null;
   try { tok = decodeToken(); } catch { tok = null; }
-  const code = String(tok?.institutionCode ?? tok?.InstitutionCode ?? "").trim();
-  const name = String(tok?.institutionName ?? tok?.InstitutionName ?? "").trim();
+  let code = String(tok?.institutionCode ?? tok?.InstitutionCode ?? "").trim();
+  let name = String(tok?.institutionName ?? tok?.InstitutionName ?? "").trim();
+
+  if (!code || !name) {
+    const ownerUser = String(
+      tok?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] ??
+      tok?.unique_name ?? tok?.preferred_username ?? tok?.preferredUsername ??
+      tok?.email ?? tok?.Email ?? tok?.sub ?? ""
+    ).trim();
+    if (ownerUser) {
+      try {
+        const raw = await ownerApi.getOwnerByName(ownerUser);
+        const d = raw?.data ?? raw?.Data;
+        const owner = Array.isArray(raw)
+          ? raw[0]
+          : Array.isArray(d)
+            ? (d[0] || null)
+            : (d && typeof d === "object" ? { ...raw, ...d } : raw);
+        code = code || String(owner?.institutionCode ?? owner?.InstitutionCode ?? "").trim();
+        name = name || String(owner?.institutionName ?? owner?.InstitutionName ?? "").trim();
+      } catch {}
+    }
+  }
+
   if (code) {
     try {
       const rec = await onboardingApi.getInstitutionByCode(code);
@@ -457,19 +482,36 @@ export async function resolveInstitutionId() {
       if (id !== undefined && id !== null && String(id) !== "") return String(id);
     } catch {}
   }
+
+  if (!code && !name) return "";
+
+  const pickId = (hit) => {
+    const id = hit?.Id ?? hit?.id;
+    return id !== undefined && id !== null && String(id) !== "" ? String(id) : "";
+  };
+  const lc = code.toLowerCase();
+  const ln = name.toLowerCase();
+  const matches = (r) => {
+    const c = String(r?.Code ?? r?.code ?? "").trim().toLowerCase();
+    const n = String(r?.Name ?? r?.name ?? "").trim().toLowerCase();
+    return (lc && c === lc) || (ln && n === ln);
+  };
+
+  // Full list carries Code + Name (the dropdown DTO only has Id + Name).
+  try {
+    const list = await onboardingApi.getInstitutions();
+    const arr = Array.isArray(list) ? list : [];
+    const hit = arr.find(matches);
+    const id = pickId(hit);
+    if (id) return id;
+  } catch {}
+
   try {
     const list = await onboardingApi.getInstitutionsDropdown().catch(() => []);
     const arr = Array.isArray(list) ? list : [];
-    const match = (r) => {
-      const c = String(r?.Code ?? r?.code ?? "").toLowerCase();
-      const n = String(r?.Name ?? r?.name ?? "").toLowerCase();
-      return (code && c === code.toLowerCase()) || (name && n === name.toLowerCase());
-    };
-    const hit = arr.find(match);
-    if (hit) {
-      const id = hit?.Id ?? hit?.id;
-      if (id !== undefined && id !== null) return String(id);
-    }
+    const hit = arr.find(matches);
+    const id = pickId(hit);
+    if (id) return id;
   } catch {}
   return "";
 }

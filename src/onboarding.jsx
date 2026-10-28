@@ -75,7 +75,6 @@ export function AdminOnboarding({ go }) {
       const tokenData = decodeToken()
       const tokenInstName = tokenData?.institutionName || tokenData?.InstitutionName || ""
       const tokenInstCode = tokenData?.institutionCode || tokenData?.InstitutionCode || ""
-      const tokenOwnerId = tokenData?.ownerId || tokenData?.OwnerId || ""
       // Prefer the code-resolved institution id (ownerId is NOT the institution
       // id — e.g. owner 5 vs institution 4. Matching by ownerId first sent
       // creates to one institution while list pages queried another, so created
@@ -86,21 +85,31 @@ export function AdminOnboarding({ go }) {
         const list = await onboardingApi.getInstitutionsDropdown()
         if (cancelled) return
         const arr = list || []
+        const norm = (v) => String(v ?? "").trim().toLowerCase()
         let match = null
         if (resolvedId) match = arr.find((i) => String(i.Id ?? i.id) === String(resolvedId))
-        if (!match && tokenInstCode) match = arr.find((i) => (i.Code ?? i.code) === tokenInstCode)
-        if (!match && tokenInstName) match = arr.find((i) => (i.Name ?? i.name) === tokenInstName)
-        if (!match && tokenOwnerId) match = arr.find((i) => String(i.Id ?? i.id) === String(tokenOwnerId))
-        // If user's institution not in dropdown (e.g. not yet onboarded), inject it so UI shows correct name instead of hardcoded first item
+        if (!match && tokenInstCode) match = arr.find((i) => norm(i.Code ?? i.code) === norm(tokenInstCode))
+        if (!match && tokenInstName) match = arr.find((i) => norm(i.Name ?? i.name) === norm(tokenInstName))
+        // Keep a resolved-but-unlisted institution visible without inventing an id.
+        if (!match && resolvedId) {
+          const synthetic = { Id: resolvedId, id: resolvedId, Name: tokenInstName || tokenInstCode || "Institution", name: tokenInstName || tokenInstCode || "Institution", Code: tokenInstCode, code: tokenInstCode }
+          arr.unshift(synthetic)
+          match = synthetic
+        }
+        // Never fall back to token ownerId or a synthetic 9999: those are not
+        // institution ids and make every onboarding endpoint answer 400.
         if (!match && (tokenInstName || tokenInstCode)) {
-          const synthId = resolvedId || tokenOwnerId || 9999
-          const synthetic = { Id: Number(synthId) || 9999, id: Number(synthId) || 9999, Name: tokenInstName || tokenInstCode, name: tokenInstName || tokenInstCode, Code: tokenInstCode, code: tokenInstCode }
+          const synthetic = { Id: "", id: "", Name: tokenInstName || tokenInstCode, name: tokenInstName || tokenInstCode, Code: tokenInstCode, code: tokenInstCode }
           arr.unshift(synthetic)
           match = synthetic
         }
         setInstitutions(arr)
-        if (match) setInstId(String(match.Id ?? match.id))
-        else if (arr.length) setInstId(String(arr[0].Id ?? arr[0].id))
+        const matchId = match?.Id ?? match?.id
+        if (matchId !== undefined && matchId !== null && String(matchId) !== "") setInstId(String(matchId))
+        else {
+          setInstId("")
+          setInstErr("No institution record found for this account yet — complete Onboarding → Institution first.")
+        }
       } catch (e) { if (!cancelled) setInstErr(e.message || "Could not load institutions") }
     })();
     return () => { cancelled = true };

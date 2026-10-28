@@ -1623,6 +1623,20 @@ function InstitutionProfile({ go }) {
     e.preventDefault()
     setMsg(""); setErr("")
     if (!form.code.trim() || !form.name.trim()) { setErr("Code and Name are required."); return }
+    const existingId = inst?.id ?? inst?.Id
+    if (existingId !== undefined && existingId !== null && String(existingId) !== "") {
+      setErr("This institution is already registered. The API has no update-institution endpoint yet, so profile changes cannot be saved.")
+      return
+    }
+    const required = [
+      ["email", "Email"], ["phoneNo", "Phone number"],
+      ["institutionType", "Institution type"], ["address", "Address"], ["website", "Website"],
+    ]
+    const missing = required.filter(([k]) => !String(form[k] ?? "").trim()).map(([, label]) => label)
+    if (missing.length) {
+      setErr("The API requires " + missing.join(", ") + " to register an institution.")
+      return
+    }
     setSaving(true)
     try {
       const { onboardingApi } = await import("./onboarding")
